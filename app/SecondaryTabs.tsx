@@ -5,7 +5,7 @@ import {
   Plus, CreditCard, Car, Table2, Search, CheckCircle2, Clock, Trash2,
   Settings, RefreshCw, Wrench, Activity, Brain, Target, Flame, Pencil,
   Image as ImageIcon, Download, Upload, Camera, User, FileText, HandCoins,
-  Users, Share2, Check, Layers
+  Users, Share2, Check, Layers, AlertTriangle, Save
 } from "lucide-react";
 import {
   ResponsiveContainer, Tooltip, Legend, XAxis, YAxis, CartesianGrid,
@@ -58,7 +58,7 @@ const DebtorInputCell = React.memo(function DebtorInputCell({
 export interface SecondaryTabsProps {
   activeTab: ActiveTab;
   moneyBlur: string;
-  currentUser: string;
+  currentUser: string | null;
   currentUserAvatar: string;
   themeMode: ThemeMode;
   changeThemeMode: (m: ThemeMode) => void;
@@ -143,8 +143,11 @@ export interface SecondaryTabsProps {
   setSheetApiUrl: (u: string) => void;
   isSyncing: boolean;
   syncFromGoogleSheets: () => void;
+  pushAllToGoogleSheets?: () => void;
+  sheetsSyncStatus?: { state: "idle" | "success" | "error"; message: string; timestamp?: string };
   stravaConfig: { athleteId: string; clientId: string; clientSecret: string; refreshToken: string };
   setStravaConfig: (cfg: any) => void;
+  stravaSyncStatus?: { state: "idle" | "success" | "error"; message: string; timestamp?: string };
   paymentMethods: string[];
   newMethodName: string;
   setNewMethodName: (v: string) => void;
@@ -190,7 +193,8 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     okrs, saveOkrs, newOkr, setNewOkr, handleAddOkr, notes, selectedNoteTag, setSelectedNoteTag,
     editingNoteId, setEditingNoteId, newNote, setNewNote, handleSaveNote, handleDeleteNote,
     handleExportFullBackupJSON, handleImportFullBackupJSON, handleUpdateProfileAvatar,
-    sheetApiUrl, setSheetApiUrl, isSyncing, syncFromGoogleSheets, stravaConfig, setStravaConfig,
+    sheetApiUrl, setSheetApiUrl, isSyncing, syncFromGoogleSheets, pushAllToGoogleSheets,
+    sheetsSyncStatus, stravaConfig, setStravaConfig, stravaSyncStatus,
     paymentMethods, newMethodName, setNewMethodName, handleAddPaymentMethod, handleDeletePaymentMethod,
     categoriesCatalog, newCategoryForm, setNewCategoryForm, handleAddCustomCategory, handleDeleteCategory,
     monthlyInvestmentGoal, patrimonyTarget, annualRunGoalKm, setPersonalBudgetLimit,
@@ -235,7 +239,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   <tr key={st.id} className={`transition ${editingStatusId === st.id ? "bg-indigo-500/15" : "hover:bg-white/[0.02]"}`}>
                     <td className="py-3.5 px-3 font-semibold">{st.title}</td>
                     <td className="py-3.5 px-3"><span className={`px-2.5 py-1 rounded-full text-[11px] font-medium ${st.type === "Renda Base" || st.type === "Benefício" ? "bg-emerald-500/15 text-emerald-400" : st.type === "Meta Aporte" ? "bg-indigo-500/15 text-indigo-400" : "bg-rose-500/15 text-rose-400"}`}>{st.type}</span></td>
-                    <td className="py-3.5 px-3 text-slate-400">{st.notes || "—"}</td>
+                    <td className="py-3.5 px-3 text-slate-400">{st.notes ? st.notes : "—"}</td>
                     <td className={`py-3.5 px-3 text-right font-bold ${moneyBlur}`}>{formatBRL(st.amount)}</td>
                     <td className="py-3.5 px-3 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -294,8 +298,8 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               {filteredTransactions.map((tx) => {
                 const flow = getFlowType(tx.category);
                 const matchedCard = cards.find((c) => c.name === tx.cardUsed);
-                const displayLogo = tx.iconUrl || matchedCard?.logoUrl;
-                const catColor = categoryColors[tx.category] || "#6366f1";
+                const displayLogo = tx.iconUrl ? tx.iconUrl : matchedCard?.logoUrl;
+                const catColor = categoryColors[tx.category] ? categoryColors[tx.category] : "#6366f1";
                 return (
                   <tr key={tx.id} className="hover:bg-white/[0.02] transition">
                     <td className="py-3.5 px-3 font-mono text-slate-400">{tx.date}</td>
@@ -381,7 +385,6 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
         </div>
 
-        {/* CARDS RÁPIDOS DE COBRANÇA WHATSAPP POR DEVEDOR */}
         {receivablesAnalytics.openByPerson.filter((p) => p.aberto > 0).length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {receivablesAnalytics.openByPerson
@@ -396,7 +399,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   <button
                     type="button"
                     onClick={() => {
-                      const personTxs = receivableItems.filter((i) => (i.debtorName.trim() || "Não Atribuído") === p.person);
+                      const personTxs = receivableItems.filter((i) => (i.debtorName.trim() ? i.debtorName.trim() : "Não Atribuído") === p.person);
                       const text = buildWhatsAppChargeText(p.person, personTxs);
                       navigator.clipboard.writeText(text);
                       notify("Resumo Copiado p/ WhatsApp!", `Cole na conversa com ${p.person}.`, "success");
@@ -419,10 +422,10 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             <div className="h-64 select-none">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={receivablesAnalytics.openByPerson} barSize={34}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
                   <XAxis dataKey="person" stroke="#64748b" fontSize={11} />
                   <YAxis stroke="#64748b" fontSize={11} />
-                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={{ fill: "rgba(255,255,255,0.02)" }} />
+                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={{ fill: "rgba(148,163,184,0.06)" }} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
                   <Bar dataKey="aberto" name="Saldo em Aberto (R$)" fill="#f59e0b" radius={[8, 8, 0, 0]} />
                 </BarChart>
@@ -438,10 +441,10 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             <div className="h-64 select-none">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={receivablesAnalytics.historyByPerson} barSize={24}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
                   <XAxis dataKey="person" stroke="#64748b" fontSize={11} />
                   <YAxis stroke="#64748b" fontSize={11} />
-                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={{ fill: "rgba(255,255,255,0.02)" }} />
+                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={{ fill: "rgba(148,163,184,0.06)" }} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
                   <Bar dataKey="totalEmprestado" name="Total Emprestado" fill="#6366f1" radius={[6, 6, 0, 0]} />
                   <Bar dataKey="pago" name="Total Pago" fill="#10b981" radius={[6, 6, 0, 0]} />
@@ -479,7 +482,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   </tr>
                 ) : (
                   receivableItems.map((item) => {
-                    const pInput = partialInputs[item.id] || "";
+                    const pInput = partialInputs[item.id] ? partialInputs[item.id] : "";
                     return (
                       <tr key={item.id} className="hover:bg-white/[0.02] transition">
                         <td className="py-3.5 px-3 font-mono text-slate-400">{item.date}</td>
@@ -585,7 +588,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                             Quitar Fatura
                           </button>
                         )}
-                        <button type="button" onClick={() => { setEditingCardId(card.id); setNewCard({ name: card.name, brand: card.brand, limit: String(card.limit), closingDay: String(card.closingDay), dueDay: String(card.dueDay), logoUrl: card.logoUrl || "" }); }} className="p-1.5 rounded-lg bg-white/10 text-slate-200 hover:bg-white/20 transition"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={() => { setEditingCardId(card.id); setNewCard({ name: card.name, brand: card.brand, limit: String(card.limit), closingDay: String(card.closingDay), dueDay: String(card.dueDay), logoUrl: card.logoUrl ? card.logoUrl : "" }); }} className="p-1.5 rounded-lg bg-white/10 text-slate-200 hover:bg-white/20 transition"><Pencil className="w-3.5 h-3.5" /></button>
                         <button type="button" onClick={() => handleDeleteCard(card.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </div>
@@ -640,13 +643,13 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 const pct = Math.min(100, Math.round((w.savedAmount / Math.max(1, w.targetAmount)) * 100));
                 const missing = Math.max(0, w.targetAmount - w.savedAmount);
                 const monthsNeeded = Math.ceil(missing / Math.max(1, personalBudgetLimit * 0.5));
-                const customVal = customWishAmounts[w.id] || "";
+                const customVal = customWishAmounts[w.id] ? customWishAmounts[w.id] : "";
                 return (
                   <div key={w.id} className="glass-card p-5 rounded-2xl border border-white/[0.07] space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <span className="font-bold text-sm block text-white">{w.title}</span>
-                        <span className="text-[11px] text-indigo-400 font-medium">Guardado em: {w.institution || "Nubank Ultravioleta"}</span>
+                        <span className="text-[11px] text-indigo-400 font-medium">Guardado em: {w.institution ? w.institution : "Nubank Ultravioleta"}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">{w.priority}</span>
@@ -679,7 +682,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           <form onSubmit={handleSaveWish} className="glass-card p-6 rounded-2xl border border-white/[0.07] space-y-3.5 text-xs h-fit">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold">{editingWishId ? "Editar Caixinha Selecionada" : "Criar Nova Caixinha ou Objetivo"}</h3>
-              {editingWishId && <button type="button" onClick={() => { setEditingWishId(null); setNewWish({ title: "", institution: cards[0]?.name || "Nubank Ultravioleta", targetAmount: "", savedAmount: "0", priority: "Média" }); }} className="text-[11px] text-rose-400 hover:underline">Cancelar</button>}
+              {editingWishId && <button type="button" onClick={() => { setEditingWishId(null); setNewWish({ title: "", institution: cards[0] ? cards[0].name : "Nubank Ultravioleta", targetAmount: "", savedAmount: "0", priority: "Média" }); }} className="text-[11px] text-rose-400 hover:underline">Cancelar</button>}
             </div>
             <input type="text" required placeholder="Nome do Objetivo (Ex: Monitor, Viagem...)" value={newWish.title} onChange={(e) => setNewWish({ ...newWish, title: e.target.value })} className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10" />
             <div>
@@ -728,7 +731,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={autoMetrics.kmRecords}>
                   <defs><linearGradient id="colorKm" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartTheme.odometerLine} stopOpacity={0.25} /><stop offset="95%" stopColor={chartTheme.odometerLine} stopOpacity={0.0} /></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
                   <XAxis dataKey="date" stroke="#64748b" fontSize={11} /><YAxis stroke="#64748b" fontSize={11} domain={["auto", "auto"]} />
                   <Tooltip content={<CustomCyberTooltip isCurrency={false} />} cursor={{ stroke: chartTheme.odometerLine, strokeWidth: 1, strokeDasharray: "4 4", fill: "transparent" }} />
                   <Area type="monotone" dataKey="km" name="Quilometragem (KM)" stroke={chartTheme.odometerLine} strokeWidth={1.7} dot={{ r: 2.5, fill: chartTheme.odometerLine }} fill="url(#colorKm)" />
@@ -790,7 +793,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartTheme.weightLine} stopOpacity={0.25} /><stop offset="95%" stopColor={chartTheme.weightLine} stopOpacity={0.0} /></linearGradient>
                     <linearGradient id="colorBf" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartTheme.bfLine} stopOpacity={0.25} /><stop offset="95%" stopColor={chartTheme.bfLine} stopOpacity={0.0} /></linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
                   <XAxis dataKey="date" stroke="#64748b" fontSize={11} /><YAxis stroke="#64748b" fontSize={11} domain={["auto", "auto"]} />
                   <Tooltip content={<CustomCyberTooltip isCurrency={false} />} cursor={{ stroke: chartTheme.weightLine, strokeWidth: 1, strokeDasharray: "4 4", fill: "transparent" }} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
@@ -945,7 +948,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-emerald-500 p-0.5 shadow-lg">
               <div className="w-full h-full rounded-[14px] bg-slate-950 flex items-center justify-center overflow-hidden">
-                {currentUserAvatar ? <img src={currentUserAvatar} alt={currentUser} className="w-full h-full object-cover" /> : <User className="w-7 h-7 text-indigo-300" />}
+                {currentUserAvatar ? <img src={currentUserAvatar} alt={currentUser ? currentUser : "Avatar"} className="w-full h-full object-cover" /> : <User className="w-7 h-7 text-indigo-300" />}
               </div>
             </div>
             <div>
@@ -977,13 +980,13 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
         </div>
 
-        {/* SISTEMAS INTEGRADOS EM CARDS PADRONIZADOS */}
         <div className="space-y-3">
           <div>
             <h3 className="text-base font-extrabold text-white">Sistemas Integrados</h3>
-            <p className="text-xs text-slate-400">Conecte e sincronize seus serviços externos de banco de dados na nuvem e telemetria esportiva.</p>
+            <p className="text-xs text-slate-400">Preencha os campos tranquilamente — o sistema só tentará conectar quando você clicar no botão de sincronização.</p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+            {/* CARD GOOGLE SHEETS */}
             <div className="glass-card p-6 rounded-2xl border border-emerald-500/25 flex flex-col justify-between space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -991,34 +994,79 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-400"><Table2 className="w-5 h-5" /></div>
                     <div>
                       <h4 className="text-sm font-bold text-white">Google Sheets Cloud DB</h4>
-                      <p className="text-[11px] text-slate-400">Sincronização bidirecional inteligente por ID, Devedor e UpdatedAt</p>
+                      <p className="text-[11px] text-slate-400">Sincronização bidirecional somente sob comando (com diagnóstico de erro)</p>
                     </div>
                   </div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${sheetApiUrl ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : "bg-slate-800 text-slate-400 border-white/10"}`}>
-                    {sheetApiUrl ? "Conectado" : "Não Configurado"}
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${sheetsSyncStatus?.state === "success" ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : sheetsSyncStatus?.state === "error" ? "bg-rose-500/15 text-rose-300 border-rose-500/30" : "bg-slate-800 text-slate-400 border-white/10"}`}>
+                    {sheetsSyncStatus?.state === "success" ? "Sincronizado" : sheetsSyncStatus?.state === "error" ? "Falha Detectada" : sheetApiUrl ? "URL Preenchida" : "Não Configurado"}
                   </span>
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">URL do App da Web (Google Apps Script /exec)</label>
+                  <label className="text-slate-400 block mb-1">URL do App da Web (Google Apps Script terminado em /exec)</label>
                   <input
                     type="url"
                     placeholder="https://script.google.com/macros/s/.../exec"
                     value={sheetApiUrl}
-                    onChange={(e) => { const c = sanitizeText(e.target.value); setSheetApiUrl(c); localStorage.setItem("lifeos_sheets_url", c); }}
+                    onChange={(e) => {
+                      const c = e.target.value.trim();
+                      setSheetApiUrl(c);
+                      localStorage.setItem("lifeos_sheets_url", c);
+                    }}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10"
                   />
                 </div>
+
+                {sheetsSyncStatus && sheetsSyncStatus.state !== "idle" && (
+                  <div className={`p-3 rounded-xl border text-[11px] leading-relaxed ${
+                    sheetsSyncStatus.state === "error"
+                      ? "bg-rose-950/60 border-rose-500/40 text-rose-200"
+                      : "bg-emerald-950/50 border-emerald-500/30 text-emerald-200"
+                  }`}>
+                    <div className="flex items-start gap-2">
+                      {sheetsSyncStatus.state === "error" ? (
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      )}
+                      <div>
+                        <strong className="block font-bold">
+                          {sheetsSyncStatus.state === "error" ? "Motivo da Falha na Integração:" : "Conexão Bem-Sucedida:"}
+                        </strong>
+                        <span>{sheetsSyncStatus.message}</span>
+                        {sheetsSyncStatus.timestamp && (
+                          <span className="block text-[10px] opacity-70 mt-1">Última tentativa: {sheetsSyncStatus.timestamp}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={syncFromGoogleSheets}
-                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition"
-              >
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
-                Sincronizar Planilha
-              </button>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={syncFromGoogleSheets}
+                  disabled={isSyncing}
+                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
+                  Sincronizar e Baixar
+                </button>
+                {pushAllToGoogleSheets && (
+                  <button
+                    type="button"
+                    onClick={pushAllToGoogleSheets}
+                    disabled={isSyncing}
+                    className="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition"
+                  >
+                    <Save className="w-4 h-4" />
+                    Enviar Lançamentos p/ Planilha
+                  </button>
+                )}
+              </div>
             </div>
 
+            {/* CARD STRAVA API */}
             <div className="glass-card p-6 rounded-2xl border border-orange-500/25 flex flex-col justify-between space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -1026,27 +1074,53 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     <div className="p-2.5 rounded-xl bg-orange-500/15 text-orange-400"><Flame className="w-5 h-5" /></div>
                     <div>
                       <h4 className="text-sm font-bold text-white">Strava Athlete API</h4>
-                      <p className="text-[11px] text-slate-400">Importação automática de corridas e quilometragem acumulada</p>
+                      <p className="text-[11px] text-slate-400">Importação de corridas sob comando (com diagnóstico de erro)</p>
                     </div>
                   </div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${stravaConfig.refreshToken ? "bg-orange-500/15 text-orange-300 border-orange-500/30" : "bg-slate-800 text-slate-400 border-white/10"}`}>
-                    {stravaConfig.refreshToken ? "Chaves Salvas" : "Pendente"}
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${stravaSyncStatus?.state === "success" ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : stravaSyncStatus?.state === "error" ? "bg-rose-500/15 text-rose-300 border-rose-500/30" : stravaConfig.refreshToken ? "bg-orange-500/15 text-orange-300 border-orange-500/30" : "bg-slate-800 text-slate-400 border-white/10"}`}>
+                    {stravaSyncStatus?.state === "success" ? "Sincronizado" : stravaSyncStatus?.state === "error" ? "Falha Detectada" : stravaConfig.refreshToken ? "Chaves Preenchidas" : "Pendente"}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <input type="text" placeholder="Athlete ID" value={stravaConfig.athleteId} onChange={(e) => { const n = { ...stravaConfig, athleteId: sanitizeText(e.target.value) }; setStravaConfig(n); localStorage.setItem("lifeos_strava_config", JSON.stringify(n)); }} className="px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10" />
+                  <input type="text" placeholder="Athlete ID (Apenas números)" value={stravaConfig.athleteId} onChange={(e) => { const n = { ...stravaConfig, athleteId: sanitizeText(e.target.value) }; setStravaConfig(n); localStorage.setItem("lifeos_strava_config", JSON.stringify(n)); }} className="px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10" />
                   <input type="text" placeholder="Client ID" value={stravaConfig.clientId} onChange={(e) => { const n = { ...stravaConfig, clientId: sanitizeText(e.target.value) }; setStravaConfig(n); localStorage.setItem("lifeos_strava_config", JSON.stringify(n)); }} className="px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10" />
                   <input type="password" placeholder="Client Secret" value={stravaConfig.clientSecret} onChange={(e) => { const n = { ...stravaConfig, clientSecret: e.target.value.trim() }; setStravaConfig(n); localStorage.setItem("lifeos_strava_config", JSON.stringify(n)); }} className="px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10" />
                   <input type="password" placeholder="Refresh Token" value={stravaConfig.refreshToken} onChange={(e) => { const n = { ...stravaConfig, refreshToken: e.target.value.trim() }; setStravaConfig(n); localStorage.setItem("lifeos_strava_config", JSON.stringify(n)); }} className="px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10" />
                 </div>
+
+                {stravaSyncStatus && stravaSyncStatus.state !== "idle" && (
+                  <div className={`p-3 rounded-xl border text-[11px] leading-relaxed ${
+                    stravaSyncStatus.state === "error"
+                      ? "bg-rose-950/60 border-rose-500/40 text-rose-200"
+                      : "bg-emerald-950/50 border-emerald-500/30 text-emerald-200"
+                  }`}>
+                    <div className="flex items-start gap-2">
+                      {stravaSyncStatus.state === "error" ? (
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      )}
+                      <div>
+                        <strong className="block font-bold">
+                          {stravaSyncStatus.state === "error" ? "Motivo da Falha no Strava:" : "Strava Sincronizado:"}
+                        </strong>
+                        <span>{stravaSyncStatus.message}</span>
+                        {stravaSyncStatus.timestamp && (
+                          <span className="block text-[10px] opacity-70 mt-1">Última tentativa: {stravaSyncStatus.timestamp}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <button
                 type="button"
                 onClick={syncStravaFromApi}
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg transition"
+                disabled={isSyncingStrava}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2 shadow-lg transition"
               >
                 <RefreshCw className={`w-4 h-4 ${isSyncingStrava ? "animate-spin" : ""}`} />
-                Sincronizar Strava
+                Testar e Sincronizar Strava
               </button>
             </div>
           </div>
@@ -1097,9 +1171,10 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </form>
             <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pt-1">
               {categoriesCatalog.map((cat) => {
-                const col = categoryColors[cat.name] || "#6366f1";
+                const mappedCol = categoryColors[cat.name];
+                const col = mappedCol ? mappedCol : "#6366f1";
                 return (
-                  <span key={cat.name} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ backgroundColor: `${col}20`, color: col, border: `1px solid ${col}45` }}>
+                  <span key={cat.name} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ backgroundColor: `${col}22`, color: col, border: `1px solid ${col}44` }}>
                     {renderCategorySemanticIcon(cat.name, col)}<span>{cat.name}</span>
                     {cat.name !== "A Receber" && (
                       <button type="button" onClick={() => handleDeleteCategory(cat.name)} className="hover:text-white ml-1">×</button>
