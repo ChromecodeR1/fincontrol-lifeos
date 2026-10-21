@@ -5,8 +5,7 @@ import {
   Wallet, TrendingUp, TrendingDown, PiggyBank, CreditCard, Car, Activity,
   Brain, Settings, Plus, Bell, Eye, EyeOff, Lock, LogOut, Sparkles,
   CheckCircle2, AlertTriangle, Flame, LayoutDashboard, HandCoins,
-  SlidersHorizontal, ArrowUpRight, ArrowDownRight, Check, X, Layers, UserCheck,
-  Menu, ChevronLeft, ChevronRight
+  SlidersHorizontal, ArrowUpRight, ArrowDownRight, Check, X, Layers, UserCheck
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -41,15 +40,15 @@ export default function FinControlLifeOS() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
 
-  // Interface e Tema (Com Sidebar Original Restaurada)
+  // Interface e Tema
   const [activeTab, setActiveTab] = useState<ActiveTab>("dashboard");
   const [themeMode, setThemeMode] = useState<ThemeMode>("tradicional");
   const [privacyMode, setPrivacyMode] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState("2026-10");
   const [curveType, setCurveType] = useState<CurveType>("monotone");
   const [showChangelogModal, setShowChangelogModal] = useState(false);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
+  const [bellTab, setBellTab] = useState<"unread" | "read">("unread");
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -64,7 +63,7 @@ export default function FinControlLifeOS() {
   const [okrs, setOkrs] = useState<PersonalOKR[]>(INITIAL_OKRS);
   const [alertRules, setAlertRules] = useState<CustomAlertRule[]>(INITIAL_ALERT_RULES);
   const [milestones] = useState<ChartMilestone[]>(INITIAL_MILESTONES);
-  const [dashboardLayout, setDashboardLayout] = useState<DashboardWidgetConfig[]>(DEFAULT_DASHBOARD_LAYOUT);
+  const [dashboardLayout] = useState<DashboardWidgetConfig[]>(DEFAULT_DASHBOARD_LAYOUT);
 
   // Catálogos e Cores
   const [categoriesCatalog, setCategoriesCatalog] = useState<CategoryCatalogItem[]>(DEFAULT_CATEGORIES_CATALOG);
@@ -175,9 +174,10 @@ export default function FinControlLifeOS() {
     [currentUser]
   );
 
-  // Hidratação Inicial Segura
+  // Hidratação Inicial Segura (Sem apagar contas nem deslogar no F5)
   useEffect(() => {
     try {
+      // 1. Contas e Sessão Ativa (Lê tanto a chave nova quanto possíveis chaves anteriores)
       const rawAccV8 = localStorage.getItem("lifeos_accounts_v8") || localStorage.getItem("lifeos_accounts_v4") || localStorage.getItem("lifeos_accounts");
       let loadedAccounts: StoredUserAccount[] = [];
       if (rawAccV8) {
@@ -199,9 +199,11 @@ export default function FinControlLifeOS() {
         setAuthMode("register");
       }
 
+      // 2. Notificações já lidas
       const savedReadNotifs = localStorage.getItem("lifeos_read_notifications_v1");
       if (savedReadNotifs) setReadNotificationIds(JSON.parse(savedReadNotifs));
 
+      // 3. Dados do ERP
       const sTxs = localStorage.getItem("lifeos_txs_v8");
       if (sTxs) setTransactions(JSON.parse(sTxs));
       const sDebtors = localStorage.getItem("lifeos_debtors_v8");
@@ -223,6 +225,7 @@ export default function FinControlLifeOS() {
       const sLogs = localStorage.getItem("lifeos_system_logs_v8");
       if (sLogs) setSystemLogs(JSON.parse(sLogs));
 
+      // 4. Aparência e Integrações (Sem disparar sync automático ao carregar/digitar)
       const sTheme = localStorage.getItem("lifeos_theme_mode") as ThemeMode | null;
       if (sTheme) setThemeMode(sTheme);
       const sUrl = localStorage.getItem("lifeos_sheets_url");
@@ -231,8 +234,6 @@ export default function FinControlLifeOS() {
       if (sStrava) setStravaConfig(JSON.parse(sStrava));
       const sStravaStats = localStorage.getItem("lifeos_strava_stats");
       if (sStravaStats) setStravaStats(JSON.parse(sStravaStats));
-      const sLayout = localStorage.getItem("lifeos_dash_layout_v1");
-      if (sLayout) setDashboardLayout(JSON.parse(sLayout));
     } catch (e) {
       console.error("Erro ao hidratar dados:", e);
     } finally {
@@ -245,23 +246,13 @@ export default function FinControlLifeOS() {
     localStorage.setItem("lifeos_theme_mode", m);
   };
 
-  const moveWidget = (index: number, direction: "up" | "down") => {
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= dashboardLayout.length) return;
-    const copy = [...dashboardLayout];
-    const temp = copy[index];
-    copy[index] = copy[targetIndex];
-    copy[targetIndex] = temp;
-    setDashboardLayout(copy);
-    localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(copy));
-    notify("Layout Atualizado", "Ordem dos painéis do dashboard reorganizada.", "info");
-  };
-
+  // Helpers de Persistência
   const saveTransactions = useCallback(
     async (updated: Transaction[], syncWithCloud = true) => {
       setTransactions(updated);
       localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
 
+      // Se a URL do Google Sheets estiver configurada e já tiver sido validada ou ativada, envia a atualização em segundo plano
       if (syncWithCloud && sheetApiUrl && sheetApiUrl.startsWith("https://script.google.com/macros/s/")) {
         try {
           const res = await fetch("/api/sync", {
@@ -298,6 +289,7 @@ export default function FinControlLifeOS() {
     [sheetApiUrl]
   );
 
+  // Sincronização Manual Google Sheets (Baixar + Mesclar + Enviar)
   const syncFromGoogleSheets = async () => {
     if (!sheetApiUrl.trim()) {
       const msg = "Você ainda não preencheu a URL do Google Apps Script.";
@@ -313,11 +305,16 @@ export default function FinControlLifeOS() {
 
       if (!res.ok || data.status === "error") {
         const reason = data.message || "Não foi possível conectar à planilha. Verifique a URL e as permissões.";
-        setSheetsSyncStatus({ state: "error", message: reason, timestamp: new Date().toLocaleTimeString("pt-BR") });
+        setSheetsSyncStatus({
+          state: "error",
+          message: reason,
+          timestamp: new Date().toLocaleTimeString("pt-BR")
+        });
         notify("Falha no Google Sheets", reason, "warning", "CONFIG");
         return;
       }
 
+      // Mescla os lançamentos da planilha com os locais
       const cloudTxs: Transaction[] = Array.isArray(data.transactions) ? data.transactions : [];
       const mergedMap = new Map<string, Transaction>();
       transactions.forEach((t) => mergedMap.set(t.id, t));
@@ -339,6 +336,7 @@ export default function FinControlLifeOS() {
       setTransactions(finalTxs);
       localStorage.setItem("lifeos_txs_v8", JSON.stringify(finalTxs));
 
+      // Agora envia a lista consolidada de volta para garantir que a planilha tenha todos os lançamentos locais
       const postRes = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -351,13 +349,21 @@ export default function FinControlLifeOS() {
 
       if (!postRes.ok || postData.status === "error") {
         const postReason = postData.message || "Leitura funcionou, mas houve falha ao gravar os lançamentos na planilha.";
-        setSheetsSyncStatus({ state: "error", message: postReason, timestamp: new Date().toLocaleTimeString("pt-BR") });
+        setSheetsSyncStatus({
+          state: "error",
+          message: postReason,
+          timestamp: new Date().toLocaleTimeString("pt-BR")
+        });
         notify("Erro ao Gravar na Planilha", postReason, "warning", "CONFIG");
         return;
       }
 
       const okMsg = `Sincronização concluída! ${finalTxs.length} lançamentos estão salvos e espelhados na aba 'Lancamentos' da sua planilha.`;
-      setSheetsSyncStatus({ state: "success", message: okMsg, timestamp: new Date().toLocaleTimeString("pt-BR") });
+      setSheetsSyncStatus({
+        state: "success",
+        message: okMsg,
+        timestamp: new Date().toLocaleTimeString("pt-BR")
+      });
       notify("Google Sheets Sincronizado!", okMsg, "success", "CONFIG");
     } catch (err: any) {
       const netMsg = `Erro de comunicação: ${err?.message || "Falha inesperada"}`;
@@ -404,6 +410,7 @@ export default function FinControlLifeOS() {
     }
   };
 
+  // Sincronização Strava com Diagnóstico Detalhado
   const syncStravaFromApi = async () => {
     const { athleteId, clientId, clientSecret, refreshToken } = stravaConfig;
     const missing: string[] = [];
@@ -479,6 +486,7 @@ export default function FinControlLifeOS() {
     }
   };
 
+  // Autenticação: Login e Registro
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
@@ -537,6 +545,7 @@ export default function FinControlLifeOS() {
     setAuthMode("login");
   };
 
+  // Classificação de Fluxo
   const getFlowType = useCallback(
     (category: string): FlowType => {
       const found = categoriesCatalog.find((c) => c.name === category);
@@ -545,6 +554,7 @@ export default function FinControlLifeOS() {
     [categoriesCatalog]
   );
 
+  // Filtro de Lançamentos por Mês e Busca
   const filteredTransactions = useMemo(() => {
     return transactions
       .filter((t) => (selectedMonth === "ALL" ? true : t.date.startsWith(selectedMonth)))
@@ -561,6 +571,7 @@ export default function FinControlLifeOS() {
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [transactions, selectedMonth, searchQuery]);
 
+  // Cálculos do Mês Atual vs Anterior
   const monthSummary = useMemo(() => {
     const calcFor = (list: Transaction[]) => {
       const income = list.filter((t) => getFlowType(t.category) === "INCOME").reduce((a, b) => a + b.amount, 0);
@@ -588,6 +599,7 @@ export default function FinControlLifeOS() {
     };
   }, [filteredTransactions, transactions, selectedMonth, getFlowType]);
 
+  // Evolução Patrimonial Dinâmica
   const patrimonyChartData = useMemo(() => {
     const base = [...HISTORICAL_INVESTMENTS];
     let runningTotal = base[base.length - 1]?.acumulado || 8200;
@@ -614,6 +626,7 @@ export default function FinControlLifeOS() {
     return base;
   }, [transactions, getFlowType]);
 
+  // Gráfico de Categorias
   const categoryChartData = useMemo(() => {
     const map = new Map<string, number>();
     filteredTransactions
@@ -626,6 +639,7 @@ export default function FinControlLifeOS() {
       .sort((a, b) => b.value - a.value);
   }, [filteredTransactions, getFlowType, categoryColors]);
 
+  // Métricas de Cartões
   const creditChartData = useMemo(() => {
     return cards.map((c) => {
       const usado = transactions
@@ -639,6 +653,7 @@ export default function FinControlLifeOS() {
     });
   }, [cards, transactions]);
 
+  // Métricas do Veículo (Auto)
   const autoMetrics = useMemo(() => {
     const autoCategories = new Set(categoriesCatalog.filter((c) => c.isAuto).map((c) => c.name));
     const autoTxs = transactions
@@ -669,6 +684,7 @@ export default function FinControlLifeOS() {
     };
   }, [transactions, categoriesCatalog]);
 
+  // Valores a Receber 2.0
   const receivableItems = useMemo(() => {
     return transactions
       .filter((t) => t.category === "A Receber")
@@ -702,9 +718,11 @@ export default function FinControlLifeOS() {
     return { totalOpen, totalPaid, totalLoaned, openByPerson: list, historyByPerson: list };
   }, [receivableItems]);
 
+  // Central de Notificações Inteligentes (Com ID único e suporte a "Já vista")
   const activeNotifications = useMemo(() => {
     const list: { id: string; title: string; detail: string; severity: "warning" | "info" }[] = [];
 
+    // 1. Alerta de Orçamento Pessoal
     if (monthSummary.personalSpent >= personalBudgetLimit * 0.8) {
       list.push({
         id: `notif-budget-${selectedMonth}-${Math.floor(monthSummary.personalSpent / 50)}`,
@@ -714,6 +732,7 @@ export default function FinControlLifeOS() {
       });
     }
 
+    // 2. Alertas do Odômetro / Revisão
     alertRules.forEach((rule) => {
       if (rule.type === "ODOMETER_KM") {
         const diff = rule.targetValue - autoMetrics.maxKm;
@@ -728,6 +747,7 @@ export default function FinControlLifeOS() {
       }
     });
 
+    // 3. Alerta de Valores a Receber em Aberto
     if (receivablesAnalytics.totalOpen > 0) {
       list.push({
         id: `notif-receivables-${receivablesAnalytics.totalOpen}`,
@@ -770,6 +790,7 @@ export default function FinControlLifeOS() {
     localStorage.setItem("lifeos_read_notifications_v1", JSON.stringify(updated));
   };
 
+  // Ações de Lançamentos (Com suporte a 1x–24x e sincronização com Planilha)
   const handleOpenNewTxModal = (defaultCat?: string) => {
     setEditingTxId(null);
     const cat = defaultCat || "Alimentação";
@@ -925,6 +946,7 @@ export default function FinControlLifeOS() {
     notify("Abatimento Registrado!", `Abatido ${formatBRL(addAmount)} em ${tx.description}.`, "success", "FINANCE");
   };
 
+  // Handlers das Abas Secundárias
   const saveStaticStatus = (items: StaticStatusItem[]) => {
     setStaticStatus(items);
     localStorage.setItem("lifeos_status_v8", JSON.stringify(items));
@@ -1165,6 +1187,7 @@ export default function FinControlLifeOS() {
     return <div className="min-h-screen bg-[#070a14] flex items-center justify-center text-slate-400 text-xs">Carregando FinControl Life OS...</div>;
   }
 
+  // TELA DE LOGIN / REGISTRO COM MEMÓRIA DE CONTAS SALVAS
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#070a14] text-slate-100 flex items-center justify-center p-4">
@@ -1265,7 +1288,7 @@ export default function FinControlLifeOS() {
   }
 
   return (
-    <div className={`min-h-screen flex transition-colors duration-300 ${
+    <div className={`min-h-screen transition-colors duration-300 pb-24 lg:pb-12 ${
       themeMode === "branco" ? "bg-slate-100 text-slate-900" : themeMode === "noturno" ? "bg-black text-slate-100" : "bg-[#070a14] text-slate-100"
     }`}>
       <style jsx global>{`
@@ -1299,149 +1322,93 @@ export default function FinControlLifeOS() {
         ))}
       </div>
 
-      {/* BARRA LATERAL (SIDEBAR) ORIGINAL RESTAURADA */}
-      <aside className={`fixed inset-y-0 left-0 z-40 bg-slate-950/95 border-r border-white/[0.08] backdrop-blur-xl transition-all duration-300 flex flex-col justify-between ${sidebarOpen ? "w-64" : "w-20"}`}>
-        <div className="p-4 space-y-6">
-          <div className="flex items-center justify-between">
-            {sidebarOpen ? (
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-gradient-to-br from-indigo-500 to-emerald-500 text-white shadow-lg">
-                  <Wallet className="w-5 h-5" />
-                </div>
-                <div>
-                  <h1 className="font-extrabold text-sm text-white">FinControl Life OS</h1>
-                  <span className="text-[10px] text-indigo-400 font-mono">v{APP_VERSION}</span>
-                </div>
+      {/* BARRA SUPERIOR */}
+      <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-slate-950/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-indigo-500 to-emerald-500 text-white shadow-lg">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-extrabold text-base text-white">FinControl BI & Auto</h1>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">v{APP_VERSION}</span>
               </div>
-            ) : (
-              <div className="p-2.5 rounded-2xl bg-gradient-to-br from-indigo-500 to-emerald-500 text-white mx-auto shadow-lg">
-                <Wallet className="w-5 h-5" />
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white"
-            >
-              {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
+              <p className="text-[11px] text-slate-400">Olá, {currentUser} • Gestão Financeira e Telemetria Pessoal</p>
+            </div>
           </div>
 
-          <nav className="space-y-1.5 text-xs">
-            {[
-              { id: "dashboard", label: "Visão Geral", icon: <LayoutDashboard className="w-4 h-4" /> },
-              { id: "status", label: "Meu Status Atual", icon: <SlidersHorizontal className="w-4 h-4" /> },
-              { id: "transactions", label: "Lançamentos", icon: <Wallet className="w-4 h-4" /> },
-              { id: "receivables", label: "Valores a Receber", icon: <HandCoins className="w-4 h-4" /> },
-              { id: "cards", label: "Cartões & Caixinhas", icon: <CreditCard className="w-4 h-4" /> },
-              { id: "auto", label: "Meu Veículo", icon: <Car className="w-4 h-4" /> },
-              { id: "bio", label: "Bio & Strava", icon: <Activity className="w-4 h-4" /> },
-              { id: "brain", label: "Metas & Notas", icon: <Brain className="w-4 h-4" /> },
-              { id: "settings", label: "Configurações", icon: <Settings className="w-4 h-4" /> }
-            ].map((tab) => (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs text-white font-semibold"
+            >
+              <option value="2026-10">Outubro / 2026</option>
+              <option value="2026-09">Setembro / 2026</option>
+              <option value="2026-11">Novembro / 2026</option>
+              <option value="2026-12">Dezembro / 2026</option>
+              <option value="ALL">Todos os Meses</option>
+            </select>
+
+            <ThemeSegmentedControl themeMode={themeMode} onChange={changeThemeMode} />
+
+            {/* SININHO COM OPÇÃO "MARCAR COMO VISTA" */}
+            <div className="relative">
               <button
-                key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id as ActiveTab)}
-                className={`w-full px-3.5 py-3 rounded-xl font-bold flex items-center gap-3 transition ${
-                  activeTab === tab.id ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
-                }`}
-                title={tab.label}
+                onClick={() => setShowBellDropdown((prev) => !prev)}
+                className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition"
+                title="Central de Notificações"
               >
-                {tab.icon}
-                {sidebarOpen && <span className="truncate">{tab.label}</span>}
+                <Bell className="w-4 h-4" />
+                {unreadNotifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow">
+                    {unreadNotifications.length}
+                  </span>
+                )}
               </button>
-            ))}
-          </nav>
-        </div>
 
-        <div className="p-4 border-t border-white/[0.08] space-y-3">
-          {sidebarOpen && (
-            <div className="flex items-center gap-3 px-2">
-              <div className="w-9 h-9 rounded-xl bg-slate-900 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                {currentUserAvatar ? <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" /> : <UserCheck className="w-4 h-4 text-indigo-400" />}
-              </div>
-              <div className="overflow-hidden">
-                <strong className="text-xs text-white block truncate">{currentUser}</strong>
-                <span className="text-[10px] text-emerald-400 block">Sessão Ativa</span>
-              </div>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={handleLogout}
-            className={`w-full py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold text-xs flex items-center justify-center gap-2 transition ${
-              sidebarOpen ? "" : "px-0"
-            }`}
-            title="Sair da Conta"
-          >
-            <LogOut className="w-4 h-4" />
-            {sidebarOpen && <span>Encerrar Sessão</span>}
-          </button>
-        </div>
-      </aside>
-
-      {/* CONTEÚDO PRINCIPAL (COM MARGEM DA SIDEBAR) */}
-      <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? "ml-64" : "ml-20"}`}>
-        {/* BARRA SUPERIOR */}
-        <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-slate-950/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-300">Mês de Referência:</span>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs text-white font-semibold"
-              >
-                <option value="2026-10">Outubro / 2026</option>
-                <option value="2026-09">Setembro / 2026</option>
-                <option value="2026-11">Novembro / 2026</option>
-                <option value="2026-12">Dezembro / 2026</option>
-                <option value="ALL">Todos os Meses</option>
-              </select>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              <ThemeSegmentedControl themeMode={themeMode} onChange={changeThemeMode} />
-
-              {/* SININHO COM OPÇÃO "MARCAR COMO VISTA" */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowBellDropdown((prev) => !prev)}
-                  className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition"
-                  title="Central de Notificações"
-                >
-                  <Bell className="w-4 h-4" />
-                  {unreadNotifications.length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow">
-                      {unreadNotifications.length}
-                    </span>
-                  )}
-                </button>
-
-                {showBellDropdown && (
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl p-4 z-50 text-xs space-y-3">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-                      <div>
-                        <strong className="text-white font-bold block">Notificações do Sistema</strong>
-                        <span className="text-[10px] text-slate-400">
-                          {unreadNotifications.length} não lida(s) • {readNotificationsList.length} já vista(s)
-                        </span>
-                      </div>
-                      {unreadNotifications.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={markAllNotificationsAsRead}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition"
-                        >
-                          <Check className="w-3 h-3" /> Marcar todas como vistas
-                        </button>
-                      )}
+              {showBellDropdown && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl p-4 z-50 text-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                    <div>
+                      <strong className="text-white font-bold block">Notificações do Sistema</strong>
+                      <span className="text-[10px] text-slate-400">
+                        {unreadNotifications.length} não lida(s) • {readNotificationsList.length} já vista(s)
+                      </span>
                     </div>
+                    {unreadNotifications.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllNotificationsAsRead}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition"
+                      >
+                        <Check className="w-3 h-3" /> Marcar todas como vistas
+                      </button>
+                    )}
+                  </div>
 
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                      {unreadNotifications.length === 0 ? (
+                  <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-900 border border-white/5 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setBellTab("unread")}
+                      className={`py-1.5 rounded-lg transition ${bellTab === "unread" ? "bg-indigo-600 text-white" : "text-slate-400"}`}
+                    >
+                      Não Vistas ({unreadNotifications.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBellTab("read")}
+                      className={`py-1.5 rounded-lg transition ${bellTab === "read" ? "bg-slate-800 text-white" : "text-slate-400"}`}
+                    >
+                      Já Vistas ({readNotificationsList.length})
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {bellTab === "unread" ? (
+                      unreadNotifications.length === 0 ? (
                         <p className="text-center text-slate-400 py-6">Tudo em dia! Nenhuma notificação pendente.</p>
                       ) : (
                         unreadNotifications.map((n) => (
@@ -1460,303 +1427,317 @@ export default function FinControlLifeOS() {
                             </button>
                           </div>
                         ))
-                      )}
-                    </div>
+                      )
+                    ) : readNotificationsList.length === 0 ? (
+                      <p className="text-center text-slate-400 py-6">Nenhuma notificação arquivada ainda.</p>
+                    ) : (
+                      readNotificationsList.map((n) => (
+                        <div key={n.id} className="p-3 rounded-xl bg-slate-900/40 border border-white/5 flex items-start justify-between gap-2.5 opacity-75">
+                          <div>
+                            <strong className="block font-bold text-slate-300">{n.title}</strong>
+                            <p className="text-[11px] text-slate-400">{n.detail}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => markNotificationAsUnread(n.id)}
+                            className="text-[10px] text-indigo-400 hover:underline shrink-0"
+                          >
+                            Reabrir
+                          </button>
+                        </div>
+                      ))
+                    )}
                   </div>
-                )}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setPrivacyMode(!privacyMode)}
+              className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200"
+              title="Modo Privacidade"
+            >
+              {privacyMode ? <EyeOff className="w-4 h-4 text-amber-400" /> : <Eye className="w-4 h-4" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleOpenNewTxModal()}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
+            >
+              <Plus className="w-4 h-4" /> Novo Lançamento
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="p-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30"
+              title="Sair da Conta"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* NAVEGAÇÃO DE ABAS */}
+        <nav className="max-w-7xl mx-auto flex items-center gap-1.5 overflow-x-auto pt-3 mt-3 border-t border-white/[0.06] text-xs">
+          {[
+            { id: "dashboard", label: "Visão Geral", icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
+            { id: "status", label: "Meu Status Atual", icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+            { id: "transactions", label: "Lançamentos", icon: <Wallet className="w-3.5 h-3.5" /> },
+            { id: "receivables", label: "Valores a Receber", icon: <HandCoins className="w-3.5 h-3.5" /> },
+            { id: "cards", label: "Cartões & Caixinhas", icon: <CreditCard className="w-3.5 h-3.5" /> },
+            { id: "auto", label: "Meu Veículo", icon: <Car className="w-3.5 h-3.5" /> },
+            { id: "bio", label: "Bio & Strava", icon: <Activity className="w-3.5 h-3.5" /> },
+            { id: "brain", label: "Metas & Notas", icon: <Brain className="w-3.5 h-3.5" /> },
+            { id: "settings", label: "Configurações", icon: <Settings className="w-3.5 h-3.5" /> }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as ActiveTab)}
+              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-2 whitespace-nowrap transition ${
+                activeTab === tab.id ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {/* CONTEÚDO PRINCIPAL */}
+      <main className="max-w-7xl mx-auto px-4 lg:px-8 py-6">
+        {activeTab === "dashboard" ? (
+          <div className="space-y-6">
+            {/* TERMÔMETRO PESSOAL */}
+            <div className="glass-card p-6 rounded-2xl border border-white/[0.07] space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-extrabold text-white">Termômetro de Gastos Pessoais / Besteiras</h2>
+                  <p className="text-xs text-slate-400">Orçamento mensal livre para compras pessoais: {formatBRL(personalBudgetLimit)}</p>
+                </div>
+                <span className={`text-sm font-extrabold ${moneyBlur} ${monthSummary.personalSpent > personalBudgetLimit ? "text-rose-400" : "text-emerald-400"}`}>
+                  {formatBRL(monthSummary.personalSpent)} / {formatBRL(personalBudgetLimit)}
+                </span>
+              </div>
+              <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-700 ${
+                    monthSummary.personalSpent > personalBudgetLimit ? "bg-rose-500" : "bg-gradient-to-r from-emerald-500 to-indigo-500"
+                  }`}
+                  style={{ width: `${Math.min(100, Math.round((monthSummary.personalSpent / Math.max(1, personalBudgetLimit)) * 100))}%` }}
+                />
+              </div>
+            </div>
+
+            {/* KPIS DO MÊS */}
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${moneyBlur}`}>
+              <div className="glass-card p-5 rounded-2xl border border-white/[0.07]">
+                <span className="text-xs text-slate-400 flex items-center justify-between">
+                  Entradas do Mês <TrendingUp className="w-4 h-4 text-emerald-400" />
+                </span>
+                <p className="text-2xl font-extrabold text-emerald-400 mt-1">{formatBRL(monthSummary.income)}</p>
+                <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
+                  <ArrowUpRight className="w-3 h-3 text-emerald-400" /> {monthSummary.incomeDiff >= 0 ? `+${monthSummary.incomeDiff}%` : `${monthSummary.incomeDiff}%`} vs. mês anterior
+                </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setPrivacyMode(!privacyMode)}
-                className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200"
-                title="Modo Privacidade"
-              >
-                {privacyMode ? <EyeOff className="w-4 h-4 text-amber-400" /> : <Eye className="w-4 h-4" />}
-              </button>
+              <div className="glass-card p-5 rounded-2xl border border-white/[0.07]">
+                <span className="text-xs text-slate-400 flex items-center justify-between">
+                  Saídas e Despesas <TrendingDown className="w-4 h-4 text-rose-400" />
+                </span>
+                <p className="text-2xl font-extrabold text-rose-400 mt-1">{formatBRL(monthSummary.expense)}</p>
+                <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
+                  <ArrowDownRight className="w-3 h-3 text-rose-400" /> {monthSummary.expenseDiff >= 0 ? `+${monthSummary.expenseDiff}%` : `${monthSummary.expenseDiff}%`} vs. mês anterior
+                </span>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => handleOpenNewTxModal()}
-                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
-              >
-                <Plus className="w-4 h-4" /> Novo Lançamento
-              </button>
+              <div className="glass-card p-5 rounded-2xl border border-white/[0.07]">
+                <span className="text-xs text-slate-400 flex items-center justify-between">
+                  Aportes / Investido <PiggyBank className="w-4 h-4 text-indigo-400" />
+                </span>
+                <p className="text-2xl font-extrabold text-indigo-400 mt-1">{formatBRL(monthSummary.invested)}</p>
+                <span className="text-[11px] text-slate-400 mt-1 block">Meta mensal: {formatBRL(monthlyInvestmentGoal)}</span>
+              </div>
+
+              <div className="glass-card p-5 rounded-2xl border border-white/[0.07]">
+                <span className="text-xs text-slate-400 flex items-center justify-between">
+                  Saldo Livre Líquido <Wallet className="w-4 h-4 text-sky-400" />
+                </span>
+                <p className={`text-2xl font-extrabold mt-1 ${monthSummary.balance >= 0 ? "text-sky-400" : "text-rose-400"}`}>
+                  {formatBRL(monthSummary.balance)}
+                </p>
+                <span className="text-[11px] text-slate-400 mt-1 block">Disponível após aportes e contas</span>
+              </div>
+            </div>
+
+            {/* GRÁFICOS PRINCIPAIS */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="glass-card p-6 rounded-2xl border border-white/[0.07] space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Evolução do Meu Patrimônio</h3>
+                  <p className="text-xs text-slate-400">Crescimento acumulado somando seus aportes mensais.</p>
+                </div>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={patrimonyChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                      <XAxis dataKey="label" stroke="#64748b" fontSize={11} />
+                      <YAxis stroke="#64748b" fontSize={11} />
+                      <Tooltip content={<CustomCyberTooltip isCurrency={true} />} />
+                      <Legend wrapperStyle={{ fontSize: "11px" }} />
+                      {milestones.map((m) => (
+                        <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
+                      ))}
+                      <Area type={curveType} dataKey="acumulado" name="Patrimônio Acumulado" stroke={chartTheme.patrimonyLine} fill={chartTheme.patrimonyLine} fillOpacity={0.2} />
+                      <Area type={curveType} dataKey="aportado" name="Aporte no Mês" stroke={chartTheme.aporteLine} fill={chartTheme.aporteLine} fillOpacity={0.15} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="glass-card p-6 rounded-2xl border border-white/[0.07] space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Limite Disponível vs. Limite Usado nos Cartões</h3>
+                  <p className="text-xs text-slate-400">Faturas em aberto comparadas ao limite disponível.</p>
+                </div>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={creditChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                      <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
+                      <YAxis stroke="#64748b" fontSize={11} />
+                      <Tooltip content={<CustomCyberTooltip isCurrency={true} />} />
+                      <Legend wrapperStyle={{ fontSize: "11px" }} />
+                      <Bar dataKey="usado" name="Fatura Aberta" fill={chartTheme.creditUsedBar} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="disponivel" name="Limite Livre" fill={chartTheme.creditAvailableBar} radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </div>
           </div>
-        </header>
-
-        {/* CORPO DO PAINEL COM WIDGETS MOVÍVEIS RESTAURADOS */}
-        <main className="max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24">
-          {activeTab === "dashboard" ? (
-            <div className="space-y-6">
-              {dashboardLayout.map((widget, index) => {
-                const isThermometer = widget.id === "thermometer";
-                const isKpis = widget.id === "kpis";
-                const isPatrimony = widget.id === "patrimony_chart";
-                const isCredit = widget.id === "credit_chart";
-                const isCategory = widget.id === "category_chart";
-                const isBenefitsStrava = widget.id === "benefits_strava";
-
-                return (
-                  <div key={widget.id} className="glass-card p-6 rounded-2xl border border-white/[0.07] relative group space-y-4 shadow-xl">
-                    <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                      <div>
-                        <h3 className="text-sm font-extrabold text-white">{widget.title}</h3>
-                        <p className="text-[11px] text-slate-400">{widget.subtitle}</p>
-                      </div>
-                      <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
-                        <button
-                          type="button"
-                          onClick={() => moveWidget(index, "up")}
-                          disabled={index === 0}
-                          className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-[10px] text-slate-300 font-bold"
-                          title="Mover para cima"
-                        >
-                          ▲ Subir
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveWidget(index, "down")}
-                          disabled={index === dashboardLayout.length - 1}
-                          className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-[10px] text-slate-300 font-bold"
-                          title="Mover para baixo"
-                        >
-                          ▼ Descer
-                        </button>
-                      </div>
-                    </div>
-
-                    {isThermometer && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-xs font-bold">
-                          <span className="text-slate-300">Gasto Atual: {formatBRL(monthSummary.personalSpent)}</span>
-                          <span className={monthSummary.personalSpent > personalBudgetLimit ? "text-rose-400" : "text-emerald-400"}>
-                            Teto Limite: {formatBRL(personalBudgetLimit)}
-                          </span>
-                        </div>
-                        <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full transition-all duration-700 ${
-                              monthSummary.personalSpent > personalBudgetLimit ? "bg-rose-500" : "bg-gradient-to-r from-emerald-500 to-indigo-500"
-                            }`}
-                            style={{ width: `${Math.min(100, Math.round((monthSummary.personalSpent / Math.max(1, personalBudgetLimit)) * 100))}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {isKpis && (
-                      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${moneyBlur}`}>
-                        <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5">
-                          <span className="text-[11px] text-slate-400 flex items-center justify-between">Entradas <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /></span>
-                          <p className="text-xl font-extrabold text-emerald-400 mt-1">{formatBRL(monthSummary.income)}</p>
-                          <span className="text-[10px] text-slate-400 mt-0.5 block">{monthSummary.incomeDiff >= 0 ? `+${monthSummary.incomeDiff}%` : `${monthSummary.incomeDiff}%`} vs. anterior</span>
-                        </div>
-                        <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5">
-                          <span className="text-[11px] text-slate-400 flex items-center justify-between">Saídas <TrendingDown className="w-3.5 h-3.5 text-rose-400" /></span>
-                          <p className="text-xl font-extrabold text-rose-400 mt-1">{formatBRL(monthSummary.expense)}</p>
-                          <span className="text-[10px] text-slate-400 mt-0.5 block">{monthSummary.expenseDiff >= 0 ? `+${monthSummary.expenseDiff}%` : `${monthSummary.expenseDiff}%`} vs. anterior</span>
-                        </div>
-                        <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5">
-                          <span className="text-[11px] text-slate-400 flex items-center justify-between">Aportes <PiggyBank className="w-3.5 h-3.5 text-indigo-400" /></span>
-                          <p className="text-xl font-extrabold text-indigo-400 mt-1">{formatBRL(monthSummary.invested)}</p>
-                          <span className="text-[10px] text-slate-400 mt-0.5 block">Meta: {formatBRL(monthlyInvestmentGoal)}</span>
-                        </div>
-                        <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5">
-                          <span className="text-[11px] text-slate-400 flex items-center justify-between">Saldo Livre <Wallet className="w-3.5 h-3.5 text-sky-400" /></span>
-                          <p className={`text-xl font-extrabold mt-1 ${monthSummary.balance >= 0 ? "text-sky-400" : "text-rose-400"}`}>{formatBRL(monthSummary.balance)}</p>
-                          <span className="text-[10px] text-slate-400 mt-0.5 block">Disponível em conta</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {isPatrimony && (
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={patrimonyChartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                            <XAxis dataKey="label" stroke="#64748b" fontSize={11} />
-                            <YAxis stroke="#64748b" fontSize={11} />
-                            <Tooltip content={<CustomCyberTooltip isCurrency={true} />} />
-                            <Legend wrapperStyle={{ fontSize: "11px" }} />
-                            {milestones.map((m) => (
-                              <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
-                            ))}
-                            <Area type={curveType} dataKey="acumulado" name="Patrimônio Acumulado" stroke={chartTheme.patrimonyLine} fill={chartTheme.patrimonyLine} fillOpacity={0.2} />
-                            <Area type={curveType} dataKey="aportado" name="Aporte no Mês" stroke={chartTheme.aporteLine} fill={chartTheme.aporteLine} fillOpacity={0.15} />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-
-                    {isCredit && (
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={creditChartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                            <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                            <YAxis stroke="#64748b" fontSize={11} />
-                            <Tooltip content={<CustomCyberTooltip isCurrency={true} />} />
-                            <Legend wrapperStyle={{ fontSize: "11px" }} />
-                            <Bar dataKey="usado" name="Fatura Aberta" fill={chartTheme.creditUsedBar} radius={[6, 6, 0, 0]} />
-                            <Bar dataKey="disponivel" name="Limite Livre" fill={chartTheme.creditAvailableBar} radius={[6, 6, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-
-                    {isCategory && (
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={categoryChartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                            <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                            <YAxis stroke="#64748b" fontSize={11} />
-                            <Tooltip content={<CustomCyberTooltip isCurrency={true} />} />
-                            <Bar dataKey="value" name="Gasto por Categoria (R$)" fill="#f43f5e" radius={[6, 6, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-
-                    {isBenefitsStrava && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                        <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-1">
-                          <span className="text-slate-400 block">Auxílio Combustível & VA</span>
-                          <strong className="text-base text-emerald-400">{formatBRL(1365)}</strong>
-                          <span className="text-[10px] text-slate-400 block">Crédito mensal recebido na ACS</span>
-                        </div>
-                        <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-1">
-                          <span className="text-slate-400 block">Progresso Anual Strava</span>
-                          <strong className="text-base text-orange-400">{stravaStats.ytdKm} km / {annualRunGoalKm} km</strong>
-                          <span className="text-[10px] text-slate-400 block">{stravaStats.ytdRuns} corridas registradas em 2026</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <SecondaryTabs
-              activeTab={activeTab}
-              moneyBlur={moneyBlur}
-              currentUser={currentUser}
-              currentUserAvatar={currentUserAvatar}
-              themeMode={themeMode}
-              changeThemeMode={changeThemeMode}
-              setShowChangelogModal={setShowChangelogModal}
-              staticStatus={staticStatus}
-              editingStatusId={editingStatusId}
-              setEditingStatusId={setEditingStatusId}
-              newStatusItem={newStatusItem}
-              setNewStatusItem={setNewStatusItem}
-              handleSaveStaticStatus={handleSaveStaticStatus}
-              saveStaticStatus={saveStaticStatus}
-              filteredTransactions={filteredTransactions}
-              transactions={transactions}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              handleExportCSV={handleExportCSV}
-              handleOpenNewTxModal={handleOpenNewTxModal}
-              getFlowType={getFlowType}
-              cards={cards}
-              categoryColors={categoryColors}
-              handleToggleStatus={handleToggleStatus}
-              handleStartEditTransaction={handleStartEditTransaction}
-              handleDeleteTransaction={handleDeleteTransaction}
-              receivableItems={receivableItems}
-              receivablesAnalytics={receivablesAnalytics}
-              handleAssignDebtor={handleAssignDebtor}
-              handlePartialPaymentReceivable={handlePartialPaymentReceivable}
-              notify={notify}
-              editingCardId={editingCardId}
-              setEditingCardId={setEditingCardId}
-              newCard={newCard}
-              setNewCard={setNewCard}
-              handleSaveCard={handleSaveCard}
-              handleDeleteCard={handleDeleteCard}
-              handlePayCardInvoice={handlePayCardInvoice}
-              wishlist={wishlist}
-              editingWishId={editingWishId}
-              setEditingWishId={setEditingWishId}
-              newWish={newWish}
-              setNewWish={setNewWish}
-              handleSaveWish={handleSaveWish}
-              handleIncrementWish={handleIncrementWish}
-              handleDeleteWish={handleDeleteWish}
-              personalBudgetLimit={personalBudgetLimit}
-              autoMetrics={autoMetrics}
-              chartTheme={chartTheme}
-              updateChartThemeColor={updateChartThemeColor}
-              stravaStats={stravaStats}
-              isSyncingStrava={isSyncingStrava}
-              syncStravaFromApi={syncStravaFromApi}
-              bioLogs={bioLogs}
-              editingBioId={editingBioId}
-              setEditingBioId={setEditingBioId}
-              newBio={newBio}
-              setNewBio={setNewBio}
-              handleSaveBioLog={handleSaveBioLog}
-              handleDeleteBioLog={handleDeleteBioLog}
-              okrs={okrs}
-              saveOkrs={saveOkrs}
-              newOkr={newOkr}
-              setNewOkr={setNewOkr}
-              handleAddOkr={handleAddOkr}
-              notes={notes}
-              selectedNoteTag={selectedNoteTag}
-              setSelectedNoteTag={setSelectedNoteTag}
-              editingNoteId={editingNoteId}
-              setEditingNoteId={setEditingNoteId}
-              newNote={newNote}
-              setNewNote={setNewNote}
-              handleSaveNote={handleSaveNote}
-              handleDeleteNote={handleDeleteNote}
-              handleExportFullBackupJSON={handleExportFullBackupJSON}
-              handleImportFullBackupJSON={handleImportFullBackupJSON}
-              handleUpdateProfileAvatar={handleUpdateProfileAvatar}
-              sheetApiUrl={sheetApiUrl}
-              setSheetApiUrl={setSheetApiUrl}
-              isSyncing={isSyncing}
-              syncFromGoogleSheets={syncFromGoogleSheets}
-              pushAllToGoogleSheets={pushAllToGoogleSheets}
-              sheetsSyncStatus={sheetsSyncStatus}
-              stravaConfig={stravaConfig}
-              setStravaConfig={setStravaConfig}
-              stravaSyncStatus={stravaSyncStatus}
-              paymentMethods={paymentMethods}
-              newMethodName={newMethodName}
-              setNewMethodName={setNewMethodName}
-              handleAddPaymentMethod={handleAddPaymentMethod}
-              handleDeletePaymentMethod={handleDeletePaymentMethod}
-              categoriesCatalog={categoriesCatalog}
-              newCategoryForm={newCategoryForm}
-              setNewCategoryForm={setNewCategoryForm}
-              handleAddCustomCategory={handleAddCustomCategory}
-              handleDeleteCategory={handleDeleteCategory}
-              monthlyInvestmentGoal={monthlyInvestmentGoal}
-              patrimonyTarget={patrimonyTarget}
-              annualRunGoalKm={annualRunGoalKm}
-              setPersonalBudgetLimit={setPersonalBudgetLimit}
-              setMonthlyInvestmentGoal={setMonthlyInvestmentGoal}
-              setPatrimonyTarget={setPatrimonyTarget}
-              setAnnualRunGoalKm={setAnnualRunGoalKm}
-              updateGoalsStorage={updateGoalsStorage}
-              alertRules={alertRules}
-              saveAlertRules={saveAlertRules}
-              newAlert={newAlert}
-              setNewAlert={setNewAlert}
-              handleAddAlertRule={handleAddAlertRule}
-              systemLogs={systemLogs}
-              setSystemLogs={setSystemLogs}
-              logFilter={logFilter}
-              setLogFilter={setLogFilter}
-            />
-          )}
-        </main>
-      </div>
+        ) : (
+          <SecondaryTabs
+            activeTab={activeTab}
+            moneyBlur={moneyBlur}
+            currentUser={currentUser}
+            currentUserAvatar={currentUserAvatar}
+            themeMode={themeMode}
+            changeThemeMode={changeThemeMode}
+            setShowChangelogModal={setShowChangelogModal}
+            staticStatus={staticStatus}
+            editingStatusId={editingStatusId}
+            setEditingStatusId={setEditingStatusId}
+            newStatusItem={newStatusItem}
+            setNewStatusItem={setNewStatusItem}
+            handleSaveStaticStatus={handleSaveStaticStatus}
+            saveStaticStatus={saveStaticStatus}
+            filteredTransactions={filteredTransactions}
+            transactions={transactions}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            handleExportCSV={handleExportCSV}
+            handleOpenNewTxModal={handleOpenNewTxModal}
+            getFlowType={getFlowType}
+            cards={cards}
+            categoryColors={categoryColors}
+            handleToggleStatus={handleToggleStatus}
+            handleStartEditTransaction={handleStartEditTransaction}
+            handleDeleteTransaction={handleDeleteTransaction}
+            receivableItems={receivableItems}
+            receivablesAnalytics={receivablesAnalytics}
+            handleAssignDebtor={handleAssignDebtor}
+            handlePartialPaymentReceivable={handlePartialPaymentReceivable}
+            notify={notify}
+            editingCardId={editingCardId}
+            setEditingCardId={setEditingCardId}
+            newCard={newCard}
+            setNewCard={setNewCard}
+            handleSaveCard={handleSaveCard}
+            handleDeleteCard={handleDeleteCard}
+            handlePayCardInvoice={handlePayCardInvoice}
+            wishlist={wishlist}
+            editingWishId={editingWishId}
+            setEditingWishId={setEditingWishId}
+            newWish={newWish}
+            setNewWish={setNewWish}
+            handleSaveWish={handleSaveWish}
+            handleIncrementWish={handleIncrementWish}
+            handleDeleteWish={handleDeleteWish}
+            personalBudgetLimit={personalBudgetLimit}
+            autoMetrics={autoMetrics}
+            chartTheme={chartTheme}
+            updateChartThemeColor={updateChartThemeColor}
+            stravaStats={stravaStats}
+            isSyncingStrava={isSyncingStrava}
+            syncStravaFromApi={syncStravaFromApi}
+            bioLogs={bioLogs}
+            editingBioId={editingBioId}
+            setEditingBioId={setEditingBioId}
+            newBio={newBio}
+            setNewBio={setNewBio}
+            handleSaveBioLog={handleSaveBioLog}
+            handleDeleteBioLog={handleDeleteBioLog}
+            okrs={okrs}
+            saveOkrs={saveOkrs}
+            newOkr={newOkr}
+            setNewOkr={setNewOkr}
+            handleAddOkr={handleAddOkr}
+            notes={notes}
+            selectedNoteTag={selectedNoteTag}
+            setSelectedNoteTag={setSelectedNoteTag}
+            editingNoteId={editingNoteId}
+            setEditingNoteId={setEditingNoteId}
+            newNote={newNote}
+            setNewNote={setNewNote}
+            handleSaveNote={handleSaveNote}
+            handleDeleteNote={handleDeleteNote}
+            handleExportFullBackupJSON={handleExportFullBackupJSON}
+            handleImportFullBackupJSON={handleImportFullBackupJSON}
+            handleUpdateProfileAvatar={handleUpdateProfileAvatar}
+            sheetApiUrl={sheetApiUrl}
+            setSheetApiUrl={setSheetApiUrl}
+            isSyncing={isSyncing}
+            syncFromGoogleSheets={syncFromGoogleSheets}
+            pushAllToGoogleSheets={pushAllToGoogleSheets}
+            sheetsSyncStatus={sheetsSyncStatus}
+            stravaConfig={stravaConfig}
+            setStravaConfig={setStravaConfig}
+            stravaSyncStatus={stravaSyncStatus}
+            paymentMethods={paymentMethods}
+            newMethodName={newMethodName}
+            setNewMethodName={setNewMethodName}
+            handleAddPaymentMethod={handleAddPaymentMethod}
+            handleDeletePaymentMethod={handleDeletePaymentMethod}
+            categoriesCatalog={categoriesCatalog}
+            newCategoryForm={newCategoryForm}
+            setNewCategoryForm={setNewCategoryForm}
+            handleAddCustomCategory={handleAddCustomCategory}
+            handleDeleteCategory={handleDeleteCategory}
+            monthlyInvestmentGoal={monthlyInvestmentGoal}
+            patrimonyTarget={patrimonyTarget}
+            annualRunGoalKm={annualRunGoalKm}
+            setPersonalBudgetLimit={setPersonalBudgetLimit}
+            setMonthlyInvestmentGoal={setMonthlyInvestmentGoal}
+            setPatrimonyTarget={setPatrimonyTarget}
+            setAnnualRunGoalKm={setAnnualRunGoalKm}
+            updateGoalsStorage={updateGoalsStorage}
+            alertRules={alertRules}
+            saveAlertRules={saveAlertRules}
+            newAlert={newAlert}
+            setNewAlert={setNewAlert}
+            handleAddAlertRule={handleAddAlertRule}
+            systemLogs={systemLogs}
+            setSystemLogs={setSystemLogs}
+            logFilter={logFilter}
+            setLogFilter={setLogFilter}
+          />
+        )}
+      </main>
 
       {/* MODAL DE NOVO / EDITAR LANÇAMENTO */}
       {showTxModal && (
@@ -1864,6 +1845,29 @@ export default function FinControlLifeOS() {
               <button type="submit" className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold">Salvar Lançamento</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* MODAL CHANGELOG */}
+      {showChangelogModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-indigo-500/30 p-6 shadow-2xl space-y-4 text-xs max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-base font-extrabold text-white">Histórico de Versões (Changelog)</h3>
+              <button type="button" onClick={() => setShowChangelogModal(false)} className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white"><X className="w-4 h-4" /></button>
+            </div>
+            {CHANGELOG_HISTORY.map((ch) => (
+              <div key={ch.version} className="p-4 rounded-2xl bg-slate-950 border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <strong className="text-emerald-400 font-bold">Versão {ch.version} — {ch.title}</strong>
+                  <span className="text-[10px] text-slate-400 font-mono">{ch.date}</span>
+                </div>
+                <ul className="list-disc list-inside text-slate-300 space-y-1">
+                  {ch.highlights.map((h, i) => <li key={i}>{h}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
