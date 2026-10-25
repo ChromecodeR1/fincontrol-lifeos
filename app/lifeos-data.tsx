@@ -2,9 +2,25 @@
 
 import React from "react";
 import {
-  Banknote, CreditCard, PiggyBank, Utensils, Home, HeartPulse,
-  Wifi, GraduationCap, Fuel, Wrench, Car, Briefcase, Coffee,
-  ShoppingBag, Tag, HandCoins, Sun, Monitor, Moon
+  Banknote,
+  CreditCard,
+  PiggyBank,
+  Utensils,
+  Home,
+  HeartPulse,
+  Wifi,
+  GraduationCap,
+  Fuel,
+  Wrench,
+  Car,
+  Briefcase,
+  Coffee,
+  ShoppingBag,
+  Tag,
+  HandCoins,
+  Sun,
+  Monitor,
+  Moon
 } from "lucide-react";
 
 export type CostType = "Fixo" | "Variável";
@@ -13,10 +29,32 @@ export type TxStatus = "Pago" | "Pendente / Na Fatura";
 export type FlowType = "INCOME" | "EXPENSE" | "INVESTMENT";
 export type CurveType = "monotone" | "natural" | "linear" | "step";
 export type ThemeMode = "branco" | "tradicional" | "noturno";
-export type ActiveTab = "dashboard" | "status" | "transactions" | "receivables" | "cards" | "auto" | "bio" | "brain" | "settings";
-export type DashboardWidgetId = "thermometer" | "kpis" | "credit_chart" | "patrimony_chart" | "category_chart" | "benefits_strava";
+export type ActiveTab =
+  | "dashboard"
+  | "status"
+  | "transactions"
+  | "receivables"
+  | "cards"
+  | "auto"
+  | "bio"
+  | "brain"
+  | "spotify"
+  | "settings";
+export type DashboardWidgetId =
+  | "thermometer"
+  | "kpis"
+  | "credit_chart"
+  | "patrimony_chart"
+  | "category_chart"
+  | "benefits_strava";
 
-export interface DashboardWidgetConfig { id: DashboardWidgetId; title: string; subtitle: string; span: 1 | 2; }
+export interface DashboardWidgetConfig {
+  id: DashboardWidgetId;
+  title: string;
+  subtitle: string;
+  visible: boolean;
+  size?: "half" | "full";
+}
 
 export interface Transaction {
   id: string;
@@ -39,36 +77,140 @@ export interface Transaction {
   paidAmount?: number;
 }
 
-export interface CreditCardItem { id: string; name: string; brand: string; limit: number; closingDay: number; dueDay: number; logoUrl?: string; }
-export interface StaticStatusItem { id: string; title: string; type: "Renda Base" | "Benefício" | "Custo Fixo" | "Meta Aporte"; amount: number; notes: string; }
-export interface WishlistItem { id: string; title: string; institution: string; targetAmount: number; savedAmount: number; priority: "Alta" | "Média" | "Baixa"; }
-export interface BioLog { id: string; date: string; weight: number; bf?: number; }
-export interface StravaStats { ytdKm: number; ytdRuns: number; allTimeKm: number; allTimeRuns: number; lastSync: string; }
-export interface BrainNote { id: string; date: string; title: string; content: string; tag: "#TrabalhoACS" | "#Ideias" | "#Estudos" | "#Pessoal" | "#Links"; }
-export interface PersonalOKR { id: string; title: string; category: string; current: number; target: number; unit: string; }
-export interface CustomAlertRule { id: string; title: string; type: "ODOMETER_KM" | "FINANCIAL_CAP"; targetValue: number; warningLead: number; }
-export interface ChartMilestone { id: string; label: string; value: number; color: string; }
-export interface ChartThemeColors { patrimonyLine: string; aporteLine: string; creditUsedBar: string; creditAvailableBar: string; odometerLine: string; weightLine: string; bfLine: string; }
-export interface CategoryCatalogItem { name: string; flow: FlowType; isAuto?: boolean; }
-export interface StoredUserAccount { username: string; passwordHash: string; salt: string; avatarUrl?: string; createdAt: string; }
-export interface ToastMessage { id: string; title: string; subtitle?: string; type: "success" | "warning" | "info"; }
-export interface SystemLogEntry { id: string; timestamp: string; user: string; category: "AUTH" | "FINANCE" | "CONFIG" | "SECURITY"; action: string; details: string; }
-export interface ChangelogEntry { version: string; date: string; title: string; highlights: string[]; }
+export interface CreditCardItem {
+  id: string;
+  name: string;
+  brand: string;
+  limit: number;
+  closingDay: number;
+  dueDay: number;
+  logoUrl?: string;
+}
 
-export const APP_VERSION = "1.0";
+export interface StaticStatusItem {
+  id: string;
+  title: string;
+  type: "Renda Base" | "Benefício" | "Custo Fixo" | "Meta Aporte";
+  amount: number;
+  notes: string;
+}
+
+export interface WishlistItem {
+  id: string;
+  title: string;
+  institution: string;
+  targetAmount: number;
+  savedAmount: number;
+  priority: "Alta" | "Média" | "Baixa";
+}
+
+export interface BioLog {
+  id: string;
+  date: string;
+  weight: number;
+  bf?: number;
+}
+
+export interface StravaStats {
+  ytdKm: number;
+  ytdRuns: number;
+  allTimeKm: number;
+  allTimeRuns: number;
+  lastSync: string;
+}
+
+export interface BrainNote {
+  id: string;
+  date: string;
+  title: string;
+  content: string;
+  tag: "#TrabalhoACS" | "#Ideias" | "#Estudos" | "#Pessoal" | "#Links";
+}
+
+export interface PersonalOKR {
+  id: string;
+  title: string;
+  category: string;
+  current: number;
+  target: number;
+  unit: string;
+}
+
+export interface CustomAlertRule {
+  id: string;
+  title: string;
+  type: "ODOMETER_KM" | "FINANCIAL_CAP";
+  targetValue: number;
+  warningLead: number;
+}
+
+export interface ChartMilestone {
+  id: string;
+  label: string;
+  value: number;
+  color: string;
+}
+
+export interface ChartThemeColors {
+  patrimonyLine: string;
+  aporteLine: string;
+  creditUsedBar: string;
+  creditAvailableBar: string;
+  odometerLine: string;
+  weightLine: string;
+  bfLine: string;
+}
+
+export interface CategoryCatalogItem {
+  name: string;
+  flow: FlowType;
+  isAuto?: boolean;
+}
+
+export interface StoredUserAccount {
+  username: string;
+  passwordHash: string;
+  salt: string;
+  avatarUrl?: string;
+  createdAt: string;
+}
+
+export interface ToastMessage {
+  id: string;
+  title: string;
+  subtitle?: string;
+  type: "success" | "warning" | "info";
+}
+
+export interface SystemLogEntry {
+  id: string;
+  timestamp: string;
+  user: string;
+  category: "AUTH" | "FINANCE" | "CONFIG" | "SECURITY";
+  action: string;
+  details: string;
+}
+
+export interface ChangelogEntry {
+  version: string;
+  date: string;
+  title: string;
+  highlights: string[];
+}
+
+export const APP_VERSION = "0.11.0";
 export const PREVIOUS_VERSION = "0.9";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: "1.0",
+    version: "0.11.0",
     date: "Out/2026",
-    title: "Full Release: Arquitetura Modular, Parcelamento 1x–24x, Valores a Receber 2.0 e Mobile Nav",
+    title: "Configurações por Gráfico, Reordenação Drag-and-Drop e Módulo Spotify Família",
     highlights: [
-      "Engenharia Modular e API Route Backend (/api/sync) para proteger URLs e chaves sensíveis no servidor.",
-      "Compras Parceladas (1x a 24x) com geração automática nos meses seguintes e cálculo real de limite comprometido.",
-      "Valores a Receber 2.0: suporte a abatimento parcial, digitação otimizada (onBlur), resumo para WhatsApp em 1 clique e sincronização do devedor na planilha.",
-      "KPIs Inteligentes com variação percentual (Mês Atual vs. Mês Anterior) e Patrimônio Dinâmico calculado por mês.",
-      "Barra de Navegação Inferior (Bottom Nav) exclusiva para uso rápido no celular."
+      "Configurações independentes por card no Dashboard (cor, curva, espessura, área, zeros, rótulos, grade e legenda).",
+      "Reordenação por arrastar e soltar (GripVertical) e alternância entre meia largura (1/2) e largura total (1/1).",
+      "Novo módulo Spotify Família com controle anual de cotas, destaque de atrasados/pendentes, baixa em lote em 2 toques e botão Cobrar.",
+      "Persistência completa no Supabase com RLS por usuário."
     ]
   },
   {
@@ -94,7 +236,12 @@ export const CHANGELOG_HISTORY: ChangelogEntry[] = [
 
 export function sanitizeText(raw: string): string {
   if (!raw) return "";
-  return raw.replace(/<\/?[^>]+(>|$)/g, "").replace(/javascript:/gi, "").replace(/on\w+\s*=/gi, "").replace(/[<>]/g, "").trim();
+  return raw
+    .replace(/<\/?[^>]+(>|$)/g, "")
+    .replace(/javascript:/gi, "")
+    .replace(/on\w+\s*=/gi, "")
+    .replace(/[<>]/g, "")
+    .trim();
 }
 
 export function sanitizeImageSource(src?: string): string | undefined {
@@ -137,8 +284,11 @@ export function buildWhatsAppChargeText(person: string, items: Transaction[]): s
     const paid = item.paidAmount ? item.paidAmount : 0;
     const rem = Math.max(0, item.amount - paid);
     totalRemaining += rem;
-    const partialNote = paid > 0 ? ` (Total: ${formatBRL(item.amount)} - Já abatido: ${formatBRL(paid)})` : "";
-    return `• ${item.date.split("-").reverse().join("/")}: *${item.description}* — *${formatBRL(rem)}*${partialNote}`;
+    const partialNote =
+      paid > 0 ? ` (Total: ${formatBRL(item.amount)} | Já abatido: ${formatBRL(paid)})` : "";
+    return `• ${item.date.split("-").reverse().join("/")}: *${item.description}* — *${formatBRL(
+      rem
+    )}*${partialNote}`;
   });
 
   return [
@@ -155,7 +305,9 @@ export async function hashPasswordPBKDF(password: string, salt: string): Promise
   const encoder = new TextEncoder();
   const data = encoder.encode(`${salt}::${password}::LIFEOS_PEPPER_v4`);
   const hashBuffer = await window.crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export function validatePasswordRules(pw: string) {
@@ -175,12 +327,22 @@ export function compressImageFileToBase64(file: File, callback: (base64: string)
     img.onload = () => {
       const canvas = document.createElement("canvas");
       const maxDim = 110;
-      let w = img.width, h = img.height;
-      if (w > h && w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
-      else if (h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; }
-      canvas.width = w; canvas.height = h;
+      let w = img.width,
+        h = img.height;
+      if (w > h && w > maxDim) {
+        h = Math.round((h * maxDim) / w);
+        w = maxDim;
+      } else if (h > maxDim) {
+        w = Math.round((w * maxDim) / h);
+        h = maxDim;
+      }
+      canvas.width = w;
+      canvas.height = h;
       const ctx = canvas.getContext("2d");
-      if (ctx) { ctx.drawImage(img, 0, 0, w, h); callback(canvas.toDataURL("image/png", 0.88)); }
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, w, h);
+        callback(canvas.toDataURL("image/png", 0.88));
+      }
     };
     if (typeof event.target?.result === "string") img.src = event.target.result;
   };
@@ -210,51 +372,136 @@ export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = [
   { name: "Estacionamento/Pedágio", flow: "EXPENSE", isAuto: true }
 ];
 
-export const DEFAULT_PAYMENT_METHODS: string[] = ["PIX", "Cartão de Débito", "Cartão de Crédito", "Cartão ECX", "Dinheiro"];
+export const DEFAULT_PAYMENT_METHODS: string[] = [
+  "PIX",
+  "Cartão de Débito",
+  "Cartão de Crédito",
+  "Cartão ECX",
+  "Dinheiro"
+];
 
 export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
-  "Salário": "#10b981", "Benefícios (VA/Combustível)": "#34d399", "Comissão": "#059669",
-  "Serviços": "#2dd4bf", "Rendimentos": "#14b8a6", "Aporte / Investimento": "#6366f1",
-  "A Receber": "#f59e0b", "Alimentação": "#f43f5e", "Moradia": "#8b5cf6",
-  "Gastos Pessoais / Besteiras": "#ec4899", "Saúde/Academia": "#06b6d4", "Assinaturas/Internet": "#3b82f6",
-  "Lazer": "#a855f7", "Educação": "#0ea5e9", "Gasolina/Combustível": "#f59e0b", "Manutenção": "#ea580c",
-  "Troca de Óleo": "#d97706", "IPVA/Licenciamento": "#e11d48", "Seguro": "#64748b", "Estacionamento/Pedágio": "#fbbf24"
+  "Salário": "#10b981",
+  "Benefícios (VA/Combustível)": "#34d399",
+  "Comissão": "#059669",
+  "Serviços": "#2dd4bf",
+  "Rendimentos": "#14b8a6",
+  "Aporte / Investimento": "#6366f1",
+  "A Receber": "#f59e0b",
+  "Alimentação": "#f43f5e",
+  "Moradia": "#8b5cf6",
+  "Gastos Pessoais / Besteiras": "#ec4899",
+  "Saúde/Academia": "#06b6d4",
+  "Assinaturas/Internet": "#3b82f6",
+  "Lazer": "#a855f7",
+  "Educação": "#0ea5e9",
+  "Gasolina/Combustível": "#f59e0b",
+  "Manutenção": "#ea580c",
+  "Troca de Óleo": "#d97706",
+  "IPVA/Licenciamento": "#e11d48",
+  "Seguro": "#64748b",
+  "Estacionamento/Pedágio": "#fbbf24"
 };
 
 export const DEFAULT_CHART_THEME: ChartThemeColors = {
-  patrimonyLine: "#818cf8", aporteLine: "#34d399", creditUsedBar: "#f43f5e",
-  creditAvailableBar: "#10b981", odometerLine: "#f59e0b", weightLine: "#10b981", bfLine: "#818cf8"
+  patrimonyLine: "#818cf8",
+  aporteLine: "#34d399",
+  creditUsedBar: "#f43f5e",
+  creditAvailableBar: "#10b981",
+  odometerLine: "#f59e0b",
+  weightLine: "#10b981",
+  bfLine: "#818cf8"
 };
 
-export const COLOR_PRESETS = ["#6366f1", "#10b981", "#f43f5e", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899", "#3b82f6", "#14b8a6", "#eab308"];
+export const COLOR_PRESETS = [
+  "#6366f1",
+  "#10b981",
+  "#f43f5e",
+  "#f59e0b",
+  "#8b5cf6",
+  "#06b6d4",
+  "#ec4899",
+  "#3b82f6",
+  "#14b8a6",
+  "#eab308"
+];
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
-  { id: "thermometer", title: "Termômetro de Gastos Pessoais", subtitle: "Acompanhe quanto do seu orçamento livre do mês ainda está disponível para compras pessoais.", span: 2 },
-  { id: "kpis", title: "Resumo Financeiro do Mês", subtitle: "Visão consolidada do que entrou, do que saiu, do saldo livre em conta e do total investido (com comparativo mensal).", span: 2 },
-  { id: "patrimony_chart", title: "Evolução do Meu Patrimônio", subtitle: "Crescimento dinâmico das suas reservas somando os aportes reais de cada mês.", span: 1 },
-  { id: "credit_chart", title: "Limite Disponível vs. Limite Usado", subtitle: "Veja quanto do seu crédito total está comprometido nas faturas (incluindo parcelas) e quanto está livre.", span: 1 },
-  { id: "category_chart", title: "Para Onde Vai o Meu Dinheiro", subtitle: "Identifique rapidamente quais categorias representam a maior fatia das suas despesas no período.", span: 1 },
-  { id: "benefits_strava", title: "Saldo de Benefícios e Meta de Corrida", subtitle: "Compare o auxílio recebido com seus gastos de mercado e posto, além do seu progresso anual no Strava.", span: 1 }
+  {
+    id: "thermometer",
+    title: "Termômetro de Orçamento & Alertas",
+    subtitle: "Consumo do teto pessoal e avisos ativos",
+    visible: true,
+    size: "full"
+  },
+  {
+    id: "kpis",
+    title: "KPIs Executivos",
+    subtitle: "Resumo financeiro e patrimonial do período",
+    visible: true,
+    size: "full"
+  },
+  {
+    id: "credit_chart",
+    title: "Exposição & Limite de Cartões",
+    subtitle: "Faturas abertas vs limite total disponível",
+    visible: true,
+    size: "half"
+  },
+  {
+    id: "patrimony_chart",
+    title: "Evolução Patrimonial",
+    subtitle: "Crescimento acumulado e fluxo mensal",
+    visible: true,
+    size: "half"
+  },
+  {
+    id: "category_chart",
+    title: "Despesas por Categoria",
+    subtitle: "Distribuição percentual dos gastos",
+    visible: true,
+    size: "half"
+  },
+  {
+    id: "benefits_strava",
+    title: "Performance & Metas",
+    subtitle: "Indicadores físicos e acompanhamento anual",
+    visible: true,
+    size: "half"
+  }
 ];
 
 export function renderCategorySemanticIcon(category: string, color: string) {
   const c = category.toLowerCase();
   const style = { color };
   if (c.includes("receber")) return <HandCoins className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("salário") || c.includes("comissão") || c.includes("rendimento")) return <Banknote className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("benefício") || c.includes("ecx") || c.includes("va")) return <CreditCard className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("aporte") || c.includes("investimento") || c.includes("reserva")) return <PiggyBank className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("alimentação") || c.includes("mercado") || c.includes("restaurante")) return <Utensils className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("moradia") || c.includes("aluguel") || c.includes("casa")) return <Home className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("saúde") || c.includes("academia") || c.includes("médico")) return <HeartPulse className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("internet") || c.includes("assinatura")) return <Wifi className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("educação") || c.includes("faculdade") || c.includes("curso")) return <GraduationCap className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("gasolina") || c.includes("combustível") || c.includes("posto")) return <Fuel className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("manutenção") || c.includes("óleo") || c.includes("revisão")) return <Wrench className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("ipva") || c.includes("seguro") || c.includes("estacionamento") || c.includes("veículo")) return <Car className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("serviço") || c.includes("trabalho")) return <Briefcase className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("salário") || c.includes("comissão") || c.includes("rendimento"))
+    return <Banknote className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("benefício") || c.includes("ecx") || c.includes("va"))
+    return <CreditCard className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("aporte") || c.includes("investimento") || c.includes("reserva"))
+    return <PiggyBank className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("alimentação") || c.includes("mercado") || c.includes("restaurante"))
+    return <Utensils className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("moradia") || c.includes("aluguel") || c.includes("casa"))
+    return <Home className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("saúde") || c.includes("academia") || c.includes("médico"))
+    return <HeartPulse className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("internet") || c.includes("assinatura"))
+    return <Wifi className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("educação") || c.includes("faculdade") || c.includes("curso"))
+    return <GraduationCap className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("gasolina") || c.includes("combustível") || c.includes("posto"))
+    return <Fuel className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("manutenção") || c.includes("óleo") || c.includes("revisão"))
+    return <Wrench className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("ipva") || c.includes("seguro") || c.includes("estacionamento") || c.includes("veículo"))
+    return <Car className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("serviço") || c.includes("trabalho"))
+    return <Briefcase className="w-3.5 h-3.5" style={style} />;
   if (c.includes("lazer")) return <Coffee className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("pessoais") || c.includes("besteira") || c.includes("compra")) return <ShoppingBag className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("pessoais") || c.includes("besteira") || c.includes("compra"))
+    return <ShoppingBag className="w-3.5 h-3.5" style={style} />;
   return <Tag className="w-3.5 h-3.5" style={style} />;
 }
 
@@ -270,20 +517,20 @@ export const INITIAL_CARDS: CreditCardItem[] = [
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [
   { id: "tx-0", date: "2026-09-05", description: "Salário Líquido ACS (Setembro)", amount: 2071.81, category: "Salário", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-09-05T08:00:00Z" },
-  { id: "tx-0b", date: "2026-09-06", description: "Aporte Mensal Setembro", amount: 1450.00, category: "Aporte / Investimento", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-09-06T08:00:00Z" },
-  { id: "tx-0c", date: "2026-09-12", description: "Despesas Gerais Setembro", amount: 1620.00, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-09-12T08:00:00Z" },
+  { id: "tx-0b", date: "2026-09-06", description: "Aporte Mensal Setembro", amount: 1450.0, category: "Aporte / Investimento", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-09-06T08:00:00Z" },
+  { id: "tx-0c", date: "2026-09-12", description: "Despesas Gerais Setembro", amount: 1620.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-09-12T08:00:00Z" },
   { id: "tx-1", date: "2026-10-05", description: "Salário Líquido ACS Sistemas", amount: 2071.81, category: "Salário", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
-  { id: "tx-2", date: "2026-10-05", description: "Auxílio Combustível + VA ACS", amount: 1365.00, category: "Benefícios (VA/Combustível)", costType: "Fixo", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
-  { id: "tx-3", date: "2026-10-06", description: "Aporte Mensal Tesouro Selic / CDB", amount: 1450.00, category: "Aporte / Investimento", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-06T08:00:00Z" },
-  { id: "tx-4", date: "2026-10-07", description: "Mensalidade Academia", amount: 82.40, category: "Saúde/Academia", costType: "Fixo", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-07T08:00:00Z" },
+  { id: "tx-2", date: "2026-10-05", description: "Auxílio Combustível + VA ACS", amount: 1365.0, category: "Benefícios (VA/Combustível)", costType: "Fixo", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
+  { id: "tx-3", date: "2026-10-06", description: "Aporte Mensal Tesouro Selic / CDB", amount: 1450.0, category: "Aporte / Investimento", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-06T08:00:00Z" },
+  { id: "tx-4", date: "2026-10-07", description: "Mensalidade Academia", amount: 82.4, category: "Saúde/Academia", costType: "Fixo", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-07T08:00:00Z" },
   { id: "tx-5", date: "2026-10-08", description: "Internet Fibra Residencial", amount: 68.17, category: "Assinaturas/Internet", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-08T08:00:00Z" },
-  { id: "tx-6", date: "2026-10-09", description: "Supermercado (Dieta da Semana)", amount: 618.00, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-09T08:00:00Z" },
-  { id: "tx-7", date: "2026-10-10", description: "Abastecimento Gasolina Comum", amount: 260.00, category: "Gasolina/Combustível", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48200, liters: 44.1, updatedAt: "2026-10-10T08:00:00Z" },
-  { id: "tx-8", date: "2026-10-11", description: "Troca de Óleo Sintético + Filtro", amount: 310.00, category: "Troca de Óleo", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Inter Black", status: "Pendente / Na Fatura", km: 48520, updatedAt: "2026-10-11T08:00:00Z" },
-  { id: "tx-9", date: "2026-10-12", description: "Camisa Minimalista + Corte de Cabelo", amount: 185.00, category: "Gastos Pessoais / Besteiras", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-12T08:00:00Z" },
-  { id: "tx-10", date: "2026-10-15", description: "Abastecimento Rotina ACS", amount: 245.00, category: "Gasolina/Combustível", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48890, liters: 41.5, updatedAt: "2026-10-15T08:00:00Z" },
-  { id: "tx-11", date: "2026-10-16", description: "Compra Passada no Cartão (Fone Bluetooth)", amount: 220.00, category: "A Receber", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", debtor: "Lucas (Primo)", paidAmount: 70, updatedAt: "2026-10-16T08:00:00Z" },
-  { id: "tx-12", date: "2026-10-17", description: "Empréstimo PIX Combustível", amount: 150.00, category: "A Receber", costType: "Variável", paymentMethod: "PIX", status: "Pago", debtor: "Matheus (ACS)", paidAmount: 150, updatedAt: "2026-10-17T08:00:00Z" }
+  { id: "tx-6", date: "2026-10-09", description: "Supermercado (Dieta da Semana)", amount: 618.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-09T08:00:00Z" },
+  { id: "tx-7", date: "2026-10-10", description: "Abastecimento Gasolina Comum", amount: 260.0, category: "Gasolina/Combustível", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48200, liters: 44.1, updatedAt: "2026-10-10T08:00:00Z" },
+  { id: "tx-8", date: "2026-10-11", description: "Troca de Óleo Sintético + Filtro", amount: 310.0, category: "Troca de Óleo", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Inter Black", status: "Pendente / Na Fatura", km: 48520, updatedAt: "2026-10-11T08:00:00Z" },
+  { id: "tx-9", date: "2026-10-12", description: "Camisa Minimalista + Corte de Cabelo", amount: 185.0, category: "Gastos Pessoais / Besteiras", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-12T08:00:00Z" },
+  { id: "tx-10", date: "2026-10-15", description: "Abastecimento Rotina ACS", amount: 245.0, category: "Gasolina/Combustível", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48890, liters: 41.5, updatedAt: "2026-10-15T08:00:00Z" },
+  { id: "tx-11", date: "2026-10-16", description: "Compra Passada no Cartão (Fone Bluetooth)", amount: 220.0, category: "A Receber", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", debtor: "Lucas (Primo)", paidAmount: 70, updatedAt: "2026-10-16T08:00:00Z" },
+  { id: "tx-12", date: "2026-10-17", description: "Empréstimo PIX Combustível", amount: 150.0, category: "A Receber", costType: "Variável", paymentMethod: "PIX", status: "Pago", debtor: "Matheus (ACS)", paidAmount: 150, updatedAt: "2026-10-17T08:00:00Z" }
 ];
 
 export const INITIAL_DEBTOR_MAP: Record<string, string> = {
@@ -293,15 +540,15 @@ export const INITIAL_DEBTOR_MAP: Record<string, string> = {
 
 export const INITIAL_STATIC_STATUS: StaticStatusItem[] = [
   { id: "st-1", title: "Salário Líquido Base (ACS)", type: "Renda Base", amount: 2071.81, notes: "Crédito no 5º dia útil" },
-  { id: "st-2", title: "Vale Alimentação (Cartão ECX)", type: "Benefício", amount: 624.00, notes: "Benefício alimentação" },
-  { id: "st-3", title: "Auxílio Combustível", type: "Benefício", amount: 741.00, notes: "Deslocamento diário" },
-  { id: "st-4", title: "Aporte Programado (70% Salário)", type: "Meta Aporte", amount: 1450.00, notes: "Prioridade nº 1 do mês" },
-  { id: "st-5", title: "Mensalidade Academia", type: "Custo Fixo", amount: 82.40, notes: "Recorrente no cartão" },
+  { id: "st-2", title: "Vale Alimentação (Cartão ECX)", type: "Benefício", amount: 624.0, notes: "Benefício alimentação" },
+  { id: "st-3", title: "Auxílio Combustível", type: "Benefício", amount: 741.0, notes: "Deslocamento diário" },
+  { id: "st-4", title: "Aporte Programado (70% Salário)", type: "Meta Aporte", amount: 1450.0, notes: "Prioridade nº 1 do mês" },
+  { id: "st-5", title: "Mensalidade Academia", type: "Custo Fixo", amount: 82.4, notes: "Recorrente no cartão" },
   { id: "st-6", title: "Plano Internet Fibra", type: "Custo Fixo", amount: 68.17, notes: "Pagamento mensal" }
 ];
 
 export const INITIAL_MILESTONES: ChartMilestone[] = [
-  { id: "ms-1", label: "Teto Caixinha Turbo Nubank (5k)", value: 5000, color: "#a855f7" },
+  { id: "ms-1", label: "Teto Caixinha Turbo Nubank (5k)", value: 5000, color: "#a85f7" },
   { id: "ms-2", label: "1º Marco Reserva de Segurança (10k)", value: 10000, color: "#10b981" }
 ];
 
@@ -345,15 +592,37 @@ export const HISTORICAL_INVESTMENTS = [
   { month: "2026-08", label: "Ago/26", aportado: 1450, acumulado: 8200 }
 ];
 
-export function CustomCyberTooltip({ active, payload, label, isCurrency = true }: any) {
+interface TooltipPayloadEntry {
+  name?: string;
+  value?: number | string;
+  color?: string;
+  fill?: string;
+}
+
+interface CustomCyberTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayloadEntry[];
+  label?: string;
+  isCurrency?: boolean;
+}
+
+export function CustomCyberTooltip({
+  active,
+  payload,
+  label,
+  isCurrency = true
+}: CustomCyberTooltipProps) {
   if (!active || !payload || !payload.length) return null;
   return (
     <div className="rounded-2xl bg-[#090d1c]/95 border border-indigo-500/30 px-3.5 py-2.5 shadow-2xl backdrop-blur-xl text-xs space-y-1">
       {label && <p className="font-bold text-slate-200 border-b border-white/10 pb-1 mb-1">{label}</p>}
-      {payload.map((entry: any, index: number) => (
+      {payload.map((entry, index) => (
         <div key={index} className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-slate-300">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color ? entry.color : entry.fill ? entry.fill : "#6366f1" }} />
+            <span
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: entry.color ? entry.color : entry.fill ? entry.fill : "#6366f1" }}
+            />
             {entry.name}:
           </span>
           <strong className="text-white font-mono">
@@ -365,7 +634,13 @@ export function CustomCyberTooltip({ active, payload, label, isCurrency = true }
   );
 }
 
-export function ThemeSegmentedControl({ themeMode, onChange }: { themeMode: ThemeMode; onChange: (m: ThemeMode) => void }) {
+export function ThemeSegmentedControl({
+  themeMode,
+  onChange
+}: {
+  themeMode: ThemeMode;
+  onChange: (m: ThemeMode) => void;
+}) {
   const options: { id: ThemeMode; icon: React.ReactNode; title: string }[] = [
     { id: "branco", icon: <Sun className="w-3.5 h-3.5" />, title: "Modo Claro" },
     { id: "tradicional", icon: <Monitor className="w-3.5 h-3.5" />, title: "Modo Tradicional" },
