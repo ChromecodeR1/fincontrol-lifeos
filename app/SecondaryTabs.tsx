@@ -5,19 +5,36 @@ import {
   Plus, CreditCard, Car, Table2, Search, CheckCircle2, Clock, Trash2,
   RefreshCw, Activity, Brain, Target, Flame, Pencil,
   Image as ImageIcon, Download, Upload, Camera, User, FileText, HandCoins,
-  Users, Share2, Layers, AlertTriangle, XCircle, Eye, EyeOff, Filter, Loader2
+  Users, Share2, Layers, AlertTriangle, XCircle, Eye, EyeOff, Filter, Loader2,
+  ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Check, X, RotateCcw,
+  SlidersHorizontal, Settings, Fuel, Gauge, DollarSign, Award, Info, Landmark,
+  Sparkles, ExternalLink, ShoppingBag, Circle
 } from "lucide-react";
 import {
   ResponsiveContainer, Tooltip, Legend, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area, BarChart, Bar
+  AreaChart, Area, BarChart, Bar, LineChart, Line, ReferenceLine, Cell
 } from "recharts";
 import {
-  ActiveTab, Transaction, CreditCardItem, StaticStatusItem, WishlistItem,
+  ActiveTab, Transaction, CreditCardItem, BankItem, BankInstitution, StaticStatusItem, WishlistItem,
   BioLog, StravaStats, BrainNote, PersonalOKR, CustomAlertRule, ChartThemeColors,
   CategoryCatalogItem, SystemLogEntry, ThemeMode, FlowType, APP_VERSION,
   formatBRL, sanitizeText, compressImageFileToBase64, renderCategorySemanticIcon,
-  CustomCyberTooltip, ThemeSegmentedControl, buildWhatsAppChargeText
+  CustomCyberTooltip, ThemeSegmentedControl, buildWhatsAppChargeText,
+  formatDateBR, AutoInmetroConfig, DEFAULT_AUTO_INMETRO_CONFIG, DashboardWidgetConfig,
+  parseInstallmentInfo, toCents, fromCents, safeAdd, safeSub,
+  calculateCardExposure, calculateBankExposure, calculateStaticStatusSummary
 } from "./lifeos-data";
+import ChartCard from "./components/ChartCard";
+import {
+  ChartKind,
+  ChartLineCurve,
+  ChartWidgetSettings,
+  ChartWidgetSize,
+  DEFAULT_CHART_WIDGET_SETTINGS
+} from "./components/ChartSettingsPopover";
+import { TransactionsTableAdvanced } from "./TransactionsTableAdvanced";
+import { BanksTab } from "./components/BanksTab";
+import { VehiclesTab } from "./components/VehiclesTab";
 
 const DebtorInputCell = React.memo(function DebtorInputCell({
   txId,
@@ -70,6 +87,8 @@ export interface SecondaryTabsProps {
   setNewStatusItem: (val: any) => void;
   handleSaveStaticStatus: (e: React.FormEvent) => void;
   saveStaticStatus: (items: StaticStatusItem[]) => void;
+  selectedMonth?: string;
+  handleLaunchFixedTransactions?: (targetMonth?: string) => Promise<{ createdCount: number; totalCount: number }>;
   filteredTransactions: Transaction[];
   transactions: Transaction[];
   searchQuery: string;
@@ -77,6 +96,13 @@ export interface SecondaryTabsProps {
   handleExportCSV: () => void;
   handleOpenNewTxModal: (defaultCategory?: string) => void;
   getFlowType: (cat: string) => FlowType;
+  banks: BankItem[];
+  editingBankId: string | null;
+  setEditingBankId: (id: string | null) => void;
+  newBank: { name: string; logoUrl: string; limit?: string; limitType?: string };
+  setNewBank: (val: any) => void;
+  handleSaveBank: (e: React.FormEvent) => void;
+  handleDeleteBank: (id: string) => void;
   cards: CreditCardItem[];
   categoryColors: Record<string, string>;
   handleToggleStatus: (tx: Transaction) => void;
@@ -91,15 +117,15 @@ export interface SecondaryTabsProps {
     historyByPerson: { person: string; aberto: number; pago: number; totalEmprestado: number }[];
   };
   handleAssignDebtor: (txId: string, debtorName: string) => void;
-  handlePartialPaymentReceivable: (tx: Transaction, addAmount: number) => void;
+  handlePartialPaymentReceivable: (tx: Transaction, addAmount: number, destBank?: string) => void;
   notify: (title: string, subtitle?: string, type?: "success" | "warning" | "info", cat?: any) => void;
   editingCardId: string | null;
   setEditingCardId: (id: string | null) => void;
-  newCard: { name: string; brand: string; limit: string; closingDay: string; dueDay: string; logoUrl: string };
-  setNewCard: React.Dispatch<React.SetStateAction<{ name: string; brand: string; limit: string; closingDay: string; dueDay: string; logoUrl: string }>>;
+  newCard: { name: string; brand: string; limit: string; closingDay: string; dueDay: string; logoUrl: string; bankId: string };
+  setNewCard: React.Dispatch<React.SetStateAction<{ name: string; brand: string; limit: string; closingDay: string; dueDay: string; logoUrl: string; bankId: string }>>;
   handleSaveCard: (e: React.FormEvent) => void;
   handleDeleteCard: (id: string) => void;
-  handlePayCardInvoice: (cardName: string) => void;
+  handlePayCardInvoice: (cardName: string, originBankName?: string) => void;
   wishlist: WishlistItem[];
   editingWishId: string | null;
   setEditingWishId: (id: string | null) => void;
@@ -132,10 +158,11 @@ export interface SecondaryTabsProps {
   setSelectedNoteTag: (t: string) => void;
   editingNoteId: string | null;
   setEditingNoteId: (id: string | null) => void;
-  newNote: { title: string; content: string; tag: BrainNote["tag"] };
+  newNote: any;
   setNewNote: (val: any) => void;
   handleSaveNote: (e: React.FormEvent) => void;
   handleDeleteNote: (id: string) => void;
+  handleToggleNoteCompleted?: (id: string) => void;
   handleExportFullBackupJSON: () => void;
   handleImportFullBackupJSON: (f: File) => void;
   handleUpdateProfileAvatar: (f: File) => void;
@@ -154,11 +181,25 @@ export interface SecondaryTabsProps {
   setNewMethodName: (v: string) => void;
   handleAddPaymentMethod: (e: React.FormEvent) => void;
   handleDeletePaymentMethod: (m: string) => void;
+  handleUpdatePaymentMethod?: (oldName: string, newName: string) => void;
   categoriesCatalog: CategoryCatalogItem[];
   newCategoryForm: { name: string; flow: FlowType; isAuto: boolean; color: string };
   setNewCategoryForm: (v: any) => void;
   handleAddCustomCategory: (e: React.FormEvent) => void;
   handleDeleteCategory: (n: string) => void;
+  handleUpdateCategory?: (oldName: string, updatedCat: CategoryCatalogItem, newColor: string) => void;
+  autoInmetroConfig?: AutoInmetroConfig;
+  setAutoInmetroConfig?: (cfg: AutoInmetroConfig) => void;
+  autoLayout?: DashboardWidgetConfig[];
+  setAutoLayout?: (l: DashboardWidgetConfig[]) => void;
+  getAutoWidgetSettings?: (widgetId: string, defaultColor?: string, fallbackCurve?: any) => ChartWidgetSettings;
+  handleUpdateAutoWidgetSettings?: (widgetId: string, next: ChartWidgetSettings) => void;
+  handleUpdateAutoWidgetSize?: (widgetId: string, nextSize: ChartWidgetSize) => void;
+  handleDragStartAutoWidget?: (id: string) => void;
+  handleDragEnterAutoWidget?: (id: string) => void;
+  handleDragEndAutoWidget?: () => void;
+  draggingAutoWidgetId?: string | null;
+  dragOverAutoWidgetId?: string | null;
   monthlyInvestmentGoal: number;
   patrimonyTarget: number;
   annualRunGoalKm: number;
@@ -182,8 +223,9 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   const {
     activeTab, moneyBlur, currentUser, currentUserAvatar, themeMode, changeThemeMode,
     setShowChangelogModal, staticStatus, editingStatusId, setEditingStatusId, newStatusItem,
-    setNewStatusItem, handleSaveStaticStatus, saveStaticStatus, filteredTransactions,
+    setNewStatusItem, handleSaveStaticStatus, saveStaticStatus, filteredTransactions, transactions,
     searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, getFlowType,
+    banks, editingBankId, setEditingBankId, newBank, setNewBank, handleSaveBank, handleDeleteBank,
     cards, categoryColors, handleToggleStatus, handleStartEditTransaction, handleDeleteTransaction,
     receivableItems, receivablesAnalytics, handleAssignDebtor, handlePartialPaymentReceivable,
     notify, editingCardId, setEditingCardId, newCard, setNewCard, handleSaveCard, handleDeleteCard,
@@ -192,24 +234,40 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     chartTheme, updateChartThemeColor, stravaStats, isSyncingStrava, syncStravaFromApi,
     bioLogs, editingBioId, setEditingBioId, newBio, setNewBio, handleSaveBioLog, handleDeleteBioLog,
     okrs, saveOkrs, newOkr, setNewOkr, handleAddOkr, notes, selectedNoteTag, setSelectedNoteTag,
-    editingNoteId, setEditingNoteId, newNote, setNewNote, handleSaveNote, handleDeleteNote,
+    editingNoteId, setEditingNoteId, newNote, setNewNote, handleSaveNote, handleDeleteNote, handleToggleNoteCompleted,
     handleExportFullBackupJSON, handleImportFullBackupJSON, handleUpdateProfileAvatar,
     sheetApiUrl, setSheetApiUrl, isSyncing, syncFromGoogleSheets,
     sheetsSyncStatus, setSheetsSyncStatus, stravaConfig, setStravaConfig, stravaSyncStatus, setStravaSyncStatus,
     paymentMethods, newMethodName, setNewMethodName, handleAddPaymentMethod, handleDeletePaymentMethod,
-    categoriesCatalog, newCategoryForm, setNewCategoryForm, handleAddCustomCategory, handleDeleteCategory,
+    handleUpdatePaymentMethod, categoriesCatalog, newCategoryForm, setNewCategoryForm, handleAddCustomCategory, handleDeleteCategory,
+    handleUpdateCategory, autoInmetroConfig, setAutoInmetroConfig, autoLayout, setAutoLayout,
+    getAutoWidgetSettings, handleUpdateAutoWidgetSettings, handleUpdateAutoWidgetSize,
+    handleDragStartAutoWidget, handleDragEnterAutoWidget, handleDragEndAutoWidget,
+    draggingAutoWidgetId, dragOverAutoWidgetId,
     monthlyInvestmentGoal, patrimonyTarget, annualRunGoalKm, setPersonalBudgetLimit,
     setMonthlyInvestmentGoal, setPatrimonyTarget, setAnnualRunGoalKm, updateGoalsStorage,
     alertRules, saveAlertRules, newAlert, setNewAlert, handleAddAlertRule, systemLogs,
     setSystemLogs, logFilter, setLogFilter
   } = props;
 
-  const [customWishAmounts, setCustomWishAmounts] = useState<Record<string, string>>({});
   const [partialInputs, setPartialInputs] = useState<Record<string, string>>({});
-  const [txStatusFilter, setTxStatusFilter] = useState<"ALL" | "PAGO" | "PENDENTE">("ALL");
+  const [partialBank, setPartialBank] = useState<Record<string, string>>({});
   const [noteSearch, setNoteSearch] = useState("");
+  const [muralFilter, setMuralFilter] = useState<"ALL" | "NOTES" | "WISHES">("ALL");
   const [logSearch, setLogSearch] = useState("");
   const [showStravaSecrets, setShowStravaSecrets] = useState(false);
+  const [isLaunchingFixed, setIsLaunchingFixed] = useState(false);
+
+  // Estados de Edição de Métodos de Pagamento e Categorias (Requisito 4)
+  const [editingMethodName, setEditingMethodName] = useState<string | null>(null);
+  const [editMethodInput, setEditMethodInput] = useState("");
+  const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
+  const [editCategoryForm, setEditCategoryForm] = useState({
+    name: "",
+    flow: "EXPENSE" as FlowType,
+    isAuto: false,
+    color: "#6366f1"
+  });
 
   const inputClass =
     "w-full px-3.5 py-2.5 rounded-xl bg-slate-950/90 border border-white/10 text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all";
@@ -218,93 +276,200 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   // ABA 1: MEU STATUS ATUAL
   // ============================================================================
   if (activeTab === "status") {
-    const rendaBase = staticStatus.filter((i) => i.type === "Renda Base" || i.type === "Benefício").reduce((a, b) => a + b.amount, 0);
-    const custoFixoBase = staticStatus.filter((i) => i.type === "Custo Fixo").reduce((a, b) => a + b.amount, 0);
-    const aporteBase = staticStatus.filter((i) => i.type === "Meta Aporte").reduce((a, b) => a + b.amount, 0);
-    const margemLivre = rendaBase - custoFixoBase - aporteBase;
+    const { rendaBase, custoFixoBase, aporteBase, margemLivre } = calculateStaticStatusSummary(staticStatus);
+
+    const targetMonth =
+      props.selectedMonth && props.selectedMonth !== "ALL"
+        ? props.selectedMonth
+        : new Date().toISOString().slice(0, 7);
+
+    const normalizeDesc = (str: string) =>
+      str
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    const txsInMonth = transactions.filter((t) => t.date.startsWith(targetMonth));
+
+    const checkIsLaunched = (title: string) => {
+      const itemTitle = normalizeDesc(title);
+      return txsInMonth.some((t) => {
+        const tDesc = normalizeDesc(t.description);
+        const descMatch =
+          tDesc === itemTitle ||
+          (itemTitle.length >= 4 && tDesc.includes(itemTitle)) ||
+          (tDesc.length >= 4 && itemTitle.includes(tDesc));
+        const keywordMatch =
+          (itemTitle.includes("salario") && tDesc.includes("salario")) ||
+          (itemTitle.includes("aporte") && tDesc.includes("aporte")) ||
+          (itemTitle.includes("academia") && tDesc.includes("academia")) ||
+          (itemTitle.includes("internet") && tDesc.includes("internet")) ||
+          (itemTitle.includes("combustivel") && tDesc.includes("combustivel"));
+        return descMatch || keywordMatch;
+      });
+    };
+
+    const pendingFixedCount = staticStatus.filter((item) => !checkIsLaunched(item.title)).length;
+
+    const handleLaunchFixedClick = async () => {
+      if (props.handleLaunchFixedTransactions) {
+        setIsLaunchingFixed(true);
+        try {
+          await props.handleLaunchFixedTransactions(targetMonth);
+        } finally {
+          setIsLaunchingFixed(false);
+        }
+      }
+    };
+
+    const [tY, tM] = targetMonth.split("-");
+    const targetMonthDisplay = `${tM}/${tY}`;
 
     return (
       <div className="space-y-6">
-        <div className="glass-card p-6 rounded-3xl border border-indigo-500/30 shadow-xl">
-          <h2 className="text-lg font-extrabold text-white tracking-tight">Meu Status Financeiro Atual</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Estrutura fixa de ganhos, benefícios, custos recorrentes e margem livre planejada para o mês.</p>
+        <div className="glass-card p-6 rounded-3xl border border-indigo-500/30 shadow-xl flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-lg font-extrabold text-white tracking-tight">Meu Status Financeiro Atual</h2>
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold font-mono">
+                {targetMonthDisplay}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Estrutura fixa de ganhos, benefícios, custos recorrentes e margem livre planejada para o mês.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleLaunchFixedClick}
+              disabled={isLaunchingFixed}
+              className={`min-h-[44px] px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 shadow-lg transition-all ${
+                pendingFixedCount > 0
+                  ? "bg-gradient-to-r from-amber-500 via-amber-600 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white shadow-amber-500/20 border border-amber-400/30 active:scale-95"
+                  : "bg-slate-900/90 border border-emerald-500/30 text-emerald-300 hover:bg-slate-900 cursor-pointer"
+              }`}
+              title={
+                pendingFixedCount > 0
+                  ? `Lançar ${pendingFixedCount} itens fixos pendentes em ${targetMonthDisplay}`
+                  : `Todos os itens fixos já foram lançados para ${targetMonthDisplay}`
+              }
+            >
+              {isLaunchingFixed ? (
+                <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+              ) : pendingFixedCount > 0 ? (
+                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+              ) : (
+                <Check className="w-4 h-4 text-emerald-400" />
+              )}
+              <span>
+                {pendingFixedCount > 0
+                  ? `⚡ Lançar Fixos no Mês Atual (${pendingFixedCount} pendente${pendingFixedCount > 1 ? "s" : ""})`
+                  : "✓ Fixos do Mês Já Lançados"}
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${moneyBlur}`}>
           <div className="glass-card p-5 rounded-3xl border border-emerald-500/25 bg-gradient-to-br from-emerald-950/30 to-slate-950/80">
-            <span className="text-xs text-slate-400 font-medium">Renda Mensal + Benefícios</span>
-            <p className="text-2xl font-extrabold text-emerald-400 mt-1">{formatBRL(rendaBase)}</p>
+            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">Renda Mensal + Benefícios</span>
+            <p className="text-2xl font-extrabold text-emerald-400 mt-1 font-mono tabular-nums">{formatBRL(rendaBase)}</p>
           </div>
           <div className="glass-card p-5 rounded-3xl border border-rose-500/25 bg-gradient-to-br from-rose-950/30 to-slate-950/80">
-            <span className="text-xs text-slate-400 font-medium">Total de Custos Fixos</span>
-            <p className="text-2xl font-extrabold text-rose-400 mt-1">{formatBRL(custoFixoBase)}</p>
+            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">Total de Custos Fixos</span>
+            <p className="text-2xl font-extrabold text-rose-400 mt-1 font-mono tabular-nums">{formatBRL(custoFixoBase)}</p>
           </div>
           <div className="glass-card p-5 rounded-3xl border border-indigo-500/25 bg-gradient-to-br from-indigo-950/30 to-slate-950/80">
-            <span className="text-xs text-slate-400 font-medium">Investimento Planejado</span>
-            <p className="text-2xl font-extrabold text-indigo-400 mt-1">{formatBRL(aporteBase)}</p>
+            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">Investimento Planejado</span>
+            <p className="text-2xl font-extrabold text-indigo-400 mt-1 font-mono tabular-nums">{formatBRL(aporteBase)}</p>
           </div>
           <div className="glass-card p-5 rounded-3xl border border-sky-500/25 bg-gradient-to-br from-sky-950/30 to-slate-950/80">
-            <span className="text-xs text-slate-400 font-medium">Sobra Livre p/ Variáveis</span>
-            <p className="text-2xl font-extrabold text-sky-400 mt-1">{formatBRL(margemLivre)}</p>
+            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">Sobra Livre p/ Variáveis</span>
+            <p className="text-2xl font-extrabold text-sky-400 mt-1 font-mono tabular-nums">{formatBRL(margemLivre)}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 glass-card p-6 rounded-3xl border border-white/[0.08] overflow-x-auto shadow-xl">
-            <h3 className="text-sm font-extrabold text-white mb-1">Minha Estrutura Mensal Fixa</h3>
-            <p className="text-xs text-slate-400 mb-4">Clique no ícone de lápis em qualquer linha para editar valores rapidamente.</p>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-extrabold text-white mb-0.5">Minha Estrutura Mensal Fixa</h3>
+                <p className="text-xs text-slate-400">Clique no lápis para editar valores ou use o botão no topo para lançar no mês.</p>
+              </div>
+              <span className="text-[11px] font-mono text-slate-400 px-2.5 py-1 rounded-xl bg-slate-950 border border-white/10">
+                {staticStatus.length} itens cadastrados
+              </span>
+            </div>
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-white/[0.08] text-slate-400">
                   <th className="py-3 px-3">Descrição</th>
                   <th className="py-3 px-3">Classificação</th>
+                  <th className="py-3 px-3">Status em {targetMonthDisplay}</th>
                   <th className="py-3 px-3">Observações</th>
                   <th className="py-3 px-3 text-right">Valor Mensal</th>
                   <th className="py-3 px-3 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
-                {staticStatus.map((st) => (
-                  <tr key={st.id} className={`transition-colors ${editingStatusId === st.id ? "bg-indigo-500/15" : "hover:bg-white/[0.03]"}`}>
-                    <td className="py-3.5 px-3 font-semibold text-white">{st.title}</td>
-                    <td className="py-3.5 px-3">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                        st.type === "Renda Base" || st.type === "Benefício"
-                          ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-                          : st.type === "Meta Aporte"
-                          ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                          : "bg-rose-500/15 text-rose-300 border border-rose-500/30"
-                      }`}>
-                        {st.type}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-3 text-slate-400">{st.notes ? st.notes : "—"}</td>
-                    <td className={`py-3.5 px-3 text-right font-extrabold text-white ${moneyBlur}`}>{formatBRL(st.amount)}</td>
-                    <td className="py-3.5 px-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingStatusId(st.id);
-                            setNewStatusItem({ title: st.title, type: st.type, amount: String(st.amount), notes: st.notes });
-                          }}
-                          className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/30 transition"
-                          title="Editar item"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => saveStaticStatus(staticStatus.filter((i) => i.id !== st.id))}
-                          className="p-1.5 rounded-lg text-slate-500 hover:bg-rose-500/15 hover:text-rose-400 transition"
-                          title="Excluir item"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {staticStatus.map((st) => {
+                  const isLaunched = checkIsLaunched(st.title);
+                  return (
+                    <tr key={st.id} className={`transition-colors ${editingStatusId === st.id ? "bg-indigo-500/15" : "hover:bg-white/[0.03]"}`}>
+                      <td className="py-3.5 px-3 font-semibold text-white">{st.title}</td>
+                      <td className="py-3.5 px-3">
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                          st.type === "Renda Base" || st.type === "Benefício"
+                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                            : st.type === "Meta Aporte"
+                            ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+                            : "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                        }`}>
+                          {st.type}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-3">
+                        {isLaunched ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <Check className="w-3 h-3 text-emerald-400" /> Lançado
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            <Clock className="w-3 h-3 text-amber-400" /> Pendente
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-3 text-slate-400">{st.notes ? st.notes : "—"}</td>
+                      <td className={`py-3.5 px-3 text-right font-extrabold text-white tabular-nums ${moneyBlur}`}>{formatBRL(st.amount)}</td>
+                      <td className="py-3.5 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingStatusId(st.id);
+                              setNewStatusItem({ title: st.title, type: st.type, amount: String(st.amount), notes: st.notes });
+                            }}
+                            className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/30 transition"
+                            title="Editar item"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveStaticStatus(staticStatus.filter((i) => i.id !== st.id))}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-500/15 hover:text-rose-400 transition"
+                            title="Excluir item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -344,188 +509,29 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   }
 
   // ============================================================================
-  // ABA 2: LANÇAMENTOS (COM BUSCA E FILTRO RÁPIDO DE SITUAÇÃO)
+  // ABA 2: LANÇAMENTOS (ORDENAÇÃO, FILTROS POR COLUNA E VIRTUALIZAÇÃO PROGRESSIVA)
   // ============================================================================
   if (activeTab === "transactions") {
-    const displayedTransactions = filteredTransactions.filter((tx) => {
-      if (txStatusFilter === "PAGO") return tx.status === "Pago";
-      if (txStatusFilter === "PENDENTE") return tx.status !== "Pago";
-      return true;
-    });
-
     return (
-      <div className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-5 shadow-2xl">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h2 className="text-lg font-extrabold text-white tracking-tight">Livro Caixa & Lançamentos</h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono font-bold">
-                {displayedTransactions.length} registro(s)
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">Gerencie entradas, despesas, compras parceladas e exporte relatórios prontos para o Excel.</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-            {/* Filtro Rápido de Situação */}
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950 border border-white/10 text-[11px]">
-              <Filter className="w-3.5 h-3.5 text-indigo-400 ml-2 mr-1" />
-              {[
-                { id: "ALL", label: "Todos" },
-                { id: "PAGO", label: "Pagos" },
-                { id: "PENDENTE", label: "Na Fatura / Pendentes" }
-              ].map((st) => (
-                <button
-                  key={st.id}
-                  type="button"
-                  onClick={() => setTxStatusFilter(st.id as any)}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition ${
-                    txStatusFilter === st.id ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  {st.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Buscar descrição, método, pessoa..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-xl text-xs bg-slate-950/90 border border-white/10 text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleExportCSV}
-              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-slate-200 font-bold flex items-center gap-1.5 transition"
-              title="Exportar planilha compatível com Microsoft Excel"
-            >
-              <Download className="w-3.5 h-3.5 text-indigo-400" /> Exportar CSV
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleOpenNewTxModal()}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition"
-            >
-              <Plus className="w-4 h-4" /> Novo Lançamento
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-white/[0.08] bg-slate-950/60 text-slate-400">
-                <th className="py-3.5 px-3">Data</th>
-                <th className="py-3.5 px-3">Descrição</th>
-                <th className="py-3.5 px-3">Categoria</th>
-                <th className="py-3.5 px-3">Custo</th>
-                <th className="py-3.5 px-3">Método</th>
-                <th className="py-3.5 px-3">Odômetro</th>
-                <th className="py-3.5 px-3">Situação</th>
-                <th className="py-3.5 px-3 text-right">Valor</th>
-                <th className="py-3.5 px-3 text-center">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.05]">
-              {displayedTransactions.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-10 text-center text-slate-400">
-                    Nenhum lançamento encontrado para os filtros selecionados.
-                  </td>
-                </tr>
-              ) : (
-                displayedTransactions.map((tx) => {
-                  const flow = getFlowType(tx.category);
-                  const matchedCard = cards.find((c) => c.name === tx.cardUsed);
-                  const displayLogo = tx.iconUrl ? tx.iconUrl : matchedCard?.logoUrl;
-                  const catColor = categoryColors[tx.category] ? categoryColors[tx.category] : "#6366f1";
-                  return (
-                    <tr key={tx.id} className="hover:bg-white/[0.03] transition-colors">
-                      <td className="py-3.5 px-3 font-mono text-slate-400 whitespace-nowrap">{tx.date}</td>
-                      <td className="py-3.5 px-3 font-semibold text-slate-100">
-                        <div className="flex items-center gap-2.5">
-                          {displayLogo ? (
-                            <img src={displayLogo} alt="Ícone" className="w-7 h-7 rounded-xl object-cover border border-white/15 shrink-0" />
-                          ) : (
-                            <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${catColor}20`, border: `1px solid ${catColor}45` }}>
-                              {renderCategorySemanticIcon(tx.category, catColor)}
-                            </div>
-                          )}
-                          <div>
-                            <span>{tx.description}</span>
-                            {tx.installmentInfo && (
-                              <span className="ml-2 px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 text-[10px] font-mono">
-                                <Layers className="w-2.5 h-2.5 inline mr-0.5" />{tx.installmentInfo}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold inline-flex items-center gap-1.5" style={{ backgroundColor: `${catColor}22`, color: catColor, border: `1px solid ${catColor}44` }}>
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: catColor }} />{tx.category}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${tx.costType === "Fixo" ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" : "bg-slate-800/80 text-slate-400"}`}>
-                          {tx.costType}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span className="font-medium text-slate-200">{tx.paymentMethod}</span>
-                        {tx.cardUsed && <span className="block text-[10px] text-indigo-400">{tx.cardUsed}</span>}
-                      </td>
-                      <td className="py-3.5 px-3 font-mono text-slate-400">
-                        {tx.km ? `${tx.km.toLocaleString("pt-BR")} km` : "—"}
-                        {tx.liters ? ` (${tx.liters}L)` : ""}
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(tx)}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition ${
-                            tx.status === "Pago"
-                              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
-                              : "bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
-                          }`}
-                        >
-                          {tx.status === "Pago" ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                          {tx.status}
-                        </button>
-                      </td>
-                      <td className={`py-3.5 px-3 text-right font-extrabold whitespace-nowrap ${moneyBlur} ${flow === "INCOME" ? "text-emerald-400" : flow === "INVESTMENT" ? "text-indigo-400" : "text-rose-400"}`}>
-                        {flow === "INCOME" ? "+" : "-"} {formatBRL(tx.amount)}
-                      </td>
-                      <td className="py-3.5 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button type="button" onClick={() => handleStartEditTransaction(tx)} className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/30 transition" title="Editar lançamento">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button type="button" onClick={() => handleDeleteTransaction(tx.id)} className="p-1.5 rounded-lg text-slate-500 hover:bg-rose-500/15 hover:text-rose-400 transition" title="Excluir lançamento">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <TransactionsTableAdvanced
+        filteredTransactions={filteredTransactions}
+        cards={cards}
+        categoryColors={categoryColors}
+        moneyBlur={moneyBlur}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        handleExportCSV={handleExportCSV}
+        handleOpenNewTxModal={handleOpenNewTxModal}
+        handleToggleStatus={handleToggleStatus}
+        handleStartEditTransaction={handleStartEditTransaction}
+        handleDeleteTransaction={handleDeleteTransaction}
+        getFlowType={getFlowType}
+      />
     );
   }
 
   // ============================================================================
-  // ABA 3: VALORES A RECEBER 2.0
+  // ABA 3: VALORES A RECEBER
   // ============================================================================
   if (activeTab === "receivables") {
     return (
@@ -533,7 +539,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         <div className="glass-card p-6 rounded-3xl border border-amber-500/30 flex flex-wrap items-center justify-between gap-4 shadow-xl">
           <div>
             <h2 className="text-lg font-extrabold text-white flex items-center gap-2 tracking-tight">
-              <HandCoins className="w-5 h-5 text-amber-400" /> Valores a Receber 2.0 (Controle de Devedores e Abatimentos)
+              <HandCoins className="w-5 h-5 text-amber-400" /> Valores A Receber
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               Todo lançamento com a categoria <strong>"A Receber"</strong> aparece aqui. Atribua o devedor, registre abatimentos parciais ou copie o resumo de cobrança para o WhatsApp.
@@ -551,17 +557,17 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 ${moneyBlur}`}>
           <div className="glass-card p-5 rounded-3xl border border-amber-500/25 bg-gradient-to-br from-amber-950/30 to-slate-950/80">
             <span className="text-xs text-slate-400 block mb-1">Saldo Restante a Receber</span>
-            <p className="text-2xl font-extrabold text-amber-400">{formatBRL(receivablesAnalytics.totalOpen)}</p>
+            <p className="text-2xl font-extrabold text-amber-400 font-mono tabular-nums">{formatBRL(receivablesAnalytics.totalOpen)}</p>
             <span className="text-[11px] text-slate-400">Descontando abatimentos parciais</span>
           </div>
           <div className="glass-card p-5 rounded-3xl border border-emerald-500/25 bg-gradient-to-br from-emerald-950/30 to-slate-950/80">
             <span className="text-xs text-slate-400 block mb-1">Total Já Recebido / Abatido</span>
-            <p className="text-2xl font-extrabold text-emerald-400">{formatBRL(receivablesAnalytics.totalPaid)}</p>
+            <p className="text-2xl font-extrabold text-emerald-400 font-mono tabular-nums">{formatBRL(receivablesAnalytics.totalPaid)}</p>
             <span className="text-[11px] text-slate-400">Soma de quitações e pagamentos parciais</span>
           </div>
           <div className="glass-card p-5 rounded-3xl border border-indigo-500/25 bg-gradient-to-br from-indigo-950/30 to-slate-950/80">
             <span className="text-xs text-slate-400 block mb-1">Volume Total Emprestado</span>
-            <p className="text-2xl font-extrabold text-indigo-400">{formatBRL(receivablesAnalytics.totalLoaned)}</p>
+            <p className="text-2xl font-extrabold text-indigo-400 font-mono tabular-nums">{formatBRL(receivablesAnalytics.totalLoaned)}</p>
             <span className="text-[11px] text-slate-400">{receivableItems.length} lançamentos vinculados</span>
           </div>
         </div>
@@ -577,7 +583,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <span className="text-sm font-extrabold text-white block">{p.person}</span>
-                        <span className={`text-sm font-extrabold text-amber-400 ${moneyBlur}`}>Em aberto: {formatBRL(p.aberto)}</span>
+                        <span className={`text-sm font-extrabold text-amber-400 font-mono tabular-nums ${moneyBlur}`}>Em aberto: {formatBRL(p.aberto)}</span>
                       </div>
                       <button
                         type="button"
@@ -595,7 +601,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden">
                       <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400" style={{ width: `${paidPct}%` }} />
                     </div>
-                    <div className={`flex justify-between text-[11px] text-slate-400 ${moneyBlur}`}>
+                    <div className={`flex justify-between text-[11px] text-slate-400 font-mono tabular-nums ${moneyBlur}`}>
                       <span>Pago: {formatBRL(p.pago)} ({paidPct}%)</span>
                       <span>Total: {formatBRL(p.totalEmprestado)}</span>
                     </div>
@@ -613,11 +619,11 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </div>
             <div className="h-64 select-none">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={receivablesAnalytics.openByPerson} barSize={34}>
+                <BarChart data={receivablesAnalytics.openByPerson} barSize={34} accessibilityLayer={false}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
                   <XAxis dataKey="person" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={11} />
-                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={{ fill: "rgba(148,163,184,0.06)" }} />
+                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => formatBRL(Number(v))} />
+                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
                   <Bar dataKey="aberto" name="Saldo em Aberto (R$)" fill="#f59e0b" radius={[8, 8, 0, 0]} />
                 </BarChart>
@@ -632,11 +638,11 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </div>
             <div className="h-64 select-none">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={receivablesAnalytics.historyByPerson} barSize={24}>
+                <BarChart data={receivablesAnalytics.historyByPerson} barSize={24} accessibilityLayer={false}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
                   <XAxis dataKey="person" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={11} />
-                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={{ fill: "rgba(148,163,184,0.06)" }} />
+                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => formatBRL(Number(v))} />
+                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
                   <Bar dataKey="totalEmprestado" name="Total Emprestado" fill="#6366f1" radius={[6, 6, 0, 0]} />
                   <Bar dataKey="pago" name="Total Pago" fill="#10b981" radius={[6, 6, 0, 0]} />
@@ -663,12 +669,13 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   <th className="py-3.5 px-3">Abater Valor Parcial</th>
                   <th className="py-3.5 px-3">Situação</th>
                   <th className="py-3.5 px-3 text-right">Restante / Total</th>
+                  <th className="py-3.5 px-3 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
                 {receivableItems.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-400">
+                    <td colSpan={7} className="py-8 text-center text-slate-400">
                       Nenhum lançamento classificado como "A Receber" até o momento.
                     </td>
                   </tr>
@@ -677,64 +684,119 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     const pInput = partialInputs[item.id] ? partialInputs[item.id] : "";
                     return (
                       <tr key={item.id} className="hover:bg-white/[0.03] transition-colors">
-                        <td className="py-3.5 px-3 font-mono text-slate-400">{item.date}</td>
+                        <td className="py-3.5 px-3 font-mono tabular-nums text-slate-300">{formatDateBR(item.date)}</td>
                         <td className="py-3.5 px-3 font-semibold text-white">
                           {item.description}
                           {item.cardUsed && <span className="block text-[10px] text-indigo-400">{item.paymentMethod} • {item.cardUsed}</span>}
+                          {item.bankAccount && !item.cardUsed && <span className="block text-[10px] text-sky-400">{item.paymentMethod} • {item.bankAccount}</span>}
                         </td>
                         <td className="py-3.5 px-3">
                           <DebtorInputCell txId={item.id} initialValue={item.debtorName} onCommit={handleAssignDebtor} />
                         </td>
                         <td className="py-3.5 px-3">
                           {item.status === "Pago" ? (
-                            <span className="text-[11px] text-emerald-400 font-bold">✓ 100% Quitado</span>
+                            <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> 100% Quitado
+                            </span>
                           ) : (
-                            <div className="flex items-center gap-1.5 max-w-[185px]">
-                              <input
-                                type="number"
-                                step="0.01"
-                                placeholder="R$..."
-                                value={pInput}
-                                onChange={(e) => setPartialInputs((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                                className="w-24 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-white/10 text-xs text-white outline-none focus:border-indigo-500"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const val = parseFloat(pInput);
-                                  if (val > 0) {
-                                    handlePartialPaymentReceivable(item, val);
-                                    setPartialInputs((prev) => ({ ...prev, [item.id]: "" }));
+                            <div className="flex flex-col gap-1.5 min-w-[210px] max-w-[230px]">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="R$..."
+                                  value={pInput}
+                                  onChange={(e) =>
+                                    setPartialInputs((prev) => ({ ...prev, [item.id]: e.target.value }))
                                   }
-                                }}
-                                className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold transition"
-                              >
-                                Abater
-                              </button>
+                                  className="w-20 min-h-[36px] px-2 py-1.5 rounded-lg bg-slate-950 border border-white/10 text-xs text-white outline-none focus:border-indigo-500 font-mono tabular-nums"
+                                />
+                                <select
+                                  value={partialBank[item.id] || banks[0]?.name || ""}
+                                  onChange={(e) =>
+                                    setPartialBank((prev) => ({ ...prev, [item.id]: e.target.value }))
+                                  }
+                                  className="flex-1 min-h-[36px] px-2 py-1.5 rounded-lg bg-slate-950 border border-white/10 text-[11px] text-white outline-none focus:border-indigo-500 truncate"
+                                  title="Banco / Conta de destino para o valor recebido"
+                                >
+                                  {banks.map((b) => (
+                                    <option key={b.id} value={b.name}>
+                                      {b.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const val = parseFloat(pInput);
+                                    if (val > 0) {
+                                      const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
+                                      handlePartialPaymentReceivable(item, val, dest);
+                                      setPartialInputs((prev) => ({ ...prev, [item.id]: "" }));
+                                    }
+                                  }}
+                                  className="flex-1 min-h-[36px] py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shadow-md transition flex items-center justify-center"
+                                >
+                                  + Abater
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (item.remaining > 0) {
+                                      const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
+                                      handlePartialPaymentReceivable(item, item.remaining, dest);
+                                    }
+                                  }}
+                                  className="min-h-[36px] py-1.5 px-2.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold transition flex items-center justify-center"
+                                  title="Quitar 100% do saldo restante e creditar receita"
+                                >
+                                  Quitar 100%
+                                </button>
+                              </div>
                             </div>
                           )}
                         </td>
                         <td className="py-3.5 px-3">
                           <button
                             type="button"
-                            onClick={() => handleToggleStatus(item)}
+                            onClick={() => {
+                              if (item.status !== "Pago" && item.remaining > 0) {
+                                const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
+                                handlePartialPaymentReceivable(item, item.remaining, dest);
+                              } else {
+                                handleToggleStatus(item);
+                              }
+                            }}
                             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition ${
                               item.status === "Pago"
                                 ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                                : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                                : "bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
                             }`}
+                            title={item.status === "Pago" ? "Reabrir lançamento" : "Quitar lançamento integralmente"}
                           >
                             {item.status === "Pago" ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
                             {item.status}
                           </button>
                         </td>
                         <td className={`py-3.5 px-3 text-right ${moneyBlur}`}>
-                          <span className="font-extrabold text-amber-400 block">{formatBRL(item.remaining)}</span>
+                          <span className="font-extrabold text-amber-400 block font-mono tabular-nums">{formatBRL(item.remaining)}</span>
                           {item.effectivePaid > 0 && item.status !== "Pago" && (
-                            <span className="text-[10px] text-emerald-400 block">
+                            <span className="text-[10px] text-emerald-400 block font-mono tabular-nums">
                               Pago: {formatBRL(item.effectivePaid)} de {formatBRL(item.amount)}
                             </span>
                           )}
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditTransaction(item)}
+                            className="p-1.5 rounded-lg bg-white/10 text-slate-300 hover:text-white hover:bg-indigo-600 transition"
+                            title="Editar lançamento"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     );
@@ -749,260 +811,67 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   }
 
   // ============================================================================
-  // ABA 4: CARTÕES DE CRÉDITO & CAIXINHAS
+  // ============================================================================
+  // ABA 4: BANCOS
   // ============================================================================
   if (activeTab === "cards") {
     return (
-      <div className="space-y-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
-            <div>
-              <h2 className="text-lg font-extrabold text-white tracking-tight">Meus Cartões de Crédito</h2>
-              <p className="text-xs text-slate-400">Controle o limite total, a fatura aberta e dê baixa integral na fatura em 1 clique.</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {cards.map((card, idx) => {
-                const usedLimit = props.transactions
-                  .filter((t) => t.paymentMethod === "Cartão de Crédito" && t.cardUsed === card.name && t.status === "Pendente / Na Fatura")
-                  .reduce((acc, curr) => acc + curr.amount, 0);
-                const availableLimit = Math.max(0, card.limit - usedLimit);
-                const usagePercent = Math.min(100, Math.round((usedLimit / Math.max(1, card.limit)) * 100));
-                return (
-                  <div key={card.id} className={`p-6 rounded-3xl border relative overflow-hidden transition-all duration-300 shadow-2xl ${idx % 2 === 0 ? "bg-gradient-to-br from-indigo-950/90 via-slate-900 to-violet-950/80 border-indigo-500/30" : "bg-gradient-to-br from-slate-900 via-zinc-900 to-slate-950 border-white/15"}`}>
-                    <div className="flex items-start justify-between mb-5">
-                      <div className="flex items-center gap-3">
-                        {card.logoUrl ? (
-                          <img src={card.logoUrl} alt={card.name} className="w-10 h-10 rounded-2xl object-cover border border-white/20 shadow-md" />
-                        ) : (
-                          <div className="p-2.5 rounded-2xl bg-white/10 text-white"><CreditCard className="w-5 h-5" /></div>
-                        )}
-                        <div>
-                          <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-300 block">{card.brand}</span>
-                          <h3 className="font-extrabold text-base text-white mt-0.5">{card.name}</h3>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {usedLimit > 0 && (
-                          <button type="button" onClick={() => handlePayCardInvoice(card.name)} className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold transition">
-                            Quitar Fatura
-                          </button>
-                        )}
-                        <button type="button" onClick={() => { setEditingCardId(card.id); setNewCard({ name: card.name, brand: card.brand, limit: String(card.limit), closingDay: String(card.closingDay), dueDay: String(card.dueDay), logoUrl: card.logoUrl ? card.logoUrl : "" }); }} className="p-1.5 rounded-lg bg-white/10 text-slate-200 hover:bg-white/20 transition"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => handleDeleteCard(card.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="w-10 h-7 rounded-md bg-gradient-to-br from-amber-200/80 to-yellow-500/80 border border-amber-100/40" />
-                      <span className="text-xs font-mono text-slate-300">Fecha dia {card.closingDay} • Vence dia {card.dueDay}</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-black/50 rounded-full overflow-hidden mb-3">
-                      <div className={`h-full transition-all duration-700 ${usagePercent >= 80 ? "bg-rose-500" : "bg-gradient-to-r from-indigo-400 to-emerald-400"}`} style={{ width: `${usagePercent}%` }} />
-                    </div>
-                    <div className={`grid grid-cols-3 gap-2 pt-3 border-t border-white/10 text-xs ${moneyBlur}`}>
-                      <div><span className="text-slate-400 block text-[10px]">Limite Total</span><strong className="text-xs text-white">{formatBRL(card.limit)}</strong></div>
-                      <div><span className="text-slate-400 block text-[10px]">Fatura Aberta</span><strong className="text-xs text-amber-300">{formatBRL(usedLimit)}</strong></div>
-                      <div><span className="text-slate-400 block text-[10px]">Disponível</span><strong className="text-xs text-emerald-400">{formatBRL(availableLimit)}</strong></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <form onSubmit={handleSaveCard} className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-3.5 text-xs h-fit shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-white">{editingCardId ? "Editar Cartão" : "Cadastrar Novo Cartão"}</h3>
-              {editingCardId && (
-                <button type="button" onClick={() => { setEditingCardId(null); setNewCard({ name: "", brand: "Mastercard Black", limit: "", closingDay: "25", dueDay: "5", logoUrl: "" }); }} className="text-[11px] text-rose-400 hover:underline">
-                  Cancelar
-                </button>
-              )}
-            </div>
-            <input type="text" required placeholder="Nome do Cartão (Ex: Nubank Ultravioleta)" value={newCard.name} onChange={(e) => setNewCard({ ...newCard, name: e.target.value })} className={inputClass} />
-            <div className="grid grid-cols-2 gap-2.5">
-              <input type="text" placeholder="Bandeira" value={newCard.brand} onChange={(e) => setNewCard({ ...newCard, brand: e.target.value })} className={inputClass} />
-              <input type="number" required placeholder="Limite Total (R$)" value={newCard.limit} onChange={(e) => setNewCard({ ...newCard, limit: e.target.value })} className={inputClass} />
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              <input type="number" required placeholder="Dia Fechamento" value={newCard.closingDay} onChange={(e) => setNewCard({ ...newCard, closingDay: e.target.value })} className={inputClass} />
-              <input type="number" required placeholder="Dia Vencimento" value={newCard.dueDay} onChange={(e) => setNewCard({ ...newCard, dueDay: e.target.value })} className={inputClass} />
-            </div>
-            <div className="p-3 rounded-xl bg-slate-950 border border-white/10 space-y-2">
-              <label className="text-slate-300 font-semibold flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5 text-indigo-400" /> Logo do Banco (Opcional)</label>
-              <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) compressImageFileToBase64(f, (b64) => setNewCard((p) => ({ ...p, logoUrl: b64 }))); }} className="w-full text-[11px] text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-600/20 file:text-indigo-300 file:font-semibold" />
-            </div>
-            <button type="submit" className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold shadow-lg transition">
-              {editingCardId ? "✓ Salvar Alterações" : "+ Cadastrar Cartão"}
-            </button>
-          </form>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 border-t border-white/[0.07]">
-          <div className="lg:col-span-2 space-y-4">
-            <div>
-              <h2 className="text-lg font-extrabold text-white tracking-tight">Caixinhas de Objetivos & Reservas</h2>
-              <p className="text-xs text-slate-400">Guardar qualquer valor aqui gera automaticamente um lançamento de aporte no seu histórico.</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {wishlist.map((w) => {
-                const pct = Math.min(100, Math.round((w.savedAmount / Math.max(1, w.targetAmount)) * 100));
-                const missing = Math.max(0, w.targetAmount - w.savedAmount);
-                const monthsNeeded = Math.ceil(missing / Math.max(1, personalBudgetLimit * 0.5));
-                const customVal = customWishAmounts[w.id] ? customWishAmounts[w.id] : "";
-                return (
-                  <div key={w.id} className="glass-card p-5 rounded-3xl border border-white/[0.08] space-y-3 shadow-lg">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="font-extrabold text-sm block text-white">{w.title}</span>
-                        <span className="text-[11px] text-indigo-400 font-medium">Instituição: {w.institution ? w.institution : "Nubank"}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold">{w.priority}</span>
-                        <button type="button" onClick={() => { setEditingWishId(w.id); setNewWish({ title: w.title, institution: w.institution, targetAmount: String(w.targetAmount), savedAmount: String(w.savedAmount), priority: w.priority }); }} className="p-1 text-indigo-300 hover:text-white"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => handleDeleteWish(w.id)} className="p-1 text-slate-500 hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                    <div className={`flex justify-between text-xs text-slate-400 ${moneyBlur}`}>
-                      <span>Guardado: <strong className="text-emerald-400">{formatBRL(w.savedAmount)}</strong></span>
-                      <span>Meta: <strong className="text-white">{formatBRL(w.targetAmount)}</strong></span>
-                    </div>
-                    <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500" style={{ width: `${pct}%` }} />
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 pt-1">
-                      <span className={moneyBlur}>Faltam {formatBRL(missing)} (~{monthsNeeded}m)</span>
-                      <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => handleIncrementWish(w, 50)} className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 font-bold transition">+ R$ 50</button>
-                        <button type="button" onClick={() => handleIncrementWish(w, 100)} className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-bold transition">+ R$ 100</button>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 pt-2 border-t border-white/[0.05]">
-                      <input type="number" step="0.01" placeholder="Outro valor (R$)..." value={customVal} onChange={(e) => setCustomWishAmounts((prev) => ({ ...prev, [w.id]: e.target.value }))} className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-white/10 text-xs text-white outline-none focus:border-emerald-500" />
-                      <button type="button" onClick={() => { const val = parseFloat(customVal); if (val > 0) { handleIncrementWish(w, val); setCustomWishAmounts((prev) => ({ ...prev, [w.id]: "" })); } }} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition">Guardar</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <form onSubmit={handleSaveWish} className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-3.5 text-xs h-fit shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-white">{editingWishId ? "Editar Caixinha" : "Nova Caixinha / Meta"}</h3>
-              {editingWishId && (
-                <button type="button" onClick={() => { setEditingWishId(null); setNewWish({ title: "", institution: cards[0] ? cards[0].name : "Nubank Ultravioleta", targetAmount: "", savedAmount: "0", priority: "Média" }); }} className="text-[11px] text-rose-400 hover:underline">
-                  Cancelar
-                </button>
-              )}
-            </div>
-            <input type="text" required placeholder="Nome do Objetivo (Ex: Viagem, PS5...)" value={newWish.title} onChange={(e) => setNewWish({ ...newWish, title: e.target.value })} className={inputClass} />
-            <input type="text" required placeholder="Instituição (Ex: Nubank, Inter...)" value={newWish.institution} onChange={(e) => setNewWish({ ...newWish, institution: e.target.value })} className={inputClass} />
-            <div className="grid grid-cols-2 gap-2.5">
-              <input type="number" required placeholder="Alvo Total (R$)" value={newWish.targetAmount} onChange={(e) => setNewWish({ ...newWish, targetAmount: e.target.value })} className={inputClass} />
-              <input type="number" placeholder="Já Guardado (R$)" value={newWish.savedAmount} onChange={(e) => setNewWish({ ...newWish, savedAmount: e.target.value })} className={inputClass} />
-            </div>
-            <select value={newWish.priority} onChange={(e) => setNewWish({ ...newWish, priority: e.target.value as WishlistItem["priority"] })} className={inputClass}>
-              <option value="Alta">Prioridade Alta</option>
-              <option value="Média">Prioridade Média</option>
-              <option value="Baixa">Prioridade Baixa</option>
-            </select>
-            <button type="submit" className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold shadow-lg transition">
-              {editingWishId ? "✓ Salvar Alterações" : "+ Criar Caixinha"}
-            </button>
-          </form>
-        </div>
-      </div>
+      <BanksTab
+        getFlowType={getFlowType}
+        banks={banks}
+        editingBankId={editingBankId}
+        setEditingBankId={setEditingBankId}
+        newBank={newBank}
+        setNewBank={setNewBank}
+        handleSaveBank={handleSaveBank}
+        handleDeleteBank={handleDeleteBank}
+        cards={cards}
+        editingCardId={editingCardId}
+        setEditingCardId={setEditingCardId}
+        newCard={newCard}
+        setNewCard={setNewCard}
+        handleSaveCard={handleSaveCard}
+        handleDeleteCard={handleDeleteCard}
+        handlePayCardInvoice={handlePayCardInvoice}
+        transactions={transactions}
+        wishlist={wishlist}
+        editingWishId={editingWishId}
+        setEditingWishId={setEditingWishId}
+        newWish={newWish}
+        setNewWish={setNewWish}
+        handleSaveWish={handleSaveWish}
+        handleIncrementWish={handleIncrementWish}
+        handleDeleteWish={handleDeleteWish}
+        personalBudgetLimit={personalBudgetLimit}
+        moneyBlur={moneyBlur}
+      />
     );
   }
 
   // ============================================================================
-  // ABA 5: MEU VEÍCULO (AUTO)
+  // ABA 5: MEUS VEÍCULOS (TELEMETRIA, ANÁLISE DE CONSUMO, INMETRO E SEMÁFORO)
   // ============================================================================
   if (activeTab === "auto") {
     return (
-      <div className="space-y-6">
-        <div className="glass-card p-6 rounded-3xl border border-white/[0.08] flex flex-wrap items-center justify-between gap-4 shadow-xl">
-          <div>
-            <h2 className="text-lg font-extrabold text-white tracking-tight">Telemetria & Gestão do Meu Veículo</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Acompanhe odômetro, consumo médio em km/L, gastos com combustível e manutenções preventivas.</p>
-          </div>
-          <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer bg-slate-950/80 px-3.5 py-2 rounded-xl border border-white/10">
-            <span>Cor da Curva do Odômetro:</span>
-            <input type="color" value={chartTheme.odometerLine} onChange={(e) => updateChartThemeColor("odometerLine", e.target.value)} className="color-circle" />
-          </label>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="glass-card p-5 rounded-3xl border border-white/[0.08]">
-            <span className="text-xs text-slate-400 block mb-1">Quilometragem Atual</span>
-            <p className="text-2xl font-extrabold text-white">{autoMetrics.maxKm.toLocaleString("pt-BR")} km</p>
-            <span className="text-[11px] text-slate-400">Rodado no período: {autoMetrics.distanceDriven} km</span>
-          </div>
-          <div className="glass-card p-5 rounded-3xl border border-emerald-500/25">
-            <span className="text-xs text-slate-400 block mb-1">Consumo Médio</span>
-            <p className="text-2xl font-extrabold text-emerald-400">{autoMetrics.avgKmPerLiter.toFixed(1)} km/L</p>
-            <span className="text-[11px] text-slate-400">Rendimento por litro</span>
-          </div>
-          <div className="glass-card p-5 rounded-3xl border border-amber-500/25">
-            <span className="text-xs text-slate-400 block mb-1">Combustível</span>
-            <p className={`text-2xl font-extrabold text-amber-400 ${moneyBlur}`}>{formatBRL(autoMetrics.fuelTotal)}</p>
-            <span className="text-[11px] text-slate-400">Abastecimentos registrados</span>
-          </div>
-          <div className="glass-card p-5 rounded-3xl border border-rose-500/25">
-            <span className="text-xs text-slate-400 block mb-1">Manutenção & Óleo</span>
-            <p className={`text-2xl font-extrabold text-rose-400 ${moneyBlur}`}>{formatBRL(autoMetrics.maintenanceTotal)}</p>
-            <span className="text-[11px] text-slate-400">Revisões e peças</span>
-          </div>
-          <div className="glass-card p-5 rounded-3xl border border-indigo-500/25">
-            <span className="text-xs text-slate-400 block mb-1">Custo Médio / KM</span>
-            <p className={`text-2xl font-extrabold text-indigo-400 ${moneyBlur}`}>{formatBRL(autoMetrics.costPerKm)}/km</p>
-            <span className={`text-[11px] text-slate-400 ${moneyBlur}`}>Total: {formatBRL(autoMetrics.totalAutoSpent)}</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="glass-card p-6 rounded-3xl border border-white/[0.08]">
-            <h3 className="text-sm font-extrabold text-white mb-1">Evolução do Odômetro (KM)</h3>
-            <p className="text-xs text-slate-400 mb-4">Progressão da quilometragem a cada serviço ou abastecimento.</p>
-            <div className="h-64 select-none">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={autoMetrics.kmRecords}>
-                  <defs>
-                    <linearGradient id="colorKm" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={chartTheme.odometerLine} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={chartTheme.odometerLine} stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                  <XAxis dataKey="date" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={11} domain={["auto", "auto"]} />
-                  <Tooltip content={<CustomCyberTooltip isCurrency={false} />} />
-                  <Area type="monotone" dataKey="km" name="Odômetro (KM)" stroke={chartTheme.odometerLine} strokeWidth={2} fill="url(#colorKm)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="glass-card p-6 rounded-3xl border border-white/[0.08]">
-            <h3 className="text-sm font-extrabold text-white mb-1">Histórico Automotivo</h3>
-            <p className="text-xs text-slate-400 mb-4">Lançamentos vinculados ao veículo.</p>
-            <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-              {autoMetrics.autoTxs.map((item: Transaction) => (
-                <div key={item.id} className="p-3.5 rounded-2xl bg-slate-950/75 border border-white/[0.06] hover:border-white/[0.12] flex items-center justify-between text-xs transition">
-                  <div>
-                    <span className="font-bold block text-white">{item.description}</span>
-                    <span className="text-slate-400">{item.date} • {item.category}{item.liters ? ` • ${item.liters}L` : ""}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className={`font-extrabold text-amber-400 block ${moneyBlur}`}>{formatBRL(item.amount)}</span>
-                    {item.km && <span className="font-mono text-[11px] text-slate-400">{item.km.toLocaleString("pt-BR")} km</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      <VehiclesTab
+        autoMetrics={autoMetrics}
+        autoInmetroConfig={autoInmetroConfig}
+        setAutoInmetroConfig={setAutoInmetroConfig}
+        chartTheme={chartTheme}
+        updateChartThemeColor={updateChartThemeColor}
+        handleOpenNewTxModal={handleOpenNewTxModal}
+        notify={notify}
+        moneyBlur={moneyBlur}
+        autoLayout={autoLayout}
+        getAutoWidgetSettings={getAutoWidgetSettings}
+        handleUpdateAutoWidgetSettings={handleUpdateAutoWidgetSettings}
+        handleUpdateAutoWidgetSize={handleUpdateAutoWidgetSize}
+        handleDragStartAutoWidget={handleDragStartAutoWidget}
+        handleDragEnterAutoWidget={handleDragEnterAutoWidget}
+        handleDragEndAutoWidget={handleDragEndAutoWidget}
+        draggingAutoWidgetId={draggingAutoWidgetId}
+        dragOverAutoWidgetId={dragOverAutoWidgetId}
+      />
     );
   }
 
@@ -1057,14 +926,15 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </div>
             <div className="h-72 select-none">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={bioLogs}>
+                <AreaChart data={bioLogs} accessibilityLayer={false}>
                   <defs>
                     <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartTheme.weightLine} stopOpacity={0.25} /><stop offset="95%" stopColor={chartTheme.weightLine} stopOpacity={0.0} /></linearGradient>
                     <linearGradient id="colorBf" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartTheme.bfLine} stopOpacity={0.25} /><stop offset="95%" stopColor={chartTheme.bfLine} stopOpacity={0.0} /></linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                  <XAxis dataKey="date" stroke="#64748b" fontSize={11} /><YAxis stroke="#64748b" fontSize={11} domain={["auto", "auto"]} />
-                  <Tooltip content={<CustomCyberTooltip isCurrency={false} />} />
+                  <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickFormatter={(v) => formatDateBR(v)} />
+                  <YAxis stroke="#64748b" fontSize={11} domain={["auto", "auto"]} />
+                  <Tooltip content={<CustomCyberTooltip isCurrency={false} />} cursor={false} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
                   <Area type="monotone" dataKey="weight" name="Peso Corporal (kg)" stroke={chartTheme.weightLine} strokeWidth={2} fill="url(#colorWeight)" />
                   <Area type="monotone" dataKey="bf" name="Gordura - BF (%)" stroke={chartTheme.bfLine} strokeWidth={2} fill="url(#colorBf)" />
@@ -1105,13 +975,13 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               <tbody className="divide-y divide-white/[0.05]">
                 {bioLogs.slice().reverse().map((b) => (
                   <tr key={b.id} className="hover:bg-white/[0.03] transition">
-                    <td className="py-3 px-3 font-mono text-slate-400">{b.date}</td>
-                    <td className="py-3 px-3 font-extrabold text-emerald-400">{b.weight} kg</td>
-                    <td className="py-3 px-3 font-extrabold text-indigo-400">{b.bf ? `${b.bf}%` : "—"}</td>
+                    <td className="py-3 px-3 font-mono tabular-nums text-slate-300">{formatDateBR(b.date)}</td>
+                    <td className="py-3 px-3 font-extrabold font-mono tabular-nums text-emerald-400">{b.weight} kg</td>
+                    <td className="py-3 px-3 font-extrabold font-mono tabular-nums text-indigo-400">{b.bf ? `${b.bf}%` : "—"}</td>
                     <td className="py-3 px-3 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <button type="button" onClick={() => { setEditingBioId(b.id); setNewBio({ date: b.date, weight: String(b.weight), bf: b.bf ? String(b.bf) : "" }); }} className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/30 transition"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => handleDeleteBioLog(b.id)} className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={() => handleDeleteBioLog(b.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>
@@ -1125,15 +995,87 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   }
 
   // ============================================================================
-  // ABA 7: SEGUNDO CÉREBRO (OKRS & NOTAS COM BUSCA)
+  // ABA 7: SEGUNDO CÉREBRO & MURAL DE ANOTAÇÕES E DESEJOS (UPDATE 4 COMPLETO)
   // ============================================================================
   if (activeTab === "brain") {
+    // Desejos de Compra e Cálculos dos KPIs
+    const wishItems = notes.filter((n) => n.itemType === "wish" || (n.price != null && n.price > 0));
+    const pendingWishesTotal = safeAdd(...wishItems.filter((w) => !w.completed).map((w) => w.price || 0));
+    const completedWishesTotal = safeAdd(...wishItems.filter((w) => Boolean(w.completed)).map((w) => w.price || 0));
+    const totalWishesValue = safeAdd(pendingWishesTotal, completedWishesTotal);
+    const conqueredPercentage = totalWishesValue > 0
+      ? Math.min(100, Math.round((completedWishesTotal / totalWishesValue) * 100))
+      : 0;
+
+    const comparisonChartData = [
+      {
+        categoria: "Ainda Quero",
+        valor: pendingWishesTotal,
+        fill: "#f59e0b"
+      },
+      {
+        categoria: "Já Comprei",
+        valor: completedWishesTotal,
+        fill: "#10b981"
+      }
+    ];
+
     const visibleNotes = notes
+      .filter((n) => {
+        if (muralFilter === "NOTES") return n.itemType !== "wish" && (!n.price || n.price === 0);
+        if (muralFilter === "WISHES") return n.itemType === "wish" || (n.price != null && n.price > 0);
+        return true;
+      })
       .filter((n) => selectedNoteTag === "ALL" || n.tag === selectedNoteTag)
-      .filter((n) => !noteSearch.trim() || n.title.toLowerCase().includes(noteSearch.toLowerCase()) || n.content.toLowerCase().includes(noteSearch.toLowerCase()));
+      .filter((n) => {
+        if (!noteSearch.trim()) return true;
+        const q = noteSearch.toLowerCase();
+        return (
+          n.title.toLowerCase().includes(q) ||
+          (n.content && n.content.toLowerCase().includes(q)) ||
+          (n.description && n.description.toLowerCase().includes(q))
+        );
+      });
+
+    const handleStartEditNote = (n: BrainNote) => {
+      setEditingNoteId(n.id);
+      setNewNote({
+        title: n.title,
+        content: n.content || n.description || "",
+        description: n.description || n.content || "",
+        tag: n.tag,
+        itemType: n.itemType || (n.price ? "wish" : "note"),
+        price: n.price != null ? String(n.price) : "",
+        priority: n.priority || "Planejado",
+        storeUrl: n.storeUrl || "",
+        completed: Boolean(n.completed)
+      });
+    };
+
+    const handleCancelEditNote = () => {
+      setEditingNoteId(null);
+      setNewNote({
+        title: "",
+        content: "",
+        tag: "#Ideias",
+        itemType: "note",
+        price: "",
+        description: "",
+        priority: "Planejado",
+        storeUrl: "",
+        completed: false
+      });
+    };
+
+    const onToggleNote = (id: string) => {
+      if (handleToggleNoteCompleted) {
+        handleToggleNoteCompleted(id);
+      }
+    };
 
     return (
       <div className="space-y-8">
+        {/* SEÇÃO 1: GRANDES OBJETIVOS DO ANO (OKRS) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 glass-card p-6 rounded-3xl border border-white/[0.08] space-y-4">
             <div>
@@ -1152,12 +1094,12 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                         <strong className="text-white font-bold block">{okr.title}</strong>
                         <span className="text-[10px] text-slate-400">{okr.category}</span>
                       </div>
-                      <button onClick={() => saveOkrs(okrs.filter((item) => item.id !== okr.id))} className="text-slate-500 hover:text-rose-400">
+                      <button onClick={() => saveOkrs(okrs.filter((item) => item.id !== okr.id))} className="text-slate-400 hover:text-rose-400">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-indigo-400 font-extrabold">{okr.current} / {okr.target} {okr.unit} ({pct}%)</span>
+                      <span className="text-indigo-400 font-extrabold font-mono tabular-nums">{okr.current} / {okr.target} {okr.unit} ({pct}%)</span>
                       <input
                         type="number"
                         step="0.1"
@@ -1189,18 +1131,121 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </form>
         </div>
 
+        {/* SEÇÃO 2: PAINEL EXECUTIVO DE DESEJOS DE COMPRA (KPIS + GRÁFICO COMPARATIVO RECHARTS) */}
+        <div className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-400" /> Painel de Desejos & Metas de Consumo
+              </h3>
+              <p className="text-xs text-slate-400">
+                Acompanhe o que você ainda planeja comprar versus o que já conquistou, evitando compras por impulso.
+              </p>
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-mono font-bold tabular-nums bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+              {wishItems.length} desejos cadastrados
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            {/* KPIs */}
+            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-amber-500/25 space-y-1">
+                <span className="text-[10px] text-amber-300/80 uppercase tracking-wider font-extrabold block">
+                  Ainda Quero Comprar
+                </span>
+                <strong className="text-base sm:text-lg font-extrabold text-amber-400 font-mono tabular-nums block">
+                  {formatBRL(pendingWishesTotal)}
+                </strong>
+                <span className="text-[10px] text-slate-400 block font-mono tabular-nums">
+                  {wishItems.filter((w) => !w.completed).length} pendente(s)
+                </span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-emerald-500/25 space-y-1">
+                <span className="text-[10px] text-emerald-300/80 uppercase tracking-wider font-extrabold block">
+                  Já Comprei
+                </span>
+                <strong className="text-base sm:text-lg font-extrabold text-emerald-400 font-mono tabular-nums block">
+                  {formatBRL(completedWishesTotal)}
+                </strong>
+                <span className="text-[10px] text-slate-400 block font-mono tabular-nums">
+                  {wishItems.filter((w) => Boolean(w.completed)).length} conquistado(s)
+                </span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-indigo-500/25 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-indigo-300/80 uppercase tracking-wider font-extrabold">
+                    Conquistado
+                  </span>
+                  <span className="text-xs font-extrabold text-white font-mono tabular-nums">
+                    {conqueredPercentage}%
+                  </span>
+                </div>
+                <strong className="text-xs font-extrabold text-white font-mono tabular-nums block truncate">
+                  {formatBRL(completedWishesTotal)} / {formatBRL(totalWishesValue)}
+                </strong>
+                <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 via-indigo-500 to-emerald-400 transition-all duration-500"
+                    style={{ width: `${conqueredPercentage}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Gráfico Comparativo Recharts */}
+            <div className="lg:col-span-5 h-36 select-none bg-slate-950/60 p-2.5 rounded-2xl border border-white/5">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={comparisonChartData}
+                  barSize={20}
+                  accessibilityLayer={false}
+                  margin={{ top: 8, right: 30, left: 10, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    stroke="#64748b"
+                    fontSize={10}
+                    tickFormatter={(v) => formatBRL(Number(v))}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="categoria"
+                    stroke="#cbd5e1"
+                    fontSize={11}
+                    width={85}
+                  />
+                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
+                  <Bar dataKey="valor" name="Montante" radius={[0, 6, 6, 0]}>
+                    {comparisonChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* SEÇÃO 3: MURAL DE ANOTAÇÕES, OBJETIVOS & LISTA DE DESEJOS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4 border-t border-white/[0.07]">
           <div className="lg:col-span-2 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-extrabold text-white">Mural de Anotações & Segundo Cérebro</h3>
-                <p className="text-xs text-slate-400">Organize ideias, estudos e links importantes com busca instantânea.</p>
+                <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-indigo-400" /> Mural Central & Segundo Cérebro
+                </h3>
+                <p className="text-xs text-slate-400">Organize anotações, metas e desejos de compra com controle interativo de conclusão.</p>
               </div>
-              <div className="relative w-full sm:w-56">
+              <div className="relative w-full sm:w-60">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Pesquisar nota..."
+                  placeholder="Pesquisar nota ou desejo..."
                   value={noteSearch}
                   onChange={(e) => setNoteSearch(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-950 border border-white/10 text-xs text-white outline-none focus:border-indigo-500"
@@ -1208,54 +1253,368 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               </div>
             </div>
 
+            {/* Pílulas de Filtro Rápido (Todos, Notas & Objetivos, Lista de Desejos) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMuralFilter("ALL")}
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                  muralFilter === "ALL"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20"
+                    : "bg-slate-900/90 text-slate-400 hover:text-white border border-white/5"
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" /> Todos
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 font-mono tabular-nums">{notes.length}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMuralFilter("NOTES")}
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                  muralFilter === "NOTES"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20"
+                    : "bg-slate-900/90 text-slate-400 hover:text-white border border-white/5"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" /> Notas & Objetivos
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 font-mono tabular-nums">
+                  {notes.filter((n) => n.itemType !== "wish" && (!n.price || n.price === 0)).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMuralFilter("WISHES")}
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                  muralFilter === "WISHES"
+                    ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30 ring-1 ring-white/20"
+                    : "bg-slate-900/90 text-slate-400 hover:text-white border border-white/5"
+                }`}
+              >
+                <ShoppingBag className="w-3.5 h-3.5 text-amber-400" /> Lista de Desejos (R$)
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 font-mono tabular-nums">
+                  {notes.filter((n) => n.itemType === "wish" || (n.price != null && n.price > 0)).length}
+                </span>
+              </button>
+            </div>
+
+            {/* Pílulas de Tags Temáticas */}
             <div className="flex flex-wrap gap-1.5">
               {["ALL", "#Ideias", "#TrabalhoACS", "#Estudos", "#Pessoal", "#Links"].map((t) => (
-                <button key={t} type="button" onClick={() => setSelectedNoteTag(t)} className={`px-3 py-1 rounded-full text-[11px] font-bold transition ${selectedNoteTag === t ? "bg-indigo-600 text-white shadow" : "bg-slate-900 text-slate-400 hover:text-white"}`}>
-                  {t === "ALL" ? "Todas" : t}
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setSelectedNoteTag(t)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-bold transition ${
+                    selectedNoteTag === t
+                      ? "bg-indigo-600 text-white shadow"
+                      : "bg-slate-900 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {t === "ALL" ? "Todas as Tags" : t}
                 </button>
               ))}
             </div>
 
+            {/* Cards do Mural */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {visibleNotes.map((n) => (
-                <div key={n.id} className="glass-card p-5 rounded-3xl border border-white/[0.08] flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300">{n.tag}</span>
-                      <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => { setEditingNoteId(n.id); setNewNote({ title: n.title, content: n.content, tag: n.tag }); }} className="text-indigo-300 hover:text-white"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => handleDeleteNote(n.id)} className="text-slate-500 hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
+              {visibleNotes.map((n) => {
+                const isWish = n.itemType === "wish" || (n.price != null && n.price > 0);
+                return (
+                  <div
+                    key={n.id}
+                    className={`glass-card p-5 rounded-3xl border transition flex flex-col justify-between space-y-3.5 relative overflow-hidden ${
+                      n.completed
+                        ? "border-emerald-500/30 bg-emerald-950/[0.08]"
+                        : "border-white/[0.08] hover:border-indigo-500/30"
+                    }`}
+                  >
+                    <div>
+                      {/* Topo do Card: Check, Badges e Ações */}
+                      <div className="flex items-start justify-between gap-2 mb-2.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {/* Botão de Check Interativo */}
+                          <button
+                            type="button"
+                            onClick={() => onToggleNote(n.id)}
+                            className="p-1 rounded-full hover:scale-110 transition shrink-0"
+                            title={n.completed ? "Desmarcar conclusão" : isWish ? "Marcar como Já Comprado" : "Marcar como Concluído"}
+                          >
+                            {n.completed ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                            ) : (
+                              <Circle className="w-5 h-5 text-slate-500 hover:text-emerald-400 transition" />
+                            )}
+                          </button>
+
+                          {/* Selo de Conquistado / Realizado */}
+                          {n.completed && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                              ✓ {isWish ? "Conquistado" : "Realizado"}
+                            </span>
+                          )}
+
+                          {/* Badge de Tipo / Tag */}
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300">
+                            {n.tag}
+                          </span>
+
+                          {/* Badge de Prioridade (Termômetro de Impulso para Desejos) */}
+                          {isWish && n.priority && (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                                n.priority === "Essencial"
+                                  ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                  : n.priority === "Planejado"
+                                  ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                                  : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                              }`}
+                            >
+                              {n.priority === "Essencial"
+                                ? "🔥 Essencial"
+                                : n.priority === "Planejado"
+                                ? "🎯 Planejado"
+                                : "💭 Desejo"}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditNote(n)}
+                            className="p-1.5 rounded-lg text-indigo-300 hover:text-white hover:bg-white/5 transition"
+                            title="Editar"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteNote(n.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Título */}
+                      <h4
+                        className={`font-extrabold text-sm mb-1.5 leading-snug ${
+                          n.completed ? "line-through text-slate-400" : "text-white"
+                        }`}
+                      >
+                        {n.title}
+                      </h4>
+
+                      {/* Descrição / Conteúdo */}
+                      <p
+                        className={`text-xs leading-relaxed whitespace-pre-line ${
+                          n.completed ? "text-slate-400" : "text-slate-300"
+                        }`}
+                      >
+                        {n.description || n.content}
+                      </p>
+
+                      {/* Linha de Valor e Link da Loja para Desejos */}
+                      {isWish && (
+                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-2xl bg-slate-950/70 border border-white/5 mt-3">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] text-slate-400 block font-medium">Valor Estimado</span>
+                            <strong className="text-base font-extrabold font-mono tabular-nums text-amber-400">
+                              {formatBRL(n.price || 0)}
+                            </strong>
+                          </div>
+                          {n.storeUrl && (
+                            <a
+                              href={n.storeUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold inline-flex items-center gap-1.5 transition"
+                              title="Abrir página da loja em nova aba"
+                            >
+                              🔗 Ver Loja <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <h4 className="font-extrabold text-sm text-white mb-1">{n.title}</h4>
-                    <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{n.content}</p>
+
+                    {/* Rodapé: Datas */}
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-white/5 font-mono tabular-nums">
+                      <span>Criado: {formatDateBR(n.date)}</span>
+                      {n.completed && n.completedAt && (
+                        <span className="text-emerald-400 font-bold">Concluído: {formatDateBR(n.completedAt)}</span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-mono">{n.date}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          <form onSubmit={handleSaveNote} className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-3.5 text-xs h-fit">
+          {/* FORMULÁRIO DE CRIAÇÃO / EDIÇÃO */}
+          <form
+            onSubmit={handleSaveNote}
+            className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-4 text-xs h-fit"
+          >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-white">{editingNoteId ? "Editar Anotação" : "Nova Anotação"}</h3>
+              <h3 className="text-sm font-extrabold text-white">
+                {editingNoteId ? "Editar Item" : "Novo Registro no Mural"}
+              </h3>
               {editingNoteId && (
-                <button type="button" onClick={() => { setEditingNoteId(null); setNewNote({ title: "", content: "", tag: "#Ideias" }); }} className="text-[11px] text-rose-400 hover:underline">
+                <button
+                  type="button"
+                  onClick={handleCancelEditNote}
+                  className="text-[11px] text-rose-400 hover:underline"
+                >
                   Cancelar
                 </button>
               )}
             </div>
-            <input type="text" required placeholder="Título..." value={newNote.title} onChange={(e) => setNewNote({ ...newNote, title: e.target.value })} className={inputClass} />
-            <select value={newNote.tag} onChange={(e) => setNewNote({ ...newNote, tag: e.target.value as BrainNote["tag"] })} className={inputClass}>
-              <option value="#Ideias">#Ideias</option>
-              <option value="#TrabalhoACS">#TrabalhoACS</option>
-              <option value="#Estudos">#Estudos</option>
-              <option value="#Pessoal">#Pessoal</option>
-              <option value="#Links">#Links</option>
-            </select>
-            <textarea rows={4} required placeholder="Conteúdo da nota..." value={newNote.content} onChange={(e) => setNewNote({ ...newNote, content: e.target.value })} className={inputClass} />
-            <button type="submit" className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold shadow-lg transition">
-              {editingNoteId ? "✓ Salvar Alterações" : "+ Fixar no Mural"}
+
+            {/* Alternador de Modo: Nota/Objetivo vs Desejo de Compra */}
+            <div className="grid grid-cols-2 p-1 rounded-2xl bg-slate-950 border border-white/10 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setNewNote({ ...newNote, itemType: "note" })}
+                className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition ${
+                  newNote.itemType !== "wish"
+                    ? "bg-indigo-600 text-white shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" /> Nota / Objetivo
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewNote({ ...newNote, itemType: "wish" })}
+                className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition ${
+                  newNote.itemType === "wish"
+                    ? "bg-amber-600 text-white shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <ShoppingBag className="w-3.5 h-3.5" /> Desejo de Compra (R$)
+              </button>
+            </div>
+
+            {/* Título */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-300 block">Título *</label>
+              <input
+                type="text"
+                required
+                placeholder={newNote.itemType === "wish" ? "Ex: Monitor Ultrawide 34 LG..." : "Ex: Revisão de DAX e SQL..."}
+                value={newNote.title}
+                onChange={(e) => setNewNote({ ...newNote, title: e.target.value })}
+                className={inputClass}
+              />
+            </div>
+
+            {/* Tag Categoria */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-300 block">Tag de Contexto</label>
+              <select
+                value={newNote.tag}
+                onChange={(e) => setNewNote({ ...newNote, tag: e.target.value as BrainNote["tag"] })}
+                className={inputClass}
+              >
+                <option value="#Ideias">#Ideias</option>
+                <option value="#TrabalhoACS">#TrabalhoACS</option>
+                <option value="#Estudos">#Estudos</option>
+                <option value="#Pessoal">#Pessoal</option>
+                <option value="#Links">#Links</option>
+              </select>
+            </div>
+
+            {/* Campos Específicos para Desejo de Compra */}
+            {newNote.itemType === "wish" && (
+              <>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300 block">Preço Estimado (R$) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      placeholder="0,00"
+                      value={newNote.price || ""}
+                      onChange={(e) => setNewNote({ ...newNote, price: e.target.value })}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300 block">Prioridade / Impulso</label>
+                    <select
+                      value={newNote.priority || "Planejado"}
+                      onChange={(e) => setNewNote({ ...newNote, priority: e.target.value as any })}
+                      className={inputClass}
+                    >
+                      <option value="Essencial">🔥 Essencial</option>
+                      <option value="Planejado">🎯 Planejado</option>
+                      <option value="Desejo">💭 Desejo / Impulso</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-300 block">Link da Loja (Opcional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={newNote.storeUrl || ""}
+                    onChange={(e) => setNewNote({ ...newNote, storeUrl: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Descrição / Conteúdo */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-300 block">
+                {newNote.itemType === "wish" ? "Motivo da Compra / Detalhes" : "Conteúdo da Nota / Meta"}
+              </label>
+              <textarea
+                rows={3}
+                placeholder={
+                  newNote.itemType === "wish"
+                    ? "Por que você precisa disso? Qual problema vai resolver?"
+                    : "Descreva suas ideias, pontos de estudo ou metas..."
+                }
+                value={newNote.description || newNote.content || ""}
+                onChange={(e) => setNewNote({ ...newNote, content: e.target.value, description: e.target.value })}
+                className={inputClass}
+              />
+            </div>
+
+            {/* Checkbox de Conclusão / Comprado */}
+            <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-950 border border-white/5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={Boolean(newNote.completed)}
+                onChange={(e) => setNewNote({ ...newNote, completed: e.target.checked })}
+                className="w-4 h-4 rounded accent-emerald-500"
+              />
+              <span className="text-xs text-slate-300 font-medium">
+                {newNote.itemType === "wish" ? "Marcar como Já Comprado / Conquistado" : "Marcar como Já Concluído / Realizado"}
+              </span>
+            </label>
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2"
+            >
+              {editingNoteId
+                ? "✓ Salvar Alterações"
+                : newNote.itemType === "wish"
+                ? "+ Adicionar à Lista de Desejos"
+                : "+ Fixar no Mural"}
             </button>
           </form>
         </div>
@@ -1337,7 +1696,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                       ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                       : sheetApiUrl
                       ? "bg-slate-800 text-slate-300 border-white/10"
-                      : "bg-slate-900 text-slate-500 border-white/5"
+                      : "bg-slate-900 text-slate-400 border-white/5"
                   }`}>
                     {sheetsSyncStatus?.state === "error" ? (
                       <><XCircle className="w-3.5 h-3.5 text-rose-400" /> Integração Inválida</>
@@ -1430,7 +1789,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                         ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                         : stravaConfig.refreshToken
                         ? "bg-orange-500/15 text-orange-300 border-orange-500/30"
-                        : "bg-slate-900 text-slate-500 border-white/5"
+                        : "bg-slate-900 text-slate-400 border-white/5"
                     }`}>
                       {stravaSyncStatus?.state === "error" ? (
                         <><XCircle className="w-3.5 h-3.5 text-rose-400" /> Integração Inválida</>
@@ -1530,54 +1889,262 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
         </div>
 
-        {/* MÉTODOS E CATEGORIAS */}
+        {/* MÉTODOS E CATEGORIAS COM AÇÃO DE EDITAR (Requisito 4) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* MÉTODOS DE PAGAMENTO */}
           <div className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-4 text-xs">
-            <h3 className="text-sm font-extrabold text-white">Métodos de Pagamento</h3>
-            <form onSubmit={handleAddPaymentMethod} className="flex gap-2">
-              <input type="text" required placeholder="Novo Método (Ex: Vale Alimentação...)" value={newMethodName} onChange={(e) => setNewMethodName(e.target.value)} className={inputClass} />
-              <button type="submit" className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold shrink-0 transition">+ Cadastrar</button>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-white">
+                {editingMethodName ? "Editar Método de Pagamento" : "Métodos de Pagamento"}
+              </h3>
+              {editingMethodName && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingMethodName(null);
+                    setEditMethodInput("");
+                  }}
+                  className="text-[11px] text-rose-400 hover:underline"
+                >
+                  Cancelar Edição
+                </button>
+              )}
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (editingMethodName) {
+                  if (props.handleUpdatePaymentMethod) {
+                    props.handleUpdatePaymentMethod(editingMethodName, editMethodInput);
+                  }
+                  setEditingMethodName(null);
+                  setEditMethodInput("");
+                } else {
+                  handleAddPaymentMethod(e);
+                }
+              }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                required
+                placeholder={editingMethodName ? "Nome do Método..." : "Novo Método (Ex: Vale Refeição...)"}
+                value={editingMethodName ? editMethodInput : newMethodName}
+                onChange={(e) => {
+                  if (editingMethodName) setEditMethodInput(e.target.value);
+                  else setNewMethodName(e.target.value);
+                }}
+                className={inputClass}
+              />
+              <button
+                type="submit"
+                className={`px-4 py-2.5 rounded-xl text-white font-extrabold shrink-0 transition ${
+                  editingMethodName
+                    ? "bg-indigo-600 hover:bg-indigo-500"
+                    : "bg-emerald-600 hover:bg-emerald-500"
+                }`}
+              >
+                {editingMethodName ? "✓ Salvar" : "+ Cadastrar"}
+              </button>
             </form>
+
             <div className="flex flex-wrap gap-2 pt-1">
               {paymentMethods.map((m) => (
-                <span key={m} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-white/10 text-slate-200 font-semibold">
-                  <CreditCard className="w-3.5 h-3.5 text-indigo-400" /><span>{m}</span>
-                  <button type="button" onClick={() => handleDeletePaymentMethod(m)} className="text-slate-500 hover:text-rose-400">×</button>
+                <span
+                  key={m}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-slate-200 font-semibold transition ${
+                    editingMethodName === m
+                      ? "bg-indigo-600/30 border-indigo-500 text-white"
+                      : "bg-slate-950 border-white/10"
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>{m}</span>
+                  <div className="flex items-center gap-1 ml-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingMethodName(m);
+                        setEditMethodInput(m);
+                      }}
+                      className="text-slate-400 hover:text-indigo-300 p-0.5 rounded transition"
+                      title={`Editar método ${m}`}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePaymentMethod(m)}
+                      className="text-slate-400 hover:text-rose-400 p-0.5"
+                      title="Excluir método"
+                    >
+                      ×
+                    </button>
+                  </div>
                 </span>
               ))}
             </div>
           </div>
 
+          {/* CATEGORIAS PERSONALIZADAS */}
           <div className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-4 text-xs">
-            <h3 className="text-sm font-extrabold text-white">Categorias Personalizadas</h3>
-            <form onSubmit={handleAddCustomCategory} className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-white">
+                {editingCategoryName ? "Editar Categoria Personalizada" : "Categorias Personalizadas"}
+              </h3>
+              {editingCategoryName && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingCategoryName(null);
+                    setEditCategoryForm({
+                      name: "",
+                      flow: "EXPENSE",
+                      isAuto: false,
+                      color: "#6366f1"
+                    });
+                  }}
+                  className="text-[11px] text-rose-400 hover:underline"
+                >
+                  Cancelar Edição
+                </button>
+              )}
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (editingCategoryName) {
+                  if (props.handleUpdateCategory) {
+                    props.handleUpdateCategory(
+                      editingCategoryName,
+                      {
+                        name: editCategoryForm.name,
+                        flow: editCategoryForm.flow,
+                        isAuto: editCategoryForm.isAuto
+                      },
+                      editCategoryForm.color
+                    );
+                  }
+                  setEditingCategoryName(null);
+                  setEditCategoryForm({
+                    name: "",
+                    flow: "EXPENSE",
+                    isAuto: false,
+                    color: "#6366f1"
+                  });
+                } else {
+                  handleAddCustomCategory(e);
+                }
+              }}
+              className="space-y-2.5"
+            >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input type="text" required placeholder="Nome da Categoria..." value={newCategoryForm.name} onChange={(e) => setNewCategoryForm({ ...newCategoryForm, name: e.target.value })} className={inputClass} />
-                <select value={newCategoryForm.flow} onChange={(e) => setNewCategoryForm({ ...newCategoryForm, flow: e.target.value as FlowType })} className={inputClass}>
+                <input
+                  type="text"
+                  required
+                  placeholder="Nome da Categoria..."
+                  value={editingCategoryName ? editCategoryForm.name : newCategoryForm.name}
+                  onChange={(e) => {
+                    if (editingCategoryName)
+                      setEditCategoryForm({ ...editCategoryForm, name: e.target.value });
+                    else setNewCategoryForm({ ...newCategoryForm, name: e.target.value });
+                  }}
+                  className={inputClass}
+                />
+                <select
+                  value={editingCategoryName ? editCategoryForm.flow : newCategoryForm.flow}
+                  onChange={(e) => {
+                    const f = e.target.value as FlowType;
+                    if (editingCategoryName) setEditCategoryForm({ ...editCategoryForm, flow: f });
+                    else setNewCategoryForm({ ...newCategoryForm, flow: f });
+                  }}
+                  className={inputClass}
+                >
                   <option value="EXPENSE">Despesa / Saída</option>
                   <option value="INCOME">Receita / Entrada</option>
                   <option value="INVESTMENT">Aporte / Investimento</option>
                 </select>
               </div>
+
               <div className="flex items-center justify-between gap-2">
                 <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
-                  <input type="checkbox" checked={newCategoryForm.isAuto} onChange={(e) => setNewCategoryForm({ ...newCategoryForm, isAuto: e.target.checked })} />
-                  <span>Vincular ao Veículo (KM/L)</span>
+                  <input
+                    type="checkbox"
+                    checked={editingCategoryName ? editCategoryForm.isAuto : newCategoryForm.isAuto}
+                    onChange={(e) => {
+                      if (editingCategoryName)
+                        setEditCategoryForm({ ...editCategoryForm, isAuto: e.target.checked });
+                      else setNewCategoryForm({ ...newCategoryForm, isAuto: e.target.checked });
+                    }}
+                  />
+                  <span>Vincular aos Veículos (KM/L)</span>
                 </label>
                 <div className="flex items-center gap-2.5">
-                  <input type="color" value={newCategoryForm.color} onChange={(e) => setNewCategoryForm({ ...newCategoryForm, color: e.target.value })} className="color-circle" />
-                  <button type="submit" className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold transition">+ Criar</button>
+                  <input
+                    type="color"
+                    value={editingCategoryName ? editCategoryForm.color : newCategoryForm.color}
+                    onChange={(e) => {
+                      if (editingCategoryName)
+                        setEditCategoryForm({ ...editCategoryForm, color: e.target.value });
+                      else setNewCategoryForm({ ...newCategoryForm, color: e.target.value });
+                    }}
+                    className="color-circle"
+                  />
+                  <button
+                    type="submit"
+                    className={`px-4 py-2 rounded-xl text-white font-extrabold transition ${
+                      editingCategoryName
+                        ? "bg-emerald-600 hover:bg-emerald-500 shadow-lg"
+                        : "bg-indigo-600 hover:bg-indigo-500"
+                    }`}
+                  >
+                    {editingCategoryName ? "✓ Salvar Alterações" : "+ Criar Categoria"}
+                  </button>
                 </div>
               </div>
             </form>
-            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pt-1">
+
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pt-1">
               {categoriesCatalog.map((cat) => {
                 const col = categoryColors[cat.name] || "#6366f1";
+                const isBeingEdited = editingCategoryName === cat.name;
                 return (
-                  <span key={cat.name} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ backgroundColor: `${col}22`, color: col, border: `1px solid ${col}44` }}>
-                    {renderCategorySemanticIcon(cat.name, col)}<span>{cat.name}</span>
+                  <span
+                    key={cat.name}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition ${
+                      isBeingEdited ? "ring-2 ring-indigo-400 scale-105" : ""
+                    }`}
+                    style={{ backgroundColor: `${col}22`, color: col, border: `1px solid ${col}44` }}
+                  >
+                    {renderCategorySemanticIcon(cat.name, col)}
+                    <span>{cat.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCategoryName(cat.name);
+                        setEditCategoryForm({
+                          name: cat.name,
+                          flow: cat.flow,
+                          isAuto: Boolean(cat.isAuto),
+                          color: col
+                        });
+                      }}
+                      className="hover:text-white p-0.5 ml-1 transition"
+                      title={`Editar categoria ${cat.name}`}
+                    >
+                      <Pencil className="w-2.5 h-2.5" />
+                    </button>
                     {cat.name !== "A Receber" && (
-                      <button type="button" onClick={() => handleDeleteCategory(cat.name)} className="hover:text-white ml-1">×</button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategory(cat.name)}
+                        className="hover:text-white ml-0.5"
+                        title="Excluir categoria"
+                      >
+                        ×
+                      </button>
                     )}
                   </span>
                 );
@@ -1641,8 +2208,8 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             <div className="space-y-1.5 max-h-28 overflow-y-auto">
               {alertRules.map((r) => (
                 <div key={r.id} className="p-2.5 rounded-xl bg-slate-950/80 border border-white/[0.07] flex items-center justify-between">
-                  <span><strong>{r.title}</strong> ({r.targetValue.toLocaleString("pt-BR")} km)</span>
-                  <button onClick={() => saveAlertRules(alertRules.filter((item) => item.id !== r.id))} className="text-slate-500 hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <span><strong>{r.title}</strong> (<span className="font-mono tabular-nums">{r.targetValue.toLocaleString("pt-BR")} km</span>)</span>
+                  <button onClick={() => saveAlertRules(alertRules.filter((item) => item.id !== r.id))} className="text-slate-400 hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               ))}
             </div>

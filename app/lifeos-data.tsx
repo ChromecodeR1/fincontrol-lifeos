@@ -20,7 +20,9 @@ import {
   HandCoins,
   Sun,
   Monitor,
-  Moon
+  Moon,
+  TrendingDown,
+  ArrowLeftRight
 } from "lucide-react";
 
 export type CostType = "Fixo" | "Variável";
@@ -44,9 +46,14 @@ export type DashboardWidgetId =
   | "thermometer"
   | "kpis"
   | "credit_chart"
+  | "bank_limits_chart"
   | "patrimony_chart"
   | "category_chart"
-  | "benefits_strava";
+  | "benefits_strava"
+  | "auto_odometer"
+  | "auto_consumption"
+  | "auto_fuel_monthly"
+  | "auto_price_per_liter";
 
 export interface DashboardWidgetConfig {
   id: DashboardWidgetId;
@@ -65,6 +72,7 @@ export interface Transaction {
   costType: CostType;
   paymentMethod: PaymentMethod;
   cardUsed?: string;
+  bankAccount?: string;
   status: TxStatus;
   km?: number;
   liters?: number;
@@ -73,9 +81,58 @@ export interface Transaction {
   updatedAt?: string;
   installmentInfo?: string;
   installmentGroupId?: string;
+  invoiceMonth?: string;
   debtor?: string;
   paidAmount?: number;
+  isTransfer?: boolean;
+  sourceBank?: string;
+  destinationBank?: string;
+  isSplit?: boolean;
+  thirdPartyAmount?: number;
+  thirdPartyName?: string;
+  personalAmount?: number;
+  linkedReceivableId?: string;
+  isSplitChild?: boolean;
+  linkedSplitParentId?: string;
 }
+
+export type BankAccountType = "Conta Corrente" | "Conta Digital" | "Investimentos" | "Benefícios";
+
+export interface BankInstitution {
+  id: string;
+  name: string;
+  accountType?: "Conta Corrente" | "Conta Digital" | "Investimentos" | "Benefícios";
+  color?: string;
+  logoUrl?: string;
+  limit?: number;
+  limitType?: string;
+}
+
+export interface BankItem {
+  id: string;
+  name: string;
+  logoUrl?: string;
+  limit?: number;
+  limitType?: string;
+  accountType?: "Conta Corrente" | "Conta Digital" | "Investimentos" | "Benefícios";
+  color?: string;
+}
+
+export interface AutoInmetroConfig {
+  gasolineKmPerLiter: number;
+  ethanolKmPerLiter: number;
+  greenThresholdPct: number;
+  yellowThresholdPct: number;
+  referenceNote: string;
+}
+
+export const DEFAULT_AUTO_INMETRO_CONFIG: AutoInmetroConfig = {
+  gasolineKmPerLiter: 12.0,
+  ethanolKmPerLiter: 8.5,
+  greenThresholdPct: 85,
+  yellowThresholdPct: 70,
+  referenceNote: "INMETRO PBEV Fiesta Sedan 2008 1.0 Flex (Ciclo Misto)"
+};
 
 export interface CreditCardItem {
   id: string;
@@ -85,7 +142,11 @@ export interface CreditCardItem {
   closingDay: number;
   dueDay: number;
   logoUrl?: string;
+  bankId?: string;
+  bankName?: string;
 }
+
+export type CreditCard = CreditCardItem;
 
 export interface StaticStatusItem {
   id: string;
@@ -101,7 +162,13 @@ export interface WishlistItem {
   institution: string;
   targetAmount: number;
   savedAmount: number;
-  priority: "Alta" | "Média" | "Baixa";
+  priority: "Alta" | "Média" | "Baixa" | "Essencial" | "Planejado" | "Desejo";
+  completed?: boolean;
+  itemType?: "note" | "wish";
+  price?: number;
+  description?: string;
+  storeUrl?: string;
+  completedAt?: string;
 }
 
 export interface BioLog {
@@ -119,12 +186,22 @@ export interface StravaStats {
   lastSync: string;
 }
 
+export type BrainNotePriority = "Essencial" | "Planejado" | "Desejo";
+export type BrainNoteItemType = "note" | "wish";
+
 export interface BrainNote {
   id: string;
   date: string;
   title: string;
   content: string;
   tag: "#TrabalhoACS" | "#Ideias" | "#Estudos" | "#Pessoal" | "#Links";
+  completed?: boolean;
+  itemType?: "note" | "wish";
+  price?: number;
+  description?: string;
+  priority?: "Essencial" | "Planejado" | "Desejo";
+  storeUrl?: string;
+  completedAt?: string;
 }
 
 export interface PersonalOKR {
@@ -179,7 +256,7 @@ export interface ToastMessage {
   id: string;
   title: string;
   subtitle?: string;
-  type: "success" | "warning" | "info";
+  type: "success" | "warning" | "info" | "error";
 }
 
 export interface SystemLogEntry {
@@ -252,6 +329,12 @@ export function sanitizeImageSource(src?: string): string | undefined {
   return undefined;
 }
 
+export function isResgateCategory(category?: string | null): boolean {
+  if (!category) return false;
+  const lower = category.toLowerCase();
+  return lower.includes("resgate");
+}
+
 export function normalizeStatus(st?: string): TxStatus {
   if (!st) return "Pago";
   return st.includes("Pendente") ? "Pendente / Na Fatura" : "Pago";
@@ -259,6 +342,64 @@ export function normalizeStatus(st?: string): TxStatus {
 
 export function formatBRL(val: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val ? val : 0);
+}
+
+// Matemática Financeira Blindada em Centavos Inteiros (Sprint 8)
+export function toCents(val: number): number {
+  return Math.round((Number(val) || 0) * 100);
+}
+
+export function fromCents(cents: number): number {
+  return Math.round(Number(cents) || 0) / 100;
+}
+
+export function safeAdd(...values: number[]): number {
+  const sumCents = values.reduce((acc, v) => acc + toCents(v), 0);
+  return fromCents(sumCents);
+}
+
+export function safeSub(a: number, b: number): number {
+  return fromCents(toCents(a) - toCents(b));
+}
+
+// Competência Real da Fatura vs. Data da Compra sem shift de fuso horário (UTC-3)
+export function getCardInvoiceCompetence(
+  purchaseDateISO: string,
+  cardClosingDay?: number
+): string {
+  if (!purchaseDateISO) return "";
+  const dateOnly = purchaseDateISO.trim().split("T")[0].replace(/\//g, "-");
+  const parts = dateOnly.split("-");
+  if (parts.length < 3) return "";
+
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return "";
+
+  if (cardClosingDay && cardClosingDay > 0 && d >= cardClosingDay) {
+    const nextYear = y + Math.floor(m / 12);
+    const nextMonth = (m % 12) + 1;
+    return `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
+  }
+
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+export function formatDateBR(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  const trimmed = dateStr.trim();
+  // Já está no formato DD/MM/AAAA
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) return trimmed;
+  // AAAA-MM-DD ou AAAA/MM/DD (com ou sem timestamp T...)
+  const dateOnly = trimmed.split("T")[0].replace(/\//g, "-");
+  const parts = dateOnly.split("-");
+  if (parts.length === 3 && parts[0].length === 4) {
+    const [year, month, day] = parts;
+    return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
+  }
+  return dateStr;
 }
 
 export function addMonthsToDate(dateStr: string, monthsToAdd: number): string {
@@ -299,6 +440,121 @@ export function buildWhatsAppChargeText(person: string, items: Transaction[]): s
     ``,
     `*Saldo Total a Receber:* ${formatBRL(totalRemaining)}`
   ].join("\n");
+}
+
+export interface InstallmentSeriesData {
+  isInstallment: boolean;
+  baseDescription: string;
+  currentInstallment?: number;
+  totalInstallments?: number;
+  groupId?: string;
+  series: Transaction[];
+}
+
+export function parseInstallmentInfo(tx: Transaction): {
+  isInstallment: boolean;
+  current?: number;
+  total?: number;
+  baseDescription: string;
+} {
+  const desc = tx.description || "";
+  const suffixRegex = /\s*[\(\[]?\s*(\d{1,2})\s*[\/|\\]\s*(\d{1,2})\s*[\)\]]?\s*$/;
+  const descMatch = desc.match(suffixRegex);
+
+  let current: number | undefined;
+  let total: number | undefined;
+
+  if (tx.installmentInfo) {
+    const infoMatch = tx.installmentInfo.match(/^(\d{1,2})\s*[\/|\\]\s*(\d{1,2})$/);
+    if (infoMatch) {
+      current = parseInt(infoMatch[1], 10);
+      total = parseInt(infoMatch[2], 10);
+    }
+  }
+
+  if (descMatch) {
+    if (!current) current = parseInt(descMatch[1], 10);
+    if (!total) total = parseInt(descMatch[2], 10);
+  }
+
+  const baseDescription = desc.replace(suffixRegex, "").trim();
+  const isInstallment = Boolean(
+    tx.installmentGroupId ||
+    (total && total > 1) ||
+    Boolean(tx.installmentInfo && tx.installmentInfo.includes("/"))
+  );
+
+  return {
+    isInstallment,
+    current,
+    total,
+    baseDescription: baseDescription || desc
+  };
+}
+
+export function getInstallmentSeries(
+  targetTx: Transaction,
+  allTransactions: Transaction[]
+): InstallmentSeriesData {
+  const parsedTarget = parseInstallmentInfo(targetTx);
+
+  if (targetTx.installmentGroupId) {
+    const series = allTransactions
+      .filter((t) => t.installmentGroupId === targetTx.installmentGroupId)
+      .sort((a, b) => {
+        const pa = parseInstallmentInfo(a);
+        const pb = parseInstallmentInfo(b);
+        if (pa.current && pb.current) return pa.current - pb.current;
+        return a.date.localeCompare(b.date);
+      });
+
+    return {
+      isInstallment: true,
+      baseDescription: parsedTarget.baseDescription,
+      currentInstallment: parsedTarget.current,
+      totalInstallments: parsedTarget.total || series.length,
+      groupId: targetTx.installmentGroupId,
+      series: series.length > 0 ? series : [targetTx]
+    };
+  }
+
+  if (!parsedTarget.isInstallment) {
+    return {
+      isInstallment: false,
+      baseDescription: targetTx.description,
+      series: [targetTx]
+    };
+  }
+
+  const targetBase = parsedTarget.baseDescription.toLowerCase();
+  const targetCard = targetTx.cardUsed || "";
+  const targetMethod = targetTx.paymentMethod || "";
+
+  const series = allTransactions
+    .filter((t) => {
+      if (t.id === targetTx.id) return true;
+      const pt = parseInstallmentInfo(t);
+      if (!pt.isInstallment) return false;
+      if (pt.baseDescription.toLowerCase() !== targetBase) return false;
+      if (t.paymentMethod !== targetMethod) return false;
+      if ((t.cardUsed || "") !== targetCard) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const pa = parseInstallmentInfo(a);
+      const pb = parseInstallmentInfo(b);
+      if (pa.current && pb.current) return pa.current - pb.current;
+      return a.date.localeCompare(b.date);
+    });
+
+  return {
+    isInstallment: true,
+    baseDescription: parsedTarget.baseDescription,
+    currentInstallment: parsedTarget.current,
+    totalInstallments: parsedTarget.total || series.length,
+    groupId: undefined,
+    series: series.length > 0 ? series : [targetTx]
+  };
 }
 
 export async function hashPasswordPBKDF(password: string, salt: string): Promise<string> {
@@ -356,6 +612,11 @@ export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = [
   { name: "Serviços", flow: "INCOME" },
   { name: "Rendimentos", flow: "INCOME" },
   { name: "Aporte / Investimento", flow: "INVESTMENT" },
+  { name: "Resgate", flow: "INVESTMENT" },
+  { name: "Resgate Caixinha", flow: "INVESTMENT" },
+  { name: "Transferência entre Contas", flow: "INVESTMENT" },
+  { name: "Recebimento de Empréstimo", flow: "INCOME" },
+  { name: "Pagamento de Fatura", flow: "EXPENSE" },
   { name: "A Receber", flow: "EXPENSE" },
   { name: "Alimentação", flow: "EXPENSE" },
   { name: "Moradia", flow: "EXPENSE" },
@@ -377,6 +638,7 @@ export const DEFAULT_PAYMENT_METHODS: string[] = [
   "Cartão de Débito",
   "Cartão de Crédito",
   "Cartão ECX",
+  "Débito em Conta",
   "Dinheiro"
 ];
 
@@ -387,6 +649,11 @@ export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   "Serviços": "#2dd4bf",
   "Rendimentos": "#14b8a6",
   "Aporte / Investimento": "#6366f1",
+  "Resgate": "#f43f5e",
+  "Resgate Caixinha": "#f43f5e",
+  "Transferência entre Contas": "#0ea5e9",
+  "Recebimento de Empréstimo": "#10b981",
+  "Pagamento de Fatura": "#8b5cf6",
   "A Receber": "#f59e0b",
   "Alimentação": "#f43f5e",
   "Moradia": "#8b5cf6",
@@ -449,6 +716,13 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
     size: "half"
   },
   {
+    id: "bank_limits_chart",
+    title: "Limites Bancários & Ranking",
+    subtitle: "Exposição total, ranking de limites e disponibilidade por banco",
+    visible: true,
+    size: "half"
+  },
+  {
     id: "patrimony_chart",
     title: "Evolução Patrimonial",
     subtitle: "Crescimento acumulado e fluxo mensal",
@@ -471,14 +745,49 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
   }
 ];
 
+export const DEFAULT_AUTO_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
+  {
+    id: "auto_odometer",
+    title: "Evolução do Odômetro (KM)",
+    subtitle: "Progressão da quilometragem a cada abastecimento ou serviço",
+    visible: true,
+    size: "half"
+  },
+  {
+    id: "auto_consumption",
+    title: "Consumo Real vs INMETRO (km/l)",
+    subtitle: "Rendimento por abastecimento com semáforo de eficiência",
+    visible: true,
+    size: "half"
+  },
+  {
+    id: "auto_fuel_monthly",
+    title: "Gasto com Combustível por Mês",
+    subtitle: "Histórico mensal de desembolso nos postos (R$)",
+    visible: true,
+    size: "half"
+  },
+  {
+    id: "auto_price_per_liter",
+    title: "Preço do Litro ao Longo do Tempo",
+    subtitle: "Variação do custo por litro (R$/L) pago na bomba",
+    visible: true,
+    size: "half"
+  }
+];
+
 export function renderCategorySemanticIcon(category: string, color: string) {
   const c = category.toLowerCase();
   const style = { color };
-  if (c.includes("receber")) return <HandCoins className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("transferência") || c.includes("transferencia"))
+    return <ArrowLeftRight className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("receber") || c.includes("recebimento")) return <HandCoins className="w-3.5 h-3.5" style={style} />;
   if (c.includes("salário") || c.includes("comissão") || c.includes("rendimento"))
     return <Banknote className="w-3.5 h-3.5" style={style} />;
   if (c.includes("benefício") || c.includes("ecx") || c.includes("va"))
     return <CreditCard className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("resgate"))
+    return <TrendingDown className="w-3.5 h-3.5" style={style} />;
   if (c.includes("aporte") || c.includes("investimento") || c.includes("reserva"))
     return <PiggyBank className="w-3.5 h-3.5" style={style} />;
   if (c.includes("alimentação") || c.includes("mercado") || c.includes("restaurante"))
@@ -510,9 +819,14 @@ export function getAutomaticStatus(method: PaymentMethod, category?: string): Tx
   return method === "Cartão de Crédito" ? "Pendente / Na Fatura" : "Pago";
 }
 
+export const INITIAL_BANKS: (BankInstitution & BankItem)[] = [
+  { id: "b1", name: "Nubank", accountType: "Conta Digital", color: "#820ad1", limit: 4500, limitType: "Cartão de Crédito" },
+  { id: "b2", name: "Inter", accountType: "Conta Digital", color: "#ff7a00", limit: 3000, limitType: "Cartão de Crédito" }
+];
+
 export const INITIAL_CARDS: CreditCardItem[] = [
-  { id: "c1", name: "Nubank Ultravioleta", brand: "Mastercard Black", limit: 4500, closingDay: 25, dueDay: 2 },
-  { id: "c2", name: "Inter Black", brand: "Mastercard Black", limit: 3000, closingDay: 10, dueDay: 17 }
+  { id: "c1", name: "Nubank Ultravioleta", brand: "Mastercard Black", limit: 4500, closingDay: 25, dueDay: 2, bankId: "b1", bankName: "Nubank" },
+  { id: "c2", name: "Inter Black", brand: "Mastercard Black", limit: 3000, closingDay: 10, dueDay: 17, bankId: "b2", bankName: "Inter" }
 ];
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [
@@ -568,9 +882,76 @@ export const INITIAL_BIO_LOGS: BioLog[] = [
 ];
 
 export const INITIAL_NOTES: BrainNote[] = [
-  { id: "n-1", date: "2026-10-14", title: "Automação de Relatórios SQL", content: "Criar view parametrizada para cruzar chamados recorrentes e reduzir retrabalho na ACS.", tag: "#TrabalhoACS" },
-  { id: "n-2", date: "2026-10-15", title: "Ideia para o Aplicativo Mobile", content: "Criar atalho rápido para registrar abastecimento direto no posto pelo celular.", tag: "#Ideias" },
-  { id: "n-3", date: "2026-10-16", title: "Revisão de DAX e Power BI", content: "Praticar funções CALCULATE, DATESYTD e inteligência de dados temporais neste fim de semana.", tag: "#Estudos" }
+  {
+    id: "n-1",
+    date: "2026-10-14",
+    title: "Automação de Relatórios SQL",
+    content: "Criar view parametrizada para cruzar chamados recorrentes e reduzir retrabalho na ACS.",
+    description: "Criar view parametrizada para cruzar chamados recorrentes e reduzir retrabalho na ACS.",
+    tag: "#TrabalhoACS",
+    itemType: "note",
+    completed: false
+  },
+  {
+    id: "n-2",
+    date: "2026-10-15",
+    title: "Ideia para o Aplicativo Mobile",
+    content: "Criar atalho rápido para registrar abastecimento direto no posto pelo celular.",
+    description: "Criar atalho rápido para registrar abastecimento direto no posto pelo celular.",
+    tag: "#Ideias",
+    itemType: "note",
+    completed: false
+  },
+  {
+    id: "n-3",
+    date: "2026-10-16",
+    title: "Revisão de DAX e Power BI",
+    content: "Praticar funções CALCULATE, DATESYTD e inteligência de dados temporais neste fim de semana.",
+    description: "Praticar funções CALCULATE, DATESYTD e inteligência de dados temporais neste fim de semana.",
+    tag: "#Estudos",
+    itemType: "note",
+    completed: true,
+    completedAt: "2026-10-18"
+  },
+  {
+    id: "w-1",
+    date: "2026-10-18",
+    title: "Monitor Ultrawide 34 LG Curvo",
+    content: "Upgrade de produtividade para desenvolvimento e análise de dados.",
+    description: "Upgrade de produtividade para desenvolvimento e análise de dados.",
+    tag: "#Ideias",
+    itemType: "wish",
+    price: 2199.9,
+    priority: "Planejado",
+    storeUrl: "https://www.kabum.com.br",
+    completed: false
+  },
+  {
+    id: "w-2",
+    date: "2026-10-20",
+    title: "Teclado Mecânico Ergonômico",
+    content: "Switches brown silenciosos para digitação contínua e sem fadiga.",
+    description: "Switches brown silenciosos para digitação contínua e sem fadiga.",
+    tag: "#Pessoal",
+    itemType: "wish",
+    price: 450.0,
+    priority: "Desejo",
+    completed: true,
+    completedAt: "2026-10-22"
+  },
+  {
+    id: "w-3",
+    date: "2026-10-22",
+    title: "Fone com Cancelamento de Ruído Sony",
+    content: "Foco profundo para estudo e trabalho em home office.",
+    description: "Foco profundo para estudo e trabalho em home office.",
+    tag: "#Estudos",
+    itemType: "wish",
+    price: 1250.0,
+    priority: "Essencial",
+    storeUrl: "https://www.amazon.com.br",
+    completed: false
+  }
 ];
 
 export const INITIAL_OKRS: PersonalOKR[] = [
@@ -613,19 +994,20 @@ export function CustomCyberTooltip({
   isCurrency = true
 }: CustomCyberTooltipProps) {
   if (!active || !payload || !payload.length) return null;
+  const displayLabel = label && /^\d{4}[-/]\d{2}[-/]\d{2}/.test(label) ? formatDateBR(label) : label;
   return (
-    <div className="rounded-2xl bg-[#090d1c]/95 border border-indigo-500/30 px-3.5 py-2.5 shadow-2xl backdrop-blur-xl text-xs space-y-1">
-      {label && <p className="font-bold text-slate-200 border-b border-white/10 pb-1 mb-1">{label}</p>}
+    <div className="bg-slate-950/90 border border-white/10 backdrop-blur-md rounded-lg px-3 py-2 text-xs shadow-xl space-y-1">
+      {displayLabel && <p className="font-semibold text-slate-300 border-b border-white/10 pb-1 mb-1">{displayLabel}</p>}
       {payload.map((entry, index) => (
-        <div key={index} className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-slate-300">
+        <div key={index} className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1.5 text-slate-400">
             <span
-              className="w-2.5 h-2.5 rounded-full"
+              className="w-2 h-2 rounded-full"
               style={{ backgroundColor: entry.color ? entry.color : entry.fill ? entry.fill : "#6366f1" }}
             />
             {entry.name}:
           </span>
-          <strong className="text-white font-mono">
+          <strong className="text-white font-mono tabular-nums">
             {isCurrency ? formatBRL(Number(entry.value)) : entry.value}
           </strong>
         </div>
@@ -668,4 +1050,236 @@ export function ThemeSegmentedControl({
       })}
     </div>
   );
+}
+
+// ============================================================================
+// SELETORES DERIVADOS PUROS (SSOT - Sprint 10 - Lucas Viana)
+// Matemática operando estritamente em centavos inteiros (safeAdd / safeSub).
+// ============================================================================
+
+export interface CardExposure {
+  cardName: string;
+  limit: number;
+  used: number;
+  available: number;
+  usagePercent: number;
+}
+
+export function calculateCardExposure(
+  card: CreditCardItem,
+  transactions: Transaction[]
+): CardExposure {
+  const pendingTxs = transactions.filter(
+    (t) =>
+      !t.isSplitChild &&
+      t.paymentMethod === "Cartão de Crédito" &&
+      t.cardUsed === card.name &&
+      t.status === "Pendente / Na Fatura"
+  );
+  const used = safeAdd(...pendingTxs.map((t) => t.amount));
+  const available = Math.max(0, safeSub(card.limit, used));
+  const usagePercent = Math.min(100, Math.round((used / Math.max(1, card.limit)) * 100));
+  return {
+    cardName: card.name,
+    limit: card.limit,
+    used,
+    available,
+    usagePercent
+  };
+}
+
+export interface BankExposure {
+  bankId: string;
+  bankName: string;
+  limit: number;
+  used: number;
+  available: number;
+  linkedCardNames: string[];
+}
+
+export function calculateBankExposure(
+  bank: BankItem,
+  cards: CreditCardItem[],
+  transactions: Transaction[]
+): BankExposure {
+  const bankCards = cards.filter((c) => c.bankId === bank.id);
+  const calcLimit =
+    bank.limit && bank.limit > 0
+      ? bank.limit
+      : safeAdd(...bankCards.map((c) => c.limit));
+  const cardNames = new Set(bankCards.map((c) => c.name));
+  const used = safeAdd(
+    ...transactions
+      .filter(
+        (t) =>
+          !t.isSplitChild &&
+          (cardNames.has(t.cardUsed || "") ||
+            (t.paymentMethod === "Cartão de Crédito" &&
+              t.cardUsed?.toLowerCase().includes(bank.name.toLowerCase()))) &&
+          t.status === "Pendente / Na Fatura"
+      )
+      .map((t) => t.amount)
+  );
+  const available = Math.max(0, safeSub(calcLimit, used));
+  return {
+    bankId: bank.id,
+    bankName: bank.name,
+    limit: calcLimit,
+    used,
+    available,
+    linkedCardNames: Array.from(cardNames)
+  };
+}
+
+/**
+ * Calcula o saldo real de uma conta bancária (Sprint 12 - Regra Contábil Estrita)
+ * - Entradas confirmadas somam (+)
+ * - Despesas diretas confirmadas (PIX/débito) subtraem (-)
+ * - Aportes subtraem (-), Resgates somam (+)
+ * - Transferências: subtrai se for o banco de origem (-), soma se for o banco de destino (+)
+ */
+export function calculateBankBalance(
+  bank: BankItem,
+  transactions: Transaction[],
+  getFlowType: (cat: string) => FlowType
+): number {
+  let balanceCents = 0;
+  const bName = bank.name.toLowerCase();
+
+  for (const t of transactions) {
+    if (t.status !== "Pago") continue;
+    if (t.isSplitChild) continue;
+
+    if (t.isTransfer || t.category === "Transferência entre Contas") {
+      const isSource =
+        (t.sourceBank && t.sourceBank.toLowerCase() === bName) ||
+        (!t.sourceBank && t.bankAccount && t.bankAccount.toLowerCase() === bName);
+      const isDest = t.destinationBank && t.destinationBank.toLowerCase() === bName;
+
+      if (isSource && !isDest) {
+        balanceCents -= toCents(t.amount);
+      } else if (isDest && !isSource) {
+        balanceCents += toCents(t.amount);
+      }
+      continue;
+    }
+
+    const isThisBank =
+      (t.bankAccount && t.bankAccount.toLowerCase() === bName) ||
+      (!t.bankAccount && t.cardUsed && t.cardUsed.toLowerCase().includes(bName));
+
+    if (!isThisBank) continue;
+
+    const flow = getFlowType(t.category);
+    if (flow === "INCOME") {
+      balanceCents += toCents(t.amount);
+    } else if (flow === "EXPENSE") {
+      if (t.paymentMethod !== "Cartão de Crédito") {
+        balanceCents -= toCents(t.amount);
+      }
+    } else if (flow === "INVESTMENT") {
+      if (isResgateCategory(t.category)) {
+        balanceCents += toCents(t.amount);
+      } else {
+        balanceCents -= toCents(t.amount);
+      }
+    }
+  }
+
+  return fromCents(balanceCents);
+}
+
+export interface PatrimonyDataPoint {
+  month: string;
+  label: string;
+  aportado: number;
+  acumulado: number;
+  [key: string]: unknown;
+}
+
+export function calculatePatrimonyEvolution(
+  transactions: Transaction[],
+  baseHistorical = HISTORICAL_INVESTMENTS
+): PatrimonyDataPoint[] {
+  const base: PatrimonyDataPoint[] = [...baseHistorical];
+  let runningTotal = base[base.length - 1]?.acumulado || 8200;
+
+  const monthsMap = new Map<string, { aportes: number; resgates: number }>();
+  transactions
+    .filter((t) => {
+      const c = t.category.toLowerCase();
+      return (
+        c.includes("aporte") ||
+        c.includes("investimento") ||
+        c.includes("resgate") ||
+        c.includes("caixinha")
+      );
+    })
+    .forEach((t) => {
+      const m = t.date.slice(0, 7);
+      if (m > "2026-08") {
+        const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
+        if (isResgateCategory(t.category)) {
+          entry.resgates = safeAdd(entry.resgates, t.amount);
+        } else {
+          entry.aportes = safeAdd(entry.aportes, t.amount);
+        }
+        monthsMap.set(m, entry);
+      }
+    });
+
+  Array.from(monthsMap.keys())
+    .sort()
+    .forEach((m) => {
+      const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
+      const liquidAporte = safeSub(entry.aportes, entry.resgates);
+      runningTotal = Math.max(0, safeAdd(runningTotal, liquidAporte));
+      const [y, mm] = m.split("-");
+      base.push({
+        month: m,
+        label: `${mm}/${y.slice(2)}`,
+        aportado: liquidAporte,
+        acumulado: runningTotal
+      });
+    });
+
+  return base;
+}
+
+export interface StaticStatusSummary {
+  rendaBase: number;
+  custoFixoBase: number;
+  aporteBase: number;
+  margemLivre: number;
+}
+
+export function calculateStaticStatusSummary(items: StaticStatusItem[]): StaticStatusSummary {
+  const rendaBase = safeAdd(
+    ...items.filter((i) => i.type === "Renda Base" || i.type === "Benefício").map((i) => i.amount)
+  );
+  const custoFixoBase = safeAdd(
+    ...items.filter((i) => i.type === "Custo Fixo").map((i) => i.amount)
+  );
+  const aporteBase = safeAdd(
+    ...items.filter((i) => i.type === "Meta Aporte").map((i) => i.amount)
+  );
+  const margemLivre = safeSub(rendaBase, safeAdd(custoFixoBase, aporteBase));
+  return {
+    rendaBase,
+    custoFixoBase,
+    aporteBase,
+    margemLivre
+  };
+}
+export function calculateSplitAmounts(totalAmount: number, thirdPartyAmount: number): {
+  personalAmount: number;
+  thirdPartyAmount: number;
+} {
+  const cleanTotal = Math.max(0, Number(totalAmount) || 0);
+  const cleanThird = Math.max(0, Math.min(cleanTotal, Number(thirdPartyAmount) || 0));
+  const personal = safeSub(cleanTotal, cleanThird);
+  return {
+    personalAmount: personal,
+    thirdPartyAmount: cleanThird
+  };
 }

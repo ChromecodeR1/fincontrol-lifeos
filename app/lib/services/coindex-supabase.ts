@@ -134,6 +134,9 @@ export async function fetchAllCoindexData(): Promise<{
       costType: (r.cost_type as CostType) ?? "Variável",
       paymentMethod: String(r.payment_method ?? "PIX"),
       cardUsed: r.card_used ? String(r.card_used) : undefined,
+      bankAccount: (r as any).bank_account
+        ? String((r as any).bank_account)
+        : (String(r.payment_method) !== "Cartão de Crédito" && r.card_used ? String(r.card_used) : undefined),
       status: normalizeStatus(String(r.status ?? "Pendente")),
       km: r.km != null ? Number(r.km) : undefined,
       liters: r.liters != null ? Number(r.liters) : undefined,
@@ -193,8 +196,15 @@ export async function fetchAllCoindexData(): Promise<{
       id: String(r.id),
       date: String(r.note_date),
       title: String(r.title),
-      content: String(r.content),
-      tag: (r.tag as BrainNote["tag"]) ?? "#Ideias"
+      content: String(r.content ?? ""),
+      tag: (r.tag as BrainNote["tag"]) ?? "#Ideias",
+      completed: Boolean(r.completed),
+      itemType: (r.item_type as "note" | "wish") ?? (r.price != null ? "wish" : "note"),
+      price: r.price != null ? Number(r.price) : undefined,
+      description: r.description ? String(r.description) : String(r.content || ""),
+      priority: (r.priority as "Essencial" | "Planejado" | "Desejo") ?? undefined,
+      storeUrl: r.store_url ? String(r.store_url) : undefined,
+      completedAt: r.completed_at ? String(r.completed_at) : undefined
     }));
 
     const alertRules: CustomAlertRule[] = ((alertsRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
@@ -390,7 +400,7 @@ export async function migrateAllStateToSupabase(
         category: t.category,
         cost_type: t.costType,
         payment_method: t.paymentMethod,
-        card_used: t.cardUsed ?? null,
+        card_used: t.cardUsed ?? t.bankAccount ?? null,
         status: t.status,
         km: t.km ?? null,
         liters: t.liters ?? null,
@@ -492,7 +502,7 @@ export async function upsertTransactionsInDb(txs: Transaction[], debtorMap?: Rec
     category: t.category,
     cost_type: t.costType,
     payment_method: t.paymentMethod,
-    card_used: t.cardUsed ?? null,
+    card_used: t.cardUsed ?? t.bankAccount ?? null,
     status: t.status,
     km: t.km ?? null,
     liters: t.liters ?? null,
@@ -513,6 +523,13 @@ export async function deleteTransactionInDb(id: string) {
   const userId = await getActiveUserId();
   if (!userId) return;
   await supabase.from("transactions").delete().eq("id", id).eq("user_id", userId);
+}
+
+export async function deleteTransactionsInDb(ids: string[]) {
+  const supabase = createClient();
+  const userId = await getActiveUserId();
+  if (!userId || ids.length === 0) return;
+  await supabase.from("transactions").delete().in("id", ids).eq("user_id", userId);
 }
 
 export async function upsertCardInDb(card: CreditCardItem) {
@@ -632,17 +649,36 @@ export async function upsertNoteInDb(n: BrainNote) {
   const supabase = createClient();
   const userId = await getActiveUserId();
   if (!userId) return;
-  await supabase.from("brain_notes").upsert(
-    {
-      id: n.id,
-      user_id: userId,
-      note_date: n.date,
-      title: n.title,
-      content: n.content,
-      tag: n.tag
-    },
-    { onConflict: "id,user_id" }
-  );
+  const payload: Record<string, unknown> = {
+    id: n.id,
+    user_id: userId,
+    note_date: n.date,
+    title: n.title,
+    content: n.content || n.description || "",
+    tag: n.tag
+  };
+  if (n.completed !== undefined) payload.completed = n.completed;
+  if (n.itemType !== undefined) payload.item_type = n.itemType;
+  if (n.price !== undefined) payload.price = n.price;
+  if (n.description !== undefined) payload.description = n.description;
+  if (n.priority !== undefined) payload.priority = n.priority;
+  if (n.storeUrl !== undefined) payload.store_url = n.storeUrl;
+  if (n.completedAt !== undefined) payload.completed_at = n.completedAt;
+
+  const { error } = await supabase.from("brain_notes").upsert(payload, { onConflict: "id,user_id" });
+  if (error) {
+    await supabase.from("brain_notes").upsert(
+      {
+        id: n.id,
+        user_id: userId,
+        note_date: n.date,
+        title: n.title,
+        content: n.content || n.description || "",
+        tag: n.tag
+      },
+      { onConflict: "id,user_id" }
+    );
+  }
 }
 
 export async function deleteNoteInDb(id: string) {
