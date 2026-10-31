@@ -94,6 +94,7 @@ export interface Transaction {
   linkedReceivableId?: string;
   isSplitChild?: boolean;
   linkedSplitParentId?: string;
+  notes?: string;
 }
 
 export type BankAccountType = "Conta Corrente" | "Conta Digital" | "Investimentos" | "Benefícios";
@@ -821,7 +822,8 @@ export function getAutomaticStatus(method: PaymentMethod, category?: string): Tx
 
 export const INITIAL_BANKS: (BankInstitution & BankItem)[] = [
   { id: "b1", name: "Nubank", accountType: "Conta Digital", color: "#820ad1", limit: 4500, limitType: "Cartão de Crédito" },
-  { id: "b2", name: "Inter", accountType: "Conta Digital", color: "#ff7a00", limit: 3000, limitType: "Cartão de Crédito" }
+  { id: "b2", name: "Inter", accountType: "Conta Digital", color: "#ff7a00", limit: 3000, limitType: "Cartão de Crédito" },
+  { id: "b3", name: "BTG Pactual", accountType: "Investimentos", color: "#001e62", limit: 0, limitType: "Global" }
 ];
 
 export const INITIAL_CARDS: CreditCardItem[] = [
@@ -829,13 +831,106 @@ export const INITIAL_CARDS: CreditCardItem[] = [
   { id: "c2", name: "Inter Black", brand: "Mastercard Black", limit: 3000, closingDay: 10, dueDay: 17, bankId: "b2", bankName: "Inter" }
 ];
 
+export interface PatrimonioImportItem {
+  id: string;
+  date: string;
+  operation: "Aporte" | "Resgate";
+  institution: string;
+  modality: string;
+  amount: number;
+  notes?: string;
+}
+
+export const PATRIMONIO_IMPORT_DATA: PatrimonioImportItem[] = [
+  { id: "patrimonio-import-01", date: "2025-12-09", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 999.99, notes: "Aporte inicial Caixinha Turbo" },
+  { id: "patrimonio-import-02", date: "2025-12-09", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 1.00, notes: "" },
+  { id: "patrimonio-import-03", date: "2025-12-10", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 624.71, notes: "" },
+  { id: "patrimonio-import-04", date: "2025-12-18", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 558.47, notes: "" },
+  { id: "patrimonio-import-05", date: "2025-12-18", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 80.00, notes: "" },
+  { id: "patrimonio-import-06", date: "2025-12-22", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 5.00, notes: "" },
+  { id: "patrimonio-import-07", date: "2025-12-23", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 97.83, notes: "" },
+  { id: "patrimonio-import-08", date: "2025-12-23", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 5.00, notes: "" },
+  { id: "patrimonio-import-09", date: "2025-12-29", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 50.00, notes: "" },
+  { id: "patrimonio-import-10", date: "2026-01-04", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 20.00, notes: "" },
+  { id: "patrimonio-import-11", date: "2026-01-06", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 250.00, notes: "" },
+  { id: "patrimonio-import-12", date: "2026-01-16", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 200.00, notes: "" },
+  { id: "patrimonio-import-13", date: "2026-01-24", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 500.00, notes: "" },
+  { id: "patrimonio-import-14", date: "2026-01-28", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 500.00, notes: "" },
+  { id: "patrimonio-import-15", date: "2026-01-28", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 500.00, notes: "" },
+  { id: "patrimonio-import-16", date: "2026-02-11", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 461.70, notes: "" },
+  { id: "patrimonio-import-17", date: "2026-02-27", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 500.00, notes: "" },
+  { id: "patrimonio-import-18", date: "2026-03-07", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 605.04, notes: "" },
+  { id: "patrimonio-import-19", date: "2026-03-12", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 1083.09, notes: "" },
+  { id: "patrimonio-import-20", date: "2026-03-26", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 50.74, notes: "" },
+  { id: "patrimonio-import-21", date: "2026-04-01", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 1284.90, notes: "" },
+  { id: "patrimonio-import-22", date: "2026-04-02", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 300.00, notes: "" },
+  { id: "patrimonio-import-23", date: "2026-04-06", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 527.01, notes: "" },
+  { id: "patrimonio-import-24", date: "2026-04-07", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 447.04, notes: "" },
+  { id: "patrimonio-import-25", date: "2026-04-09", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 2287.87, notes: "" },
+  { id: "patrimonio-import-26", date: "2026-04-11", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 99.37, notes: "" },
+  { id: "patrimonio-import-27", date: "2026-04-17", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 400.00, notes: "" },
+  { id: "patrimonio-import-28", date: "2026-05-04", operation: "Aporte", institution: "BTG Pactual", modality: "Caixinha Turbo (115% CDI)", amount: 50.48, notes: "" },
+  { id: "patrimonio-import-29", date: "2026-05-06", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 800.00, notes: "" },
+  { id: "patrimonio-import-30", date: "2026-05-06", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 32.09, notes: "" },
+  { id: "patrimonio-import-31", date: "2026-05-12", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 700.00, notes: "" },
+  { id: "patrimonio-import-32", date: "2026-05-29", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 215.00, notes: "" },
+  { id: "patrimonio-import-33", date: "2026-06-01", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 300.00, notes: "" },
+  { id: "patrimonio-import-34", date: "2026-06-04", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 280.49, notes: "" },
+  { id: "patrimonio-import-35", date: "2026-06-15", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 66.63, notes: "" },
+  { id: "patrimonio-import-36", date: "2026-06-22", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 40.90, notes: "" },
+  { id: "patrimonio-import-37", date: "2026-07-04", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 99.57, notes: "" },
+  { id: "patrimonio-import-38", date: "2026-07-09", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 43.78, notes: "" },
+  { id: "patrimonio-import-39", date: "2026-07-15", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 23.57, notes: "" },
+  { id: "patrimonio-import-40", date: "2026-07-16", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 482.10, notes: "" },
+  { id: "patrimonio-import-41", date: "2026-07-17", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 329.00, notes: "" },
+  { id: "patrimonio-import-42", date: "2026-07-28", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 290.00, notes: "" },
+  { id: "patrimonio-import-43", date: "2026-08-06", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 222.85, notes: "" },
+  { id: "patrimonio-import-44", date: "2026-08-06", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 346.00, notes: "" },
+  { id: "patrimonio-import-45", date: "2026-08-13", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 200.00, notes: "" },
+  { id: "patrimonio-import-46", date: "2026-08-25", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 100.00, notes: "" },
+  { id: "patrimonio-import-47", date: "2026-08-29", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 100.00, notes: "" },
+  { id: "patrimonio-import-48", date: "2026-09-02", operation: "Resgate", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 126.83, notes: "" },
+  { id: "patrimonio-import-49", date: "2026-09-03", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 600.00, notes: "" },
+  { id: "patrimonio-import-50", date: "2026-09-05", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 70.25, notes: "" },
+  { id: "patrimonio-import-51", date: "2026-09-05", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 62.66, notes: "" },
+  { id: "patrimonio-import-52", date: "2026-09-10", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 152.37, notes: "" },
+  { id: "patrimonio-import-53", date: "2026-09-10", operation: "Resgate", institution: "BTG Pactual", modality: "Caixinha Turbo (115% CDI)", amount: 50.48, notes: "" },
+  { id: "patrimonio-import-54", date: "2026-09-10", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 182.97, notes: "" },
+  { id: "patrimonio-import-55", date: "2026-09-22", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 260.00, notes: "" },
+  { id: "patrimonio-import-56", date: "2026-10-06", operation: "Aporte", institution: "Nubank", modality: "Caixinha Turbo (115% CDI)", amount: 630.31, notes: "" }
+];
+
+export function convertPatrimonioItemToTransaction(item: PatrimonioImportItem): Transaction {
+  const isAporte = item.operation === "Aporte";
+  const desc = item.notes?.trim()
+    ? item.notes.trim()
+    : `${item.operation} ${item.modality} (${item.institution})`;
+
+  return {
+    id: item.id,
+    date: item.date,
+    description: desc,
+    amount: item.amount,
+    category: isAporte ? "Aporte / Investimento" : "Resgate",
+    costType: isAporte ? "Fixo" : "Variável",
+    paymentMethod: "PIX",
+    bankAccount: item.institution,
+    status: "Pago",
+    notes: item.notes || undefined,
+    updatedAt: `${item.date}T12:00:00Z`
+  };
+}
+
+export const PATRIMONIO_IMPORT_TRANSACTIONS: Transaction[] = PATRIMONIO_IMPORT_DATA.map(
+  convertPatrimonioItemToTransaction
+);
+
 export const INITIAL_TRANSACTIONS: Transaction[] = [
+  ...PATRIMONIO_IMPORT_TRANSACTIONS,
   { id: "tx-0", date: "2026-09-05", description: "Salário Líquido ACS (Setembro)", amount: 2071.81, category: "Salário", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-09-05T08:00:00Z" },
-  { id: "tx-0b", date: "2026-09-06", description: "Aporte Mensal Setembro", amount: 1450.0, category: "Aporte / Investimento", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-09-06T08:00:00Z" },
   { id: "tx-0c", date: "2026-09-12", description: "Despesas Gerais Setembro", amount: 1620.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-09-12T08:00:00Z" },
   { id: "tx-1", date: "2026-10-05", description: "Salário Líquido ACS Sistemas", amount: 2071.81, category: "Salário", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
   { id: "tx-2", date: "2026-10-05", description: "Auxílio Combustível + VA ACS", amount: 1365.0, category: "Benefícios (VA/Combustível)", costType: "Fixo", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
-  { id: "tx-3", date: "2026-10-06", description: "Aporte Mensal Tesouro Selic / CDB", amount: 1450.0, category: "Aporte / Investimento", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-06T08:00:00Z" },
   { id: "tx-4", date: "2026-10-07", description: "Mensalidade Academia", amount: 82.4, category: "Saúde/Academia", costType: "Fixo", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-07T08:00:00Z" },
   { id: "tx-5", date: "2026-10-08", description: "Internet Fibra Residencial", amount: 68.17, category: "Assinaturas/Internet", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-08T08:00:00Z" },
   { id: "tx-6", date: "2026-10-09", description: "Supermercado (Dieta da Semana)", amount: 618.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-09T08:00:00Z" },
@@ -867,7 +962,7 @@ export const INITIAL_MILESTONES: ChartMilestone[] = [
 ];
 
 export const INITIAL_WISHLIST: WishlistItem[] = [
-  { id: "w-1", title: "Caixinha Turbo / Monitor Ultrawide", institution: "Nubank Ultravioleta", targetAmount: 1250, savedAmount: 450, priority: "Alta" },
+  { id: "w-1", title: "Caixinha Turbo (115% CDI)", institution: "Nubank", targetAmount: 5000, savedAmount: 2616.61, priority: "Alta" },
   { id: "w-2", title: "Tênis de Corrida (Rodagem Strava)", institution: "Nubank Ultravioleta", targetAmount: 680, savedAmount: 300, priority: "Média" },
   { id: "w-3", title: "Kit Vestuário Minimalista", institution: "Inter Black", targetAmount: 400, savedAmount: 150, priority: "Baixa" }
 ];
@@ -1197,25 +1292,41 @@ export interface PatrimonyDataPoint {
   [key: string]: unknown;
 }
 
+const MONTH_NAMES_SHORT = [
+  "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"
+];
+
+export function formatMonthShortLabel(ym: string): string {
+  const [yearStr, monthStr] = ym.split("-");
+  const monthIdx = parseInt(monthStr, 10) - 1;
+  const shortMonth = MONTH_NAMES_SHORT[monthIdx] || monthStr;
+  const shortYear = yearStr ? yearStr.slice(2) : "";
+  return `${shortMonth}/${shortYear}`;
+}
+
 export function calculatePatrimonyEvolution(
   transactions: Transaction[],
   baseHistorical = HISTORICAL_INVESTMENTS
 ): PatrimonyDataPoint[] {
-  const base: PatrimonyDataPoint[] = [...baseHistorical];
-  let runningTotal = base[base.length - 1]?.acumulado || 8200;
+  const investTxs = transactions.filter((t) => {
+    if (t.isSplitChild) return false;
+    const c = t.category.toLowerCase();
+    return (
+      c.includes("aporte") ||
+      c.includes("investimento") ||
+      c.includes("resgate") ||
+      c.includes("caixinha")
+    );
+  });
 
-  const monthsMap = new Map<string, { aportes: number; resgates: number }>();
-  transactions
-    .filter((t) => {
-      const c = t.category.toLowerCase();
-      return (
-        c.includes("aporte") ||
-        c.includes("investimento") ||
-        c.includes("resgate") ||
-        c.includes("caixinha")
-      );
-    })
-    .forEach((t) => {
+  const hasEarlyHistory = investTxs.some((t) => t.date < "2026-05");
+
+  if (!hasEarlyHistory) {
+    const base: PatrimonyDataPoint[] = [...baseHistorical];
+    let runningTotal = base[base.length - 1]?.acumulado || 8200;
+
+    const monthsMap = new Map<string, { aportes: number; resgates: number }>();
+    investTxs.forEach((t) => {
       const m = t.date.slice(0, 7);
       if (m > "2026-08") {
         const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
@@ -1228,22 +1339,69 @@ export function calculatePatrimonyEvolution(
       }
     });
 
-  Array.from(monthsMap.keys())
-    .sort()
-    .forEach((m) => {
-      const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
-      const liquidAporte = safeSub(entry.aportes, entry.resgates);
-      runningTotal = Math.max(0, safeAdd(runningTotal, liquidAporte));
-      const [y, mm] = m.split("-");
-      base.push({
-        month: m,
-        label: `${mm}/${y.slice(2)}`,
-        aportado: liquidAporte,
-        acumulado: runningTotal
+    Array.from(monthsMap.keys())
+      .sort()
+      .forEach((m) => {
+        const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
+        const liquidAporte = safeSub(entry.aportes, entry.resgates);
+        runningTotal = Math.max(0, safeAdd(runningTotal, liquidAporte));
+        base.push({
+          month: m,
+          label: formatMonthShortLabel(m),
+          aportado: liquidAporte,
+          acumulado: runningTotal
+        });
       });
+
+    return base;
+  }
+
+  // Agrupa todas as transações de investimento por mês
+  const monthsMap = new Map<string, { aportes: number; resgates: number }>();
+  investTxs.forEach((t) => {
+    const m = t.date.slice(0, 7);
+    const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
+    if (isResgateCategory(t.category)) {
+      entry.resgates = safeAdd(entry.resgates, t.amount);
+    } else {
+      entry.aportes = safeAdd(entry.aportes, t.amount);
+    }
+    monthsMap.set(m, entry);
+  });
+
+  const allMonths = Array.from(monthsMap.keys()).sort();
+  if (allMonths.length === 0) return [];
+
+  const minMonth = allMonths[0]; // e.g. "2025-12"
+  const maxMonth = allMonths[allMonths.length - 1]; // e.g. "2026-10"
+
+  const result: PatrimonyDataPoint[] = [];
+  let running = 0;
+
+  let cur = minMonth;
+  while (cur <= maxMonth) {
+    const entry = monthsMap.get(cur) || { aportes: 0, resgates: 0 };
+    const liquid = safeSub(entry.aportes, entry.resgates);
+    running = Math.max(0, safeAdd(running, liquid));
+
+    result.push({
+      month: cur,
+      label: formatMonthShortLabel(cur),
+      aportado: liquid,
+      acumulado: running
     });
 
-  return base;
+    const [yStr, mStr] = cur.split("-");
+    let y = parseInt(yStr, 10);
+    let m = parseInt(mStr, 10) + 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    cur = `${y}-${String(m).padStart(2, "0")}`;
+  }
+
+  return result;
 }
 
 export interface StaticStatusSummary {

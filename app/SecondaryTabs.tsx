@@ -7,7 +7,7 @@ import {
   Image as ImageIcon, Download, Upload, Camera, User, FileText, HandCoins,
   Users, Share2, Layers, AlertTriangle, XCircle, Eye, EyeOff, Filter, Loader2,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Check, X, RotateCcw,
-  SlidersHorizontal, Settings, Fuel, Gauge, DollarSign, Award, Info, Landmark,
+  SlidersHorizontal, Settings, Fuel, Gauge, DollarSign, Award, Info, Landmark, PiggyBank,
   Sparkles, ExternalLink, ShoppingBag, Circle
 } from "lucide-react";
 import {
@@ -170,6 +170,7 @@ export interface SecondaryTabsProps {
   setSheetApiUrl: (u: string) => void;
   isSyncing: boolean;
   syncFromGoogleSheets: () => void;
+  handleSyncOfficialPatrimonioData?: () => void;
   sheetsSyncStatus?: { state: "idle" | "success" | "error"; message: string; timestamp?: string };
   setSheetsSyncStatus?: (st: { state: "idle" | "success" | "error"; message: string; timestamp?: string }) => void;
   stravaConfig: { athleteId: string; clientId: string; clientSecret: string; refreshToken: string };
@@ -236,7 +237,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     okrs, saveOkrs, newOkr, setNewOkr, handleAddOkr, notes, selectedNoteTag, setSelectedNoteTag,
     editingNoteId, setEditingNoteId, newNote, setNewNote, handleSaveNote, handleDeleteNote, handleToggleNoteCompleted,
     handleExportFullBackupJSON, handleImportFullBackupJSON, handleUpdateProfileAvatar,
-    sheetApiUrl, setSheetApiUrl, isSyncing, syncFromGoogleSheets,
+    sheetApiUrl, setSheetApiUrl, isSyncing, syncFromGoogleSheets, handleSyncOfficialPatrimonioData,
     sheetsSyncStatus, setSheetsSyncStatus, stravaConfig, setStravaConfig, stravaSyncStatus, setStravaSyncStatus,
     paymentMethods, newMethodName, setNewMethodName, handleAddPaymentMethod, handleDeletePaymentMethod,
     handleUpdatePaymentMethod, categoriesCatalog, newCategoryForm, setNewCategoryForm, handleAddCustomCategory, handleDeleteCategory,
@@ -1751,11 +1752,47 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 type="button"
                 onClick={syncFromGoogleSheets}
                 disabled={isSyncing}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition"
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition cursor-pointer"
               >
                 {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 <span>{isSyncing ? "Sincronizando Planilha..." : "Sincronizar Planilha"}</span>
               </button>
+            </div>
+
+            {/* CARD IMPORTAÇÃO OFICIAL HISTÓRICA DO PATRIMÔNIO (SPRINT 18) */}
+            <div className="glass-card p-6 rounded-3xl border border-indigo-500/25 flex flex-col justify-between space-y-4">
+              <div className="space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-indigo-500/15 text-indigo-400">
+                      <PiggyBank className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-extrabold text-white">Histórico Oficial do Patrimônio</h4>
+                      <p className="text-[11px] text-slate-400">56 lançamentos oficiais (2025-12 a 2026-10)</p>
+                    </div>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-[10px] font-extrabold border bg-indigo-500/15 text-indigo-300 border-indigo-500/30 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" /> Oficial Planilha
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Carga histórica certificada com os 56 aportes e resgates da Caixinha Turbo Nubank e BTG Pactual, totalizando <strong className="text-white">R$ 10.956,85</strong> em aportes e saldo líquido exato de <strong className="text-emerald-400 font-mono">R$ 2.616,61</strong>.
+                </p>
+              </div>
+
+              {handleSyncOfficialPatrimonioData && (
+                <button
+                  type="button"
+                  onClick={handleSyncOfficialPatrimonioData}
+                  disabled={isSyncing}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 text-white font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 transition cursor-pointer"
+                >
+                  {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  <span>Sincronizar 56 Lançamentos com o Supabase</span>
+                </button>
+              )}
             </div>
 
             {/* CARD STRAVA API */}

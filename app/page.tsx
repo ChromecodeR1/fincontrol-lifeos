@@ -103,6 +103,7 @@ import {
   INITIAL_BANKS,
   INITIAL_CARDS,
   INITIAL_TRANSACTIONS,
+  PATRIMONIO_IMPORT_TRANSACTIONS,
   INITIAL_DEBTOR_MAP,
   INITIAL_STATIC_STATUS,
   INITIAL_MILESTONES,
@@ -699,17 +700,54 @@ export default function CoindexApp() {
         if (savedReadNotifs) setReadNotificationIds(JSON.parse(savedReadNotifs));
 
         const sTxs = localStorage.getItem("lifeos_txs_v8");
-        if (sTxs) setTransactions(JSON.parse(sTxs));
+        if (sTxs) {
+          const parsedTxs: Transaction[] = JSON.parse(sTxs);
+          const existingIds = new Set(parsedTxs.map((t) => t.id));
+          const missingOfficial = PATRIMONIO_IMPORT_TRANSACTIONS.filter((t) => !existingIds.has(t.id));
+          if (missingOfficial.length > 0) {
+            const merged = [...parsedTxs, ...missingOfficial];
+            setTransactions(merged);
+            localStorage.setItem("lifeos_txs_v8", JSON.stringify(merged));
+          } else {
+            setTransactions(parsedTxs);
+          }
+        }
         const sDebtors = localStorage.getItem("lifeos_debtors_v8");
         if (sDebtors) setDebtorMap(JSON.parse(sDebtors));
         const sBanks = localStorage.getItem("lifeos_banks_v1");
-        if (sBanks) setBanks(JSON.parse(sBanks));
+        if (sBanks) {
+          const parsedBanks: BankItem[] = JSON.parse(sBanks);
+          if (!parsedBanks.some((b) => b.name === "BTG Pactual")) {
+            const btg = INITIAL_BANKS.find((b) => b.name === "BTG Pactual");
+            if (btg) {
+              const mergedBanks = [...parsedBanks, btg];
+              setBanks(mergedBanks);
+              localStorage.setItem("lifeos_banks_v1", JSON.stringify(mergedBanks));
+            } else {
+              setBanks(parsedBanks);
+            }
+          } else {
+            setBanks(parsedBanks);
+          }
+        }
         const sCards = localStorage.getItem("lifeos_cards_v8");
         if (sCards) setCards(JSON.parse(sCards));
         const sStatus = localStorage.getItem("lifeos_status_v8");
         if (sStatus) setStaticStatus(JSON.parse(sStatus));
         const sWish = localStorage.getItem("lifeos_wish_v8");
-        if (sWish) setWishlist(JSON.parse(sWish));
+        if (sWish) {
+          const parsedWish: WishlistItem[] = JSON.parse(sWish);
+          const caixinha = parsedWish.find((w) => w.title.toLowerCase().includes("caixinha"));
+          if (caixinha && caixinha.savedAmount !== 2616.61) {
+            caixinha.savedAmount = 2616.61;
+            caixinha.title = "Caixinha Turbo (115% CDI)";
+            caixinha.institution = "Nubank";
+            setWishlist([...parsedWish]);
+            localStorage.setItem("lifeos_wish_v8", JSON.stringify(parsedWish));
+          } else {
+            setWishlist(parsedWish);
+          }
+        }
         const sBio = localStorage.getItem("lifeos_bio_v8");
         if (sBio) setBioLogs(JSON.parse(sBio));
         const sNotes = localStorage.getItem("lifeos_notes_v8");
@@ -828,8 +866,19 @@ export default function CoindexApp() {
           }
         } else if (res.data) {
           const d = res.data;
-          setTransactions(d.transactions);
-          localStorage.setItem("lifeos_txs_v8", JSON.stringify(d.transactions));
+          const existingIds = new Set(d.transactions.map((t) => t.id));
+          const missingOfficial = PATRIMONIO_IMPORT_TRANSACTIONS.filter((t) => !existingIds.has(t.id));
+
+          let finalTxs = d.transactions;
+          if (missingOfficial.length > 0) {
+            finalTxs = [...d.transactions, ...missingOfficial];
+            upsertTransactionsInDb(missingOfficial, debtorMap).catch((err) =>
+              console.error("Erro ao sincronizar aportes oficiais no Supabase:", err)
+            );
+          }
+
+          setTransactions(finalTxs);
+          localStorage.setItem("lifeos_txs_v8", JSON.stringify(finalTxs));
 
           if (d.cards.length > 0) {
             setCards(d.cards);
@@ -1034,6 +1083,58 @@ export default function CoindexApp() {
     debtorMap,
     notify
   ]);
+
+  // SPRINT 18: Carga e Sincronização Oficial dos 56 Lançamentos de Aportes/Resgates com o Supabase
+  const handleSyncOfficialPatrimonioData = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      // 1. Identifica lançamentos faltantes e une à lista global
+      const existingIds = new Set(transactions.map((t) => t.id));
+      const missing = PATRIMONIO_IMPORT_TRANSACTIONS.filter((t) => !existingIds.has(t.id));
+      const nextTxs = missing.length > 0 ? [...transactions, ...missing] : [...transactions];
+
+      setTransactions(nextTxs);
+      localStorage.setItem("lifeos_txs_v8", JSON.stringify(nextTxs));
+
+      // 2. Garante o banco BTG Pactual cadastrado
+      if (!banks.some((b) => b.name === "BTG Pactual")) {
+        const btg = INITIAL_BANKS.find((b) => b.name === "BTG Pactual");
+        if (btg) {
+          const nextBanks = [...banks, btg];
+          setBanks(nextBanks);
+          localStorage.setItem("lifeos_banks_v1", JSON.stringify(nextBanks));
+        }
+      }
+
+      // 3. Ajusta o saldo da Caixinha Turbo para R$ 2.616,61
+      const updatedWishlist = wishlist.map((w) => {
+        if (w.title.toLowerCase().includes("caixinha")) {
+          return { ...w, title: "Caixinha Turbo (115% CDI)", savedAmount: 2616.61, institution: "Nubank" };
+        }
+        return w;
+      });
+      if (!updatedWishlist.some((w) => w.title.toLowerCase().includes("caixinha"))) {
+        const caixinha = INITIAL_WISHLIST.find((w) => w.title.toLowerCase().includes("caixinha"));
+        if (caixinha) updatedWishlist.push(caixinha);
+      }
+      setWishlist(updatedWishlist);
+      localStorage.setItem("lifeos_wish_v8", JSON.stringify(updatedWishlist));
+
+      // 4. Salva no banco de dados Supabase PostgreSQL
+      await upsertTransactionsInDb(PATRIMONIO_IMPORT_TRANSACTIONS, debtorMap);
+      notify(
+        "Patrimônio Histórico Sincronizado!",
+        "Os 56 lançamentos oficiais de Aporte e Resgate foram salvos no Supabase com sucesso.",
+        "success",
+        "CONFIG"
+      );
+    } catch (err: unknown) {
+      console.error("Erro ao sincronizar aportes oficiais:", err);
+      notify("Erro na Sincronização", "Não foi possível sincronizar o histórico oficial.", "error", "CONFIG");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [transactions, banks, wishlist, debtorMap, notify]);
 
   // Sincronização Manual do Strava via Backend Proxy (/api/strava) + Persistência no Supabase
   const syncStravaFromApi = async () => {
@@ -3407,10 +3508,19 @@ export default function CoindexApp() {
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-white font-bold outline-none focus:border-indigo-500 transition"
               >
-                <option value="2026-10">Outubro / 2026</option>
+                <option value="2026-10">Outubro / 2026 (Atual)</option>
                 <option value="2026-09">Setembro / 2026</option>
-                <option value="2026-11">Novembro / 2026</option>
-                <option value="2026-12">Dezembro / 2026</option>
+                <option value="2026-08">Agosto / 2026</option>
+                <option value="2026-07">Julho / 2026</option>
+                <option value="2026-06">Junho / 2026</option>
+                <option value="2026-05">Maio / 2026</option>
+                <option value="2026-04">Abril / 2026</option>
+                <option value="2026-03">Março / 2026</option>
+                <option value="2026-02">Fevereiro / 2026</option>
+                <option value="2026-01">Janeiro / 2026</option>
+                <option value="2025-12">Dezembro / 2025</option>
+                <option value="2026-11">Novembro / 2026 (Futuro)</option>
+                <option value="2026-12">Dezembro / 2026 (Futuro)</option>
                 <option value="ALL">Histórico Completo</option>
               </select>
             </div>
@@ -4325,6 +4435,7 @@ export default function CoindexApp() {
               setSheetApiUrl={setSheetApiUrl}
               isSyncing={isSyncing}
               syncFromGoogleSheets={syncFromGoogleSheets}
+              handleSyncOfficialPatrimonioData={handleSyncOfficialPatrimonioData}
               sheetsSyncStatus={sheetsSyncStatus}
               setSheetsSyncStatus={setSheetsSyncStatus}
               stravaConfig={stravaConfig}
