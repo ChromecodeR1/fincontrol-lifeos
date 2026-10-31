@@ -276,11 +276,11 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Cabeçalho da Aba Meus Veículos */}
-      <div className="glass-card p-6 rounded-3xl border border-white/[0.08] flex flex-wrap items-center justify-between gap-4 shadow-xl">
+      <div className="glass-card px-4 py-2.5 rounded-2xl border border-white/[0.08] flex flex-wrap items-center justify-between gap-3 shadow-xl mb-3">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-lg font-extrabold text-white tracking-tight">Telemetria & Gestão de Meus Veículos</h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-white tracking-tight">Telemetria & Gestão de Meus Veículos</h2>
+            <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] sm:text-[11px] font-bold">
               Ford Fiesta Sedan 1.0 Flex
             </span>
           </div>
@@ -289,11 +289,11 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => handleOpenNewTxModal("Gasolina/Combustível")}
-            className="min-h-[44px] px-3.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-xs text-white font-bold flex items-center gap-1.5 shadow-lg shadow-amber-600/20 transition"
+            className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-xs text-white font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/20 transition"
           >
             <Fuel className="w-3.5 h-3.5" /> Posto Express (Abastecer)
           </button>
@@ -301,13 +301,13 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
           <button
             type="button"
             onClick={() => setShowInmetroModal(true)}
-            className="min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-indigo-300 font-bold flex items-center gap-1.5 transition"
+            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-indigo-300 font-bold flex items-center gap-1.5 transition"
           >
-            <Settings className="w-3.5 h-3.5 text-indigo-400" /> Configurar Metas INMETRO
+            <Settings className="w-3.5 h-3.5 text-indigo-400" /> Metas INMETRO
           </button>
 
-          <label className="flex items-center gap-2 min-h-[44px] text-xs text-slate-300 cursor-pointer bg-slate-950/80 px-3.5 py-2 rounded-xl border border-white/10">
-            <span>Cor do Odômetro:</span>
+          <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-white/10">
+            <span className="text-[11px]">Odômetro:</span>
             <input
               type="color"
               value={chartTheme.odometerLine}
@@ -450,82 +450,82 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
       )}
 
       {/* CARDS DE KPIS PRINCIPAIS (COM SEMÁFORO E EFICIÊNCIA DO ÚLTIMO TANQUE) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-        <div className="glass-card p-5 rounded-3xl border border-white/[0.08]">
-          <span className="text-xs uppercase tracking-wider font-semibold text-slate-400 block mb-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+        <div className="glass-card px-3.5 py-2.5 rounded-2xl border border-white/[0.08] flex flex-col justify-between">
+          <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5 block">
             Quilometragem Atual
           </span>
-          <p className="text-2xl font-extrabold text-white font-mono tabular-nums">
+          <p className="text-lg sm:text-xl font-bold text-white font-mono tabular-nums leading-tight">
             {autoMetrics.maxKm.toLocaleString("pt-BR")} km
           </p>
-          <span className="text-[11px] text-slate-400 font-mono tabular-nums">
-            Rodado no período: {autoMetrics.distanceDriven} km
+          <span className="text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums mt-0.5">
+            Rodado: {autoMetrics.distanceDriven} km
           </span>
         </div>
 
         {/* Consumo Médio com Semáforo */}
-        <div className="glass-card p-5 rounded-3xl border border-indigo-500/20">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">Consumo Médio</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${avgSemaforoColor}`}>
+        <div className="glass-card px-3.5 py-2.5 rounded-2xl border border-indigo-500/20 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400">Consumo Médio</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold border ${avgSemaforoColor}`}>
               {avgSemaforoBadge}
             </span>
           </div>
-          <p className="text-2xl font-extrabold text-white font-mono tabular-nums">
+          <p className="text-lg sm:text-xl font-bold text-white font-mono tabular-nums leading-tight">
             {autoMetrics.avgKmPerLiter.toFixed(1)} km/L
           </p>
-          <span className="text-[11px] text-slate-400 block mt-0.5 font-mono tabular-nums">
+          <span className="text-[10px] sm:text-[11px] text-slate-400 block mt-0.5 font-mono tabular-nums">
             {avgPctOfInmetro}% da ref. ({inmetroCfg.gasolineKmPerLiter} km/l)
           </span>
         </div>
 
         {/* Eficiência do Último Abastecimento */}
-        <div className="glass-card p-5 rounded-3xl border border-amber-500/25">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">Último Tanque</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${lastSemaforoColor}`}>
+        <div className="glass-card px-3.5 py-2.5 rounded-2xl border border-amber-500/25 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400">Último Tanque</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold border ${lastSemaforoColor}`}>
               {lastSemaforoBadge}
             </span>
           </div>
-          <p className="text-2xl font-extrabold text-white font-mono tabular-nums">
+          <p className="text-lg sm:text-xl font-bold text-white font-mono tabular-nums leading-tight">
             {effectiveLastKmL ? `${effectiveLastKmL} km/L` : `${autoMetrics.avgKmPerLiter.toFixed(1)} km/L`}
           </p>
-          <span className="text-[11px] text-slate-400 block mt-0.5 font-mono tabular-nums">
+          <span className="text-[10px] sm:text-[11px] text-slate-400 block mt-0.5 font-mono tabular-nums truncate">
             {effectiveLastPct !== undefined
-              ? `${effectiveLastPct}% da ref. (${effectiveLastFuelType})`
-              : "Aguardando abastecimento"}
+              ? `${effectiveLastPct}% ref. (${effectiveLastFuelType})`
+              : "Aguardando"}
           </span>
         </div>
 
-        <div className="glass-card p-5 rounded-3xl border border-amber-500/25">
-          <span className="text-xs uppercase tracking-wider font-semibold text-slate-400 block mb-1">
+        <div className="glass-card px-3.5 py-2.5 rounded-2xl border border-amber-500/25 flex flex-col justify-between">
+          <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5 block">
             Combustível Total
           </span>
-          <p className={`text-2xl font-extrabold text-amber-400 font-mono tabular-nums ${moneyBlur}`}>
+          <p className={`text-lg sm:text-xl font-bold text-amber-400 font-mono tabular-nums leading-tight ${moneyBlur}`}>
             {formatBRL(autoMetrics.fuelTotal)}
           </p>
-          <span className="text-[11px] text-slate-400">{fuelTxs.length} abastecimentos registrados</span>
+          <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">{fuelTxs.length} abastecimentos</span>
         </div>
 
-        <div className="glass-card p-5 rounded-3xl border border-rose-500/25">
-          <span className="text-xs uppercase tracking-wider font-semibold text-slate-400 block mb-1">
+        <div className="glass-card px-3.5 py-2.5 rounded-2xl border border-rose-500/25 flex flex-col justify-between">
+          <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5 block">
             Manutenção & Óleo
           </span>
-          <p className={`text-2xl font-extrabold text-rose-400 font-mono tabular-nums ${moneyBlur}`}>
+          <p className={`text-lg sm:text-xl font-bold text-rose-400 font-mono tabular-nums leading-tight ${moneyBlur}`}>
             {formatBRL(autoMetrics.maintenanceTotal)}
           </p>
-          <span className="text-[11px] text-slate-400">Revisões e serviços preventivos</span>
+          <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">Revisões e preventivos</span>
         </div>
 
-        <div className="glass-card p-5 rounded-3xl border border-indigo-500/25">
-          <span className="text-xs uppercase tracking-wider font-semibold text-slate-400 block mb-1">
+        <div className="glass-card px-3.5 py-2.5 rounded-2xl border border-indigo-500/25 flex flex-col justify-between">
+          <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5 block">
             Custo Médio / KM
           </span>
-          <p className={`text-2xl font-extrabold text-indigo-400 font-mono tabular-nums ${moneyBlur}`}>
+          <p className={`text-lg sm:text-xl font-bold text-indigo-400 font-mono tabular-nums leading-tight ${moneyBlur}`}>
             {formatBRL(autoMetrics.costPerKm)}/km
           </p>
-          <span className={`text-[11px] text-slate-400 font-mono tabular-nums ${moneyBlur}`}>
-            Total gasto: {formatBRL(autoMetrics.totalAutoSpent)}
+          <span className={`text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums mt-0.5 ${moneyBlur}`}>
+            Total: {formatBRL(autoMetrics.totalAutoSpent)}
           </span>
         </div>
       </div>

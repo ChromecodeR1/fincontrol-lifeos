@@ -96,7 +96,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
     const cardBank = banks.find((b) => b.id === card.bankId) || (card.bankName ? { name: card.bankName } : null);
     return (
       <div
-        className={`p-6 rounded-3xl border relative overflow-hidden transition-all duration-300 shadow-2xl ${
+        className={`p-4 sm:p-5 rounded-2xl border relative overflow-hidden transition-all duration-300 shadow-xl ${
           globalIdx % 2 === 0
             ? "bg-gradient-to-br from-indigo-950/90 via-slate-900 to-violet-950/80 border-indigo-500/30"
             : "bg-gradient-to-br from-slate-900 via-zinc-900 to-slate-950 border-white/15"
@@ -215,8 +215,8 @@ export const BanksTab: React.FC<BanksTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <div>
-            <h2 className="text-lg font-extrabold text-white tracking-tight">Minhas Instituições Financeiras</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-base font-semibold text-white tracking-tight">Minhas Instituições Financeiras</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
               Cadastre seus bancos, defina limites (cartão de crédito, cheque especial ou global) e vincule seus cartões.
             </p>
           </div>
@@ -232,7 +232,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
               return (
                 <div
                   key={bank.id}
-                  className="glass-card p-4 rounded-2xl border border-white/[0.08] flex flex-col justify-between gap-3 shadow-md"
+                  className="glass-card px-3.5 py-2.5 rounded-2xl border border-white/[0.08] flex flex-col justify-between gap-2.5 shadow-md"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
@@ -414,8 +414,8 @@ export const BanksTab: React.FC<BanksTabProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div>
-              <h2 className="text-lg font-extrabold text-white tracking-tight">Meus Cartões de Crédito</h2>
-              <p className="text-xs text-slate-400">
+              <h2 className="text-base font-semibold text-white tracking-tight">Meus Cartões de Crédito</h2>
+              <p className="text-xs text-slate-400 mt-0.5">
                 Controle o limite total, a fatura aberta e dê baixa integral na fatura em 1 clique.
               </p>
             </div>
@@ -589,8 +589,8 @@ export const BanksTab: React.FC<BanksTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 border-t border-white/[0.07]">
         <div className="lg:col-span-2 space-y-4">
           <div>
-            <h2 className="text-lg font-extrabold text-white tracking-tight">Caixinhas de Objetivos & Reservas</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-base font-semibold text-white tracking-tight">Caixinhas de Objetivos & Reservas</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
               Guardar qualquer valor aqui gera automaticamente um lançamento de aporte no seu histórico.
             </p>
           </div>
@@ -601,7 +601,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
               const monthsNeeded = Math.ceil(missing / Math.max(1, personalBudgetLimit * 0.5));
               const customVal = customWishAmounts[w.id] ? customWishAmounts[w.id] : "";
               return (
-                <div key={w.id} className="glass-card p-5 rounded-3xl border border-white/[0.08] space-y-3 shadow-lg">
+                <div key={w.id} className="glass-card p-4 rounded-2xl border border-white/[0.08] space-y-3 shadow-lg">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className="font-extrabold text-sm block text-white">{w.title}</span>

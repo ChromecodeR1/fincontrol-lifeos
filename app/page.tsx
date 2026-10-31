@@ -1213,11 +1213,22 @@ export default function CoindexApp() {
 
   const effectivePersonalBudgetLimit = personalBudgetLimit * filterMonthsCount;
 
-  // UPDATE 1: Top 5 categorias de maior valor + "Outros" para gráficos e legendas limpos
+  // UPDATE 1 & SPRINT 16: Top 5 categorias estritamente de despesas reais (Donut)
   const categoryChartData = useMemo(() => {
     const map = new Map<string, number>();
     filteredTransactions
-      .filter((t) => !t.isTransfer && !t.isSplitChild && t.category !== "Transferência entre Contas" && getFlowType(t.category) === "EXPENSE")
+      .filter((t) => {
+        if (t.isTransfer || t.isSplitChild || t.category === "Transferência entre Contas") return false;
+        const cLower = (t.category || "").toLowerCase();
+        if (
+          cLower.includes("recebimento") ||
+          cLower.includes("resgate") ||
+          cLower.includes("reembolso") ||
+          cLower.includes("estorno") ||
+          cLower.includes("a receber")
+        ) return false;
+        return getFlowType(t.category) === "EXPENSE";
+      })
       .forEach((t) => {
         const val = t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount;
         map.set(t.category, safeAdd(map.get(t.category) || 0, val));
@@ -3336,7 +3347,7 @@ export default function CoindexApp() {
         </div>
 
         <div className="p-4 border-t border-white/[0.08] space-y-3">
-          {sidebarOpen && (
+          {sidebarOpen ? (
             <div
               onClick={() => setShowProfileModal(true)}
               className="p-3 rounded-2xl bg-slate-900/90 hover:bg-slate-800/90 border border-white/[0.06] hover:border-indigo-500/30 flex items-center gap-3 cursor-pointer transition group"
@@ -3358,6 +3369,21 @@ export default function CoindexApp() {
                 </span>
               </div>
             </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowProfileModal(true)}
+              className="w-full flex justify-center p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.06] hover:border-indigo-500/30 transition group"
+              title={`Perfil: ${currentUser} (Clique para editar)`}
+            >
+              <div className="w-8 h-8 rounded-lg bg-slate-950 border border-indigo-500/30 overflow-hidden flex items-center justify-center shrink-0">
+                {currentUserAvatar ? (
+                  <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <UserCheck className="w-4 h-4 text-indigo-400" />
+                )}
+              </div>
+            </button>
           )}
           <button
             type="button"
@@ -3387,41 +3413,9 @@ export default function CoindexApp() {
                 <option value="2026-12">Dezembro / 2026</option>
                 <option value="ALL">Histórico Completo</option>
               </select>
-
-              <button
-                type="button"
-                onClick={() => setShowCommandModal(true)}
-                className="hidden md:flex items-center gap-2 min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-slate-300 transition"
-                title="Atalho de Comandos Rápidos (Ctrl + K)"
-              >
-                <Command className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Comandos</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 text-[10px] font-mono text-slate-400">
-                  Ctrl+K
-                </kbd>
-              </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
-              {/* BOTÃO DE PERFIL DO USUÁRIO */}
-              <button
-                type="button"
-                onClick={() => setShowProfileModal(true)}
-                className="min-h-[44px] px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 flex items-center gap-2.5 transition group"
-                title="Meu Perfil (Editar Foto e Nome)"
-              >
-                <div className="w-6 h-6 rounded-full bg-slate-950 border border-indigo-500/30 overflow-hidden flex items-center justify-center shrink-0">
-                  {currentUserAvatar ? (
-                    <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
-                  )}
-                </div>
-                <span className="text-xs text-white font-bold max-w-[110px] truncate group-hover:text-indigo-300 transition hidden sm:inline">
-                  {currentUser || "Perfil"}
-                </span>
-              </button>
-
               <ThemeSegmentedControl themeMode={themeMode} onChange={changeThemeMode} />
 
               {/* SININHO DE NOTIFICAÇÕES */}
@@ -3567,7 +3561,7 @@ export default function CoindexApp() {
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-extrabold text-white tracking-tight">Painel Executivo Coindex</h2>
+                  <h2 className="text-base font-semibold text-white tracking-tight">Painel Executivo Coindex</h2>
                   <p className="text-xs text-slate-400">
                     Arraste pelo ícone de grade para reordenar, alterne o tamanho (1/2 ou 1/1) ou configure cada gráfico na engrenagem.
                   </p>
@@ -3723,98 +3717,110 @@ export default function CoindexApp() {
                         )}
 
                         {widget.id === "kpis" && (
-                          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${moneyBlur}`}>
-                            <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/40 to-slate-950/90 border border-emerald-500/25 space-y-1">
-                              <div className="flex items-center justify-between text-xs uppercase tracking-wider font-semibold text-slate-400">
-                                <span>Entradas do Mês</span>
-                                <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
-                                  <TrendingUp className="w-4 h-4" />
+                          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 ${moneyBlur}`}>
+                            {/* Card 1: Entradas do Mês */}
+                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-emerald-950/40 to-slate-950/90 border border-emerald-500/25 flex flex-col justify-between shadow-lg">
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                                  <span>Entradas do Mês</span>
+                                  <div className="p-1 rounded-lg bg-emerald-500/15 text-emerald-400">
+                                    <TrendingUp className="w-3.5 h-3.5" />
+                                  </div>
                                 </div>
+                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-emerald-400 leading-tight mt-0.5">
+                                  {formatBRL(monthSummary.income)}
+                                </p>
                               </div>
-                              <p className="text-2xl font-extrabold font-mono tabular-nums text-emerald-400">
-                                {formatBRL(monthSummary.income)}
-                              </p>
-                              <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono tabular-nums">
-                                <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
-                                {monthSummary.incomeDiff >= 0
-                                  ? `+${monthSummary.incomeDiff}%`
-                                  : `${monthSummary.incomeDiff}%`}{" "}
-                                vs. mês anterior
-                              </span>
+                              <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
+                                <span className="flex items-center gap-1">
+                                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
+                                  {monthSummary.incomeDiff >= 0
+                                    ? `+${monthSummary.incomeDiff}%`
+                                    : `${monthSummary.incomeDiff}%`}{" "}
+                                  vs. mês anterior
+                                </span>
+                              </div>
                             </div>
 
-                            <div className="p-5 rounded-2xl bg-gradient-to-br from-rose-950/40 to-slate-950/90 border border-rose-500/25 space-y-1">
-                              <div className="flex items-center justify-between text-xs uppercase tracking-wider font-semibold text-slate-400">
-                                <span>Saídas & Despesas</span>
-                                <div className="p-2 rounded-xl bg-rose-500/15 text-rose-400">
-                                  <TrendingDown className="w-4 h-4" />
+                            {/* Card 2: Saídas & Despesas */}
+                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-rose-950/40 to-slate-950/90 border border-rose-500/25 flex flex-col justify-between shadow-lg">
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                                  <span>Saídas & Despesas</span>
+                                  <div className="p-1 rounded-lg bg-rose-500/15 text-rose-400">
+                                    <TrendingDown className="w-3.5 h-3.5" />
+                                  </div>
                                 </div>
+                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-rose-400 leading-tight mt-0.5">
+                                  {formatBRL(monthSummary.expense)}
+                                </p>
                               </div>
-                              <p className="text-2xl font-extrabold font-mono tabular-nums text-rose-400">
-                                {formatBRL(monthSummary.expense)}
-                              </p>
-                              <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono tabular-nums">
-                                <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
-                                {monthSummary.expenseDiff >= 0
-                                  ? `+${monthSummary.expenseDiff}%`
-                                  : `${monthSummary.expenseDiff}%`}{" "}
-                                vs. mês anterior
-                              </span>
+                              <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
+                                <span className="flex items-center gap-1">
+                                  <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
+                                  {monthSummary.expenseDiff >= 0
+                                    ? `+${monthSummary.expenseDiff}%`
+                                    : `${monthSummary.expenseDiff}%`}{" "}
+                                  vs. mês anterior
+                                </span>
+                              </div>
                             </div>
 
-                            <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-950/40 to-slate-950/90 border border-indigo-500/25 space-y-1">
-                              <div className="flex items-center justify-between text-xs uppercase tracking-wider font-semibold text-slate-400">
-                                <span>Aportes no Mês</span>
-                                <div className="p-2 rounded-xl bg-indigo-500/15 text-indigo-400">
-                                  <PiggyBank className="w-4 h-4" />
+                            {/* Card 3: Aportes no Mês */}
+                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-indigo-950/40 to-slate-950/90 border border-indigo-500/25 flex flex-col justify-between shadow-lg">
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                                  <span>Aportes no Mês</span>
+                                  <div className="p-1 rounded-lg bg-indigo-500/15 text-indigo-400">
+                                    <PiggyBank className="w-3.5 h-3.5" />
+                                  </div>
                                 </div>
+                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-indigo-400 leading-tight mt-0.5">
+                                  {formatBRL(monthSummary.invested)}
+                                </p>
                               </div>
-                              <p className="text-2xl font-extrabold font-mono tabular-nums text-indigo-400">
-                                {formatBRL(monthSummary.invested)}
-                              </p>
-                              <span className="text-[11px] text-slate-400 block font-mono tabular-nums">
-                                Meta Mensal: {formatBRL(monthlyInvestmentGoal)}
-                              </span>
+                              <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
+                                <span>Meta: {formatBRL(monthlyInvestmentGoal)}</span>
+                              </div>
                             </div>
 
-                            <div className="p-5 rounded-2xl bg-gradient-to-br from-sky-950/40 to-slate-950/90 border border-sky-500/25 space-y-2">
-                              <div className="flex items-center justify-between text-xs uppercase tracking-wider font-semibold text-slate-400">
-                                <span>Saldo Livre Líquido</span>
-                                <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400">
-                                  <Wallet className="w-4 h-4" />
+                            {/* Card 4: Saldo Livre Líquido & Safe-to-Spend Compacto (Sprint 16 & 17) */}
+                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-sky-950/40 to-slate-950/90 border border-sky-500/25 flex flex-col justify-between shadow-lg">
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                                  <span>Saldo Livre Líquido</span>
+                                  <div className="p-1 rounded-lg bg-sky-500/15 text-sky-400">
+                                    <Wallet className="w-3.5 h-3.5" />
+                                  </div>
                                 </div>
+                                <p
+                                  className={`text-lg sm:text-xl font-bold font-mono tabular-nums leading-tight mt-0.5 ${
+                                    monthSummary.balance >= 0 ? "text-sky-400" : "text-rose-400"
+                                  }`}
+                                >
+                                  {formatBRL(monthSummary.balance)}
+                                </p>
                               </div>
-                              <p
-                                className={`text-2xl font-extrabold font-mono tabular-nums ${
-                                  monthSummary.balance >= 0 ? "text-sky-400" : "text-rose-400"
-                                }`}
+
+                              {/* Rodapé Compacto e Perfeitamente Alinhado com Tooltip de Detalhes */}
+                              <div
+                                className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] font-mono tabular-nums cursor-help"
+                                title={`Safe-to-Spend: Contas (${formatBRL(safeToSpend.currentCash)}) + Entradas Pendentes (${formatBRL(safeToSpend.pendingIncome)}) - Fixos/Faturas Pendentes (${formatBRL(safeAdd(safeToSpend.pendingDirectExpenses, safeToSpend.pendingInvoices))}) | A Receber Aberto: ${formatBRL(receivablesAnalytics.totalOpen)}`}
                               >
-                                {formatBRL(monthSummary.balance)}
-                              </p>
-                              <span className="text-[11px] text-slate-400 block font-mono tabular-nums">
-                                A Receber Aberto: {formatBRL(receivablesAnalytics.totalOpen)}
-                              </span>
-
-                              {/* Indicador "Saldo Livre Projetado / Safe-to-Spend" (Sprint 12) */}
-                              <div className="pt-2 border-t border-white/10 space-y-1">
-                                <div className="flex items-center justify-between text-[11px]">
-                                  <span className="text-slate-300 font-semibold flex items-center gap-1">
-                                    <Sparkles className="w-3 h-3 text-indigo-400" /> Saldo Livre (Safe-to-Spend):
-                                  </span>
-                                  <strong
-                                    className={`font-mono font-extrabold tabular-nums px-2 py-0.5 rounded-lg border ${
-                                      safeToSpend.projected > 200
-                                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
-                                        : safeToSpend.projected >= 0
-                                        ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                                        : "bg-rose-500/15 text-rose-300 border-rose-500/30"
-                                    } ${moneyBlur}`}
-                                  >
-                                    {formatBRL(safeToSpend.projected)}
-                                  </strong>
-                                </div>
-                                <span className="text-[10px] text-slate-400 block font-mono tabular-nums leading-tight">
-                                  Contas ({formatBRL(safeToSpend.currentCash)}) + Entradas ({formatBRL(safeToSpend.pendingIncome)}) - Fixos/Faturas ({formatBRL(safeAdd(safeToSpend.pendingDirectExpenses, safeToSpend.pendingInvoices))})
+                                <span className="text-slate-400 flex items-center gap-1 font-sans">
+                                  <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
+                                  <span>Safe-to-Spend:</span>
+                                </span>
+                                <span
+                                  className={`font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums ${
+                                    safeToSpend.projected > 200
+                                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                      : safeToSpend.projected >= 0
+                                      ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                      : "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                                  }`}
+                                >
+                                  {formatBRL(safeToSpend.projected)}
                                 </span>
                               </div>
                             </div>
@@ -3822,72 +3828,127 @@ export default function CoindexApp() {
                         )}
 
                         {widget.id === "patrimony_chart" && (
-                          <div className="h-72 select-none">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={processedPatrimonyData} accessibilityLayer={false}>
-                                <defs>
-                                  <linearGradient id="gradPatrimony" x1="0" y1="0" x2="0" y2="1">
-                                    <stop
-                                      offset="5%"
-                                      stopColor={primarySeriesColor(chartTheme.patrimonyLine)}
-                                      stopOpacity={0.35}
-                                    />
-                                    <stop
-                                      offset="95%"
-                                      stopColor={primarySeriesColor(chartTheme.patrimonyLine)}
-                                      stopOpacity={0.0}
-                                    />
-                                  </linearGradient>
-                                  <linearGradient id="gradAporte" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={chartTheme.aporteLine} stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor={chartTheme.aporteLine} stopOpacity={0.0} />
-                                  </linearGradient>
-                                </defs>
-                                {cfg.showGrid && (
-                                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                                )}
-                                <XAxis dataKey="label" stroke="#64748b" fontSize={11} />
-                                <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => formatBRL(Number(v))} />
-                                <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
-                                {cfg.showLegend && <Legend wrapperStyle={{ fontSize: "11px" }} />}
-                                {milestones.map((m) => (
-                                  <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
-                                ))}
-                                <Area
-                                  type={cfg.curveType}
-                                  dataKey="acumulado"
-                                  name="Patrimônio Acumulado"
-                                  stroke={primarySeriesColor(chartTheme.patrimonyLine)}
-                                  strokeWidth={cfg.strokeWidth}
-                                  dot={cfg.showDots}
-                                  fill="url(#gradPatrimony)"
-                                  fillOpacity={cfg.fillArea ? 1 : 0}
-                                  connectNulls={true}
-                                  label={
-                                    cfg.showDataLabels
-                                      ? { position: "top", fill: "#cbd5e1", fontSize: 10 }
-                                      : false
-                                  }
+                          <div className="space-y-2.5">
+                            {/* Pílulas Minimalistas de Legenda no Cabeçalho do Gráfico (Sprint 16) */}
+                            <div className="flex items-center justify-end gap-2 text-xs">
+                              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: primarySeriesColor(chartTheme.patrimonyLine) }}
                                 />
-                                <Area
-                                  type={cfg.curveType}
-                                  dataKey="aportado"
-                                  name="Aporte Mensal"
-                                  stroke={chartTheme.aporteLine}
-                                  strokeWidth={cfg.strokeWidth}
-                                  dot={cfg.showDots}
-                                  fill="url(#gradAporte)"
-                                  fillOpacity={cfg.fillArea ? 1 : 0}
-                                  connectNulls={true}
+                                <span>Patrimônio Acumulado</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: chartTheme.aporteLine }}
                                 />
-                              </AreaChart>
-                            </ResponsiveContainer>
+                                <span>Aporte Mensal</span>
+                              </div>
+                            </div>
+
+                            <div className="h-72 select-none">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart
+                                  data={processedPatrimonyData}
+                                  accessibilityLayer={false}
+                                  margin={{ top: 10, right: 12, left: 4, bottom: 0 }}
+                                >
+                                  <defs>
+                                    <linearGradient id="gradPatrimony" x1="0" y1="0" x2="0" y2="1">
+                                      <stop
+                                        offset="0%"
+                                        stopColor={primarySeriesColor(chartTheme.patrimonyLine)}
+                                        stopOpacity={0.4}
+                                      />
+                                      <stop
+                                        offset="50%"
+                                        stopColor={primarySeriesColor(chartTheme.patrimonyLine)}
+                                        stopOpacity={0.15}
+                                      />
+                                      <stop
+                                        offset="100%"
+                                        stopColor={primarySeriesColor(chartTheme.patrimonyLine)}
+                                        stopOpacity={0.0}
+                                      />
+                                    </linearGradient>
+                                    <linearGradient id="gradAporte" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="0%" stopColor={chartTheme.aporteLine} stopOpacity={0.35} />
+                                      <stop offset="50%" stopColor={chartTheme.aporteLine} stopOpacity={0.12} />
+                                      <stop offset="100%" stopColor={chartTheme.aporteLine} stopOpacity={0.0} />
+                                    </linearGradient>
+                                  </defs>
+
+                                  {cfg.showGrid && (
+                                    <CartesianGrid
+                                      vertical={false}
+                                      strokeDasharray="3 3"
+                                      stroke="rgba(148, 163, 184, 0.08)"
+                                    />
+                                  )}
+
+                                  <XAxis
+                                    dataKey="label"
+                                    stroke="#64748b"
+                                    fontSize={11}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickMargin={10}
+                                  />
+                                  <YAxis
+                                    stroke="#64748b"
+                                    fontSize={11}
+                                    width={56}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={(v) => {
+                                      const num = Number(v) || 0;
+                                      if (num === 0) return "R$ 0";
+                                      if (Math.abs(num) >= 1000) {
+                                        const k = num / 1000;
+                                        return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
+                                      }
+                                      return `R$ ${num}`;
+                                    }}
+                                  />
+                                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
+                                  {milestones.map((m) => (
+                                    <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
+                                  ))}
+                                  <Area
+                                    type="monotone"
+                                    dataKey="acumulado"
+                                    name="Patrimônio Acumulado"
+                                    stroke={primarySeriesColor(chartTheme.patrimonyLine)}
+                                    strokeWidth={2.5}
+                                    dot={false}
+                                    activeDot={{ r: 5, strokeWidth: 2, stroke: "#0f172a" }}
+                                    fill="url(#gradPatrimony)"
+                                    fillOpacity={1}
+                                    connectNulls={true}
+                                  />
+                                  <Area
+                                    type="monotone"
+                                    dataKey="aportado"
+                                    name="Aporte Mensal"
+                                    stroke={chartTheme.aporteLine}
+                                    strokeWidth={2.5}
+                                    dot={false}
+                                    activeDot={{ r: 5, strokeWidth: 2, stroke: "#0f172a" }}
+                                    fill="url(#gradAporte)"
+                                    fillOpacity={1}
+                                    connectNulls={true}
+                                  />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </div>
                           </div>
                         )}
 
                         {widget.id === "category_chart" && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-                            <div className="h-60 select-none">
+                            {/* Donut Moderno com Rótulo Centralizado Total Gasto (Sprint 16) */}
+                            <div className="relative h-64 select-none flex items-center justify-center">
                               <ResponsiveContainer width="100%" height="100%">
                                 <PieChart accessibilityLayer={false}>
                                   <Pie
@@ -3896,31 +3957,38 @@ export default function CoindexApp() {
                                     nameKey="name"
                                     cx="50%"
                                     cy="50%"
-                                    innerRadius={52}
-                                    outerRadius={82}
-                                    paddingAngle={3}
-                                    label={
-                                      cfg.showDataLabels
-                                        ? ({ name, value }: { name?: string; value?: number }) =>
-                                            `${name}: ${formatBRL(Number(value || 0))}`
-                                        : false
-                                    }
+                                    innerRadius="68%"
+                                    outerRadius="90%"
+                                    paddingAngle={4}
+                                    cornerRadius={6}
+                                    stroke="none"
+                                    label={false}
+                                    labelLine={false}
                                   >
                                     {categoryChartData.map((entry, idx) => (
                                       <Cell
                                         key={`cell-${idx}`}
                                         fill={entry.color}
-                                        stroke="rgba(15,23,42,0.8)"
-                                        strokeWidth={2}
                                       />
                                     ))}
                                   </Pie>
                                   <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
-                                  {cfg.showLegend && <Legend wrapperStyle={{ fontSize: "11px" }} />}
                                 </PieChart>
                               </ResponsiveContainer>
+
+                              {/* Rótulo Central do Donut: TOTAL GASTO + Valor em R$ */}
+                              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center select-none">
+                                <span className="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">
+                                  Total Gasto
+                                </span>
+                                <span className={`text-base sm:text-lg font-extrabold text-white font-mono tabular-nums ${moneyBlur}`}>
+                                  {formatBRL(totalExpenses)}
+                                </span>
+                              </div>
                             </div>
-                            <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1 text-xs">
+
+                            {/* Lista de Categorias com Bolinha Colorida Correspondente */}
+                            <div className="space-y-2 max-h-64 overflow-y-auto pr-1 text-xs">
                               {categoryChartData.map((cat) => {
                                 const pct = Math.round((cat.value / totalExpenses) * 100);
                                 return (
@@ -3929,17 +3997,22 @@ export default function CoindexApp() {
                                     className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-1.5"
                                   >
                                     <div className="flex items-center justify-between">
-                                      <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+                                      <span className="font-semibold text-slate-200 flex items-center gap-2">
+                                        <span
+                                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
+                                          style={{ backgroundColor: cat.color }}
+                                        />
                                         {renderCategorySemanticIcon(cat.name, cat.color)}
-                                        <span className="truncate max-w-[120px]">{cat.name}</span>
+                                        <span className="truncate max-w-[130px]">{cat.name}</span>
                                       </span>
-                                      <span className={`font-bold text-white tabular-nums ${moneyBlur}`}>
-                                        {formatBRL(cat.value)} ({pct}%)
+                                      <span className={`font-bold text-white tabular-nums font-mono ${moneyBlur}`}>
+                                        {formatBRL(cat.value)}{" "}
+                                        <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
                                       </span>
                                     </div>
                                     <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
                                       <div
-                                        className="h-full rounded-full"
+                                        className="h-full rounded-full transition-all duration-300"
                                         style={{ width: `${pct}%`, backgroundColor: cat.color }}
                                       />
                                     </div>
