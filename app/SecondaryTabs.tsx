@@ -523,6 +523,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         setSearchQuery={setSearchQuery}
         handleExportCSV={handleExportCSV}
         handleOpenNewTxModal={handleOpenNewTxModal}
+        onNewTransaction={handleOpenNewTxModal}
         handleToggleStatus={handleToggleStatus}
         handleStartEditTransaction={handleStartEditTransaction}
         handleDeleteTransaction={handleDeleteTransaction}

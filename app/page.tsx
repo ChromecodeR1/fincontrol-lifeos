@@ -133,7 +133,8 @@ import {
   calculateBankExposure,
   calculateBankBalance,
   calculatePatrimonyEvolution,
-  calculateStaticStatusSummary
+  calculateStaticStatusSummary,
+  migrateLegacyCategory
 } from "./lifeos-data";
 import {
   validateTransactionData,
@@ -185,6 +186,65 @@ interface StravaCredentials {
   clientId: string;
   clientSecret: string;
   refreshToken: string;
+}
+
+interface PatrimonyTooltipPayloadItem {
+  payload?: {
+    month: string;
+    label: string;
+    aportado: number;
+    acumulado: number;
+    resgatado?: number;
+  };
+}
+
+interface PatrimonyCyberTooltipProps {
+  active?: boolean;
+  payload?: PatrimonyTooltipPayloadItem[];
+  label?: string;
+}
+
+function PatrimonyCyberTooltip({ active, payload, label }: PatrimonyCyberTooltipProps) {
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0]?.payload;
+  if (!data) return null;
+
+  return (
+    <div className="bg-slate-950/95 border border-white/10 backdrop-blur-md rounded-xl px-3.5 py-2.5 text-xs shadow-2xl space-y-1.5 min-w-[210px]">
+      <p className="font-semibold text-slate-300 border-b border-white/10 pb-1 mb-1">
+        {label || data.label}
+      </p>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
+          Patrimônio Acumulado:
+        </span>
+        <strong className="text-white font-mono tabular-nums">
+          {formatBRL(data.acumulado)}
+        </strong>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+          Aportes Brutos no Mês:
+        </span>
+        <strong className="text-emerald-400 font-mono tabular-nums">
+          {formatBRL(data.aportado)}
+        </strong>
+      </div>
+      {Boolean(data.resgatado && data.resgatado > 0) && (
+        <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/5">
+          <span className="flex items-center gap-1.5 text-rose-300/80">
+            <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+            Resgates no Mês:
+          </span>
+          <strong className="text-rose-400 font-mono tabular-nums">
+            {formatBRL(data.resgatado || 0)}
+          </strong>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function CoindexApp() {
@@ -702,15 +762,16 @@ export default function CoindexApp() {
         const sTxs = localStorage.getItem("lifeos_txs_v8");
         if (sTxs) {
           const parsedTxs: Transaction[] = JSON.parse(sTxs);
-          const existingIds = new Set(parsedTxs.map((t) => t.id));
+          // Migração de categorias legadas (Sprint 19)
+          const migratedTxs = parsedTxs.map((t) => ({
+            ...t,
+            category: migrateLegacyCategory(t.category, t.description)
+          }));
+          const existingIds = new Set(migratedTxs.map((t) => t.id));
           const missingOfficial = PATRIMONIO_IMPORT_TRANSACTIONS.filter((t) => !existingIds.has(t.id));
-          if (missingOfficial.length > 0) {
-            const merged = [...parsedTxs, ...missingOfficial];
-            setTransactions(merged);
-            localStorage.setItem("lifeos_txs_v8", JSON.stringify(merged));
-          } else {
-            setTransactions(parsedTxs);
-          }
+          const finalMerged = missingOfficial.length > 0 ? [...migratedTxs, ...missingOfficial] : migratedTxs;
+          setTransactions(finalMerged);
+          localStorage.setItem("lifeos_txs_v8", JSON.stringify(finalMerged));
         }
         const sDebtors = localStorage.getItem("lifeos_debtors_v8");
         if (sDebtors) setDebtorMap(JSON.parse(sDebtors));
@@ -866,12 +927,17 @@ export default function CoindexApp() {
           }
         } else if (res.data) {
           const d = res.data;
-          const existingIds = new Set(d.transactions.map((t) => t.id));
+          // Migração de categorias legadas (Sprint 19)
+          const migratedTxs = d.transactions.map((t) => ({
+            ...t,
+            category: migrateLegacyCategory(t.category, t.description)
+          }));
+          const existingIds = new Set(migratedTxs.map((t) => t.id));
           const missingOfficial = PATRIMONIO_IMPORT_TRANSACTIONS.filter((t) => !existingIds.has(t.id));
 
-          let finalTxs = d.transactions;
+          let finalTxs = migratedTxs;
           if (missingOfficial.length > 0) {
-            finalTxs = [...d.transactions, ...missingOfficial];
+            finalTxs = [...migratedTxs, ...missingOfficial];
             upsertTransactionsInDb(missingOfficial, debtorMap).catch((err) =>
               console.error("Erro ao sincronizar aportes oficiais no Supabase:", err)
             );
@@ -1261,21 +1327,28 @@ export default function CoindexApp() {
       const aportesMes = safeAdd(...investmentTxs.filter((t) => !isResgateCategory(t.category)).map((t) => t.amount));
       const resgatesMes = safeAdd(...investmentTxs.filter((t) => isResgateCategory(t.category)).map((t) => t.amount));
 
-      const invested = safeSub(aportesMes, resgatesMes);
-      const balance = safeSub(income, safeAdd(expense, invested));
+      const netInvested = safeSub(aportesMes, resgatesMes);
+
+      // SPRINT 19 (Correção 2): No "Histórico Completo", o Balanço Operacional Real é (Entradas Totais - Saídas Operacionais)
+      // No mês selecionado, considera o fluxo de caixa líquido abatendo os investimentos líquidos do mês
+      const balance =
+        selectedMonth === "ALL"
+          ? safeSub(income, expense)
+          : safeSub(income, safeAdd(expense, netInvested));
 
       const personalSpent = safeAdd(
         ...nonTransferList
-          .filter((t) => t.category === "Gastos Pessoais / Besteiras")
+          .filter((t) => t.category === "Gastos Pessoais" || t.category === "Gastos Pessoais / Besteiras")
           .map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
       );
 
       return {
         income,
         expense,
-        invested,
+        invested: aportesMes,
         aportes: aportesMes,
         resgates: resgatesMes,
+        netInvested,
         balance,
         personalSpent
       };
@@ -1298,6 +1371,23 @@ export default function CoindexApp() {
       investedDiff: pctDiff(current.invested, prev.invested)
     };
   }, [filteredTransactions, transactions, selectedMonth, getFlowType]);
+
+  const allTimeReserva = useMemo(() => {
+    const investTxs = transactions.filter(
+      (t) => !t.isSplitChild && getFlowType(t.category) === "INVESTMENT"
+    );
+    const totAportes = safeAdd(
+      ...investTxs.filter((t) => !isResgateCategory(t.category)).map((t) => t.amount)
+    );
+    const totResgates = safeAdd(
+      ...investTxs.filter((t) => isResgateCategory(t.category)).map((t) => t.amount)
+    );
+    return {
+      aportes: totAportes,
+      resgates: totResgates,
+      liquido: safeSub(totAportes, totResgates)
+    };
+  }, [transactions, getFlowType]);
 
   const patrimonyChartData = useMemo(() => {
     return calculatePatrimonyEvolution(transactions, HISTORICAL_INVESTMENTS);
@@ -1703,12 +1793,12 @@ export default function CoindexApp() {
       date: new Date().toISOString().split("T")[0],
       description: isFuel ? "Abastecimento Gasolina Comum" : "",
       amount: "",
-      category: isFuel ? "Gasolina/Combustível" : cat,
+      category: isFuel ? "Gasolina" : cat,
       costType: "Variável",
       paymentMethod: defaultMethod,
       cardUsed: cards[0]?.name || "Nubank Ultravioleta",
       bankAccount: banks[0]?.name || "Nubank",
-      status: getAutomaticStatus(defaultMethod, isFuel ? "Gasolina/Combustível" : cat),
+      status: getAutomaticStatus(defaultMethod, isFuel ? "Gasolina" : cat),
       km: "",
       liters: "",
       installments: "1",
@@ -3751,8 +3841,20 @@ export default function CoindexApp() {
                       <ChartCard
                         key={widget.id}
                         id={widget.id}
-                        title={widget.title}
-                        subtitle={widget.subtitle}
+                        title={
+                          widget.id === "kpis"
+                            ? selectedMonth === "ALL"
+                              ? "Resumo Financeiro — Histórico Geral"
+                              : "Resumo Financeiro do Mês"
+                            : widget.title
+                        }
+                        subtitle={
+                          widget.id === "kpis"
+                            ? selectedMonth === "ALL"
+                              ? "Consolidado geral de todas as entradas, despesas operacionais e patrimônio guardado"
+                              : widget.subtitle
+                            : widget.subtitle
+                        }
                         chartKind={chartKind}
                         hasMultipleSeries={
                           widget.id === "patrimony_chart" ||
@@ -3828,11 +3930,11 @@ export default function CoindexApp() {
 
                         {widget.id === "kpis" && (
                           <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 ${moneyBlur}`}>
-                            {/* Card 1: Entradas do Mês */}
+                            {/* Card 1: Entradas */}
                             <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-emerald-950/40 to-slate-950/90 border border-emerald-500/25 flex flex-col justify-between shadow-lg">
                               <div>
                                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                  <span>Entradas do Mês</span>
+                                  <span>{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
                                   <div className="p-1 rounded-lg bg-emerald-500/15 text-emerald-400">
                                     <TrendingUp className="w-3.5 h-3.5" />
                                   </div>
@@ -3842,13 +3944,17 @@ export default function CoindexApp() {
                                 </p>
                               </div>
                               <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
-                                <span className="flex items-center gap-1">
-                                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
-                                  {monthSummary.incomeDiff >= 0
-                                    ? `+${monthSummary.incomeDiff}%`
-                                    : `${monthSummary.incomeDiff}%`}{" "}
-                                  vs. mês anterior
-                                </span>
+                                {selectedMonth === "ALL" ? (
+                                  <span>Média mensal: {formatBRL(monthSummary.income / filterMonthsCount)}</span>
+                                ) : (
+                                  <span className="flex items-center gap-1">
+                                    <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
+                                    {monthSummary.incomeDiff >= 0
+                                      ? `+${monthSummary.incomeDiff}%`
+                                      : `${monthSummary.incomeDiff}%`}{" "}
+                                    vs. mês anterior
+                                  </span>
+                                )}
                               </div>
                             </div>
 
@@ -3856,7 +3962,7 @@ export default function CoindexApp() {
                             <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-rose-950/40 to-slate-950/90 border border-rose-500/25 flex flex-col justify-between shadow-lg">
                               <div>
                                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                  <span>Saídas & Despesas</span>
+                                  <span>{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
                                   <div className="p-1 rounded-lg bg-rose-500/15 text-rose-400">
                                     <TrendingDown className="w-3.5 h-3.5" />
                                   </div>
@@ -3866,39 +3972,49 @@ export default function CoindexApp() {
                                 </p>
                               </div>
                               <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
-                                <span className="flex items-center gap-1">
-                                  <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
-                                  {monthSummary.expenseDiff >= 0
-                                    ? `+${monthSummary.expenseDiff}%`
-                                    : `${monthSummary.expenseDiff}%`}{" "}
-                                  vs. mês anterior
-                                </span>
+                                {selectedMonth === "ALL" ? (
+                                  <span>Média mensal: {formatBRL(monthSummary.expense / filterMonthsCount)}</span>
+                                ) : (
+                                  <span className="flex items-center gap-1">
+                                    <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
+                                    {monthSummary.expenseDiff >= 0
+                                      ? `+${monthSummary.expenseDiff}%`
+                                      : `${monthSummary.expenseDiff}%`}{" "}
+                                    vs. mês anterior
+                                  </span>
+                                )}
                               </div>
                             </div>
 
-                            {/* Card 3: Aportes no Mês */}
+                            {/* Card 3: Aportes Brutos */}
                             <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-indigo-950/40 to-slate-950/90 border border-indigo-500/25 flex flex-col justify-between shadow-lg">
                               <div>
                                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                  <span>Aportes no Mês</span>
+                                  <span>{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
                                   <div className="p-1 rounded-lg bg-indigo-500/15 text-indigo-400">
                                     <PiggyBank className="w-3.5 h-3.5" />
                                   </div>
                                 </div>
                                 <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-indigo-400 leading-tight mt-0.5">
-                                  {formatBRL(monthSummary.invested)}
+                                  {formatBRL(monthSummary.aportes)}
                                 </p>
                               </div>
                               <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
-                                <span>Meta: {formatBRL(monthlyInvestmentGoal)}</span>
+                                {selectedMonth === "ALL" ? (
+                                  <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)} • Resgatado: ${formatBRL(allTimeReserva.resgates)}`}>
+                                    Em Reserva (Líquido): <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong> • Resgatado: {formatBRL(allTimeReserva.resgates)}
+                                  </span>
+                                ) : (
+                                  <span>Meta: {formatBRL(monthlyInvestmentGoal)}</span>
+                                )}
                               </div>
                             </div>
 
-                            {/* Card 4: Saldo Livre Líquido & Safe-to-Spend Compacto (Sprint 16 & 17) */}
+                            {/* Card 4: Saldo Livre / Balanço Operacional Líquido */}
                             <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-sky-950/40 to-slate-950/90 border border-sky-500/25 flex flex-col justify-between shadow-lg">
                               <div>
                                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                  <span>Saldo Livre Líquido</span>
+                                  <span>{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
                                   <div className="p-1 rounded-lg bg-sky-500/15 text-sky-400">
                                     <Wallet className="w-3.5 h-3.5" />
                                   </div>
@@ -3912,34 +4028,46 @@ export default function CoindexApp() {
                                 </p>
                               </div>
 
-                              {/* Rodapé Compacto e Perfeitamente Alinhado com Tooltip de Detalhes */}
-                              <div
-                                className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] font-mono tabular-nums cursor-help"
-                                title={`Safe-to-Spend: Contas (${formatBRL(safeToSpend.currentCash)}) + Entradas Pendentes (${formatBRL(safeToSpend.pendingIncome)}) - Fixos/Faturas Pendentes (${formatBRL(safeAdd(safeToSpend.pendingDirectExpenses, safeToSpend.pendingInvoices))}) | A Receber Aberto: ${formatBRL(receivablesAnalytics.totalOpen)}`}
-                              >
-                                <span className="text-slate-400 flex items-center gap-1 font-sans">
-                                  <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
-                                  <span>Safe-to-Spend:</span>
-                                </span>
-                                <span
-                                  className={`font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums ${
-                                    safeToSpend.projected > 200
-                                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
-                                      : safeToSpend.projected >= 0
-                                      ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                                      : "bg-rose-500/15 text-rose-300 border-rose-500/30"
-                                  }`}
+                              {/* Rodapé Adaptativo */}
+                              {selectedMonth === "ALL" ? (
+                                <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] font-mono tabular-nums">
+                                  <span className="text-slate-400 flex items-center gap-1 font-sans">
+                                    <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
+                                    <span>Patrimônio em Caixinhas:</span>
+                                  </span>
+                                  <span className="font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                                    {formatBRL(allTimeReserva.liquido)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div
+                                  className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] font-mono tabular-nums cursor-help"
+                                  title={`Safe-to-Spend: Contas (${formatBRL(safeToSpend.currentCash)}) + Entradas Pendentes (${formatBRL(safeToSpend.pendingIncome)}) - Fixos/Faturas Pendentes (${formatBRL(safeAdd(safeToSpend.pendingDirectExpenses, safeToSpend.pendingInvoices))}) | A Receber Aberto: ${formatBRL(receivablesAnalytics.totalOpen)}`}
                                 >
-                                  {formatBRL(safeToSpend.projected)}
-                                </span>
-                              </div>
+                                  <span className="text-slate-400 flex items-center gap-1 font-sans">
+                                    <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
+                                    <span>Safe-to-Spend:</span>
+                                  </span>
+                                  <span
+                                    className={`font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums ${
+                                      safeToSpend.projected > 200
+                                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                        : safeToSpend.projected >= 0
+                                        ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                        : "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                                    }`}
+                                  >
+                                    {formatBRL(safeToSpend.projected)}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
 
                         {widget.id === "patrimony_chart" && (
                           <div className="space-y-2.5">
-                            {/* Pílulas Minimalistas de Legenda no Cabeçalho do Gráfico (Sprint 16) */}
+                            {/* Pílulas Minimalistas de Legenda no Cabeçalho do Gráfico (Sprint 16 & 19) */}
                             <div className="flex items-center justify-end gap-2 text-xs">
                               <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
                                 <span
@@ -3953,7 +4081,7 @@ export default function CoindexApp() {
                                   className="w-2 h-2 rounded-full shrink-0"
                                   style={{ backgroundColor: chartTheme.aporteLine }}
                                 />
-                                <span>Aporte Mensal</span>
+                                <span>Aportes Brutos</span>
                               </div>
                             </div>
 
@@ -4009,19 +4137,20 @@ export default function CoindexApp() {
                                     stroke="#64748b"
                                     fontSize={11}
                                     width={56}
+                                    domain={[0, "auto"]}
                                     axisLine={false}
                                     tickLine={false}
                                     tickFormatter={(v) => {
                                       const num = Number(v) || 0;
-                                      if (num === 0) return "R$ 0";
-                                      if (Math.abs(num) >= 1000) {
+                                      if (num <= 0) return "R$ 0";
+                                      if (num >= 1000) {
                                         const k = num / 1000;
                                         return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
                                       }
                                       return `R$ ${num}`;
                                     }}
                                   />
-                                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
+                                  <Tooltip content={<PatrimonyCyberTooltip />} cursor={false} />
                                   {milestones.map((m) => (
                                     <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
                                   ))}
@@ -4040,7 +4169,7 @@ export default function CoindexApp() {
                                   <Area
                                     type="monotone"
                                     dataKey="aportado"
-                                    name="Aporte Mensal"
+                                    name="Aportes Brutos"
                                     stroke={chartTheme.aporteLine}
                                     strokeWidth={2.5}
                                     dot={false}
@@ -4540,7 +4669,7 @@ export default function CoindexApp() {
                   label: "Posto Express (Abastecer)",
                   action: () => {
                     setShowCommandModal(false);
-                    handleOpenNewTxModal("Gasolina/Combustível");
+                    handleOpenNewTxModal("Gasolina");
                   },
                   icon: <Fuel className="w-3.5 h-3.5 text-amber-400" />
                 },

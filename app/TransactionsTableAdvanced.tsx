@@ -49,7 +49,8 @@ export interface TransactionsTableAdvancedProps {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   handleExportCSV: () => void;
-  handleOpenNewTxModal: () => void;
+  handleOpenNewTxModal?: () => void;
+  onNewTransaction?: () => void;
   handleToggleStatus: (tx: Transaction) => void;
   handleStartEditTransaction: (tx: Transaction) => void;
   handleDeleteTransaction: (id: string) => void;
@@ -276,6 +277,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
   setSearchQuery,
   handleExportCSV,
   handleOpenNewTxModal,
+  onNewTransaction,
   handleToggleStatus,
   handleStartEditTransaction,
   handleDeleteTransaction,
@@ -519,8 +521,11 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
 
           <button
             type="button"
-            onClick={handleOpenNewTxModal}
-            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition"
+            onClick={() => {
+              if (onNewTransaction) onNewTransaction();
+              else if (handleOpenNewTxModal) handleOpenNewTxModal();
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" /> Novo Lançamento
           </button>
@@ -583,10 +588,14 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+      <div
+        className={`rounded-2xl border border-white/[0.06] transition-all relative ${
+          activeFilterPopover ? "min-h-[380px] overflow-visible pb-20" : "overflow-x-auto"
+        }`}
+      >
         <table className="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-white/[0.08] bg-slate-950/60 text-slate-400">
+          <thead className="relative z-30">
+            <tr className="border-b border-white/[0.08] bg-slate-950/80 text-slate-400">
               {/* 1. DATA */}
               <th className="py-3.5 px-3">
                 <div className="flex items-center gap-1.5">
@@ -613,7 +622,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "date" && (
-                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-50 space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-[100] space-y-2 text-xs">
                         <span className="font-bold text-white block">Filtrar por Data</span>
                         <input
                           type="text"
@@ -685,7 +694,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "category" && (
-                      <div className="absolute left-0 mt-2 p-3 w-64 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-50 space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-64 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-[100] space-y-2 text-xs">
                         <div className="flex items-center justify-between pb-1 border-b border-white/10">
                           <span className="font-bold text-white">Selecionar Categorias</span>
                           <button
@@ -758,7 +767,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "costType" && (
-                      <div className="absolute left-0 mt-2 p-3 w-44 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-50 space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-44 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-[100] space-y-2 text-xs">
                         <span className="font-bold text-white block">Tipo de Custo</span>
                         {["Fixo", "Variável"].map((cType) => (
                           <label
@@ -817,7 +826,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "paymentMethod" && (
-                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-50 space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-[100] space-y-2 text-xs">
                         <div className="flex items-center justify-between pb-1 border-b border-white/10">
                           <span className="font-bold text-white">Métodos</span>
                           <button
@@ -887,7 +896,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "km" && (
-                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-50 space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-[100] space-y-2 text-xs">
                         <label className="flex items-center gap-2 text-slate-200 cursor-pointer">
                           <input
                             type="checkbox"
@@ -937,7 +946,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "status" && (
-                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-50 space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-[100] space-y-2 text-xs">
                         <span className="font-bold text-white block">Situação</span>
                         {["Pago", "Pendente / Na Fatura"].map((st) => (
                           <label
@@ -989,7 +998,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "amount" && (
-                      <div className="absolute right-0 mt-2 p-3 w-52 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-50 space-y-2 text-xs text-left">
+                      <div className="absolute right-0 mt-2 p-3 w-52 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl z-[100] space-y-2 text-xs text-left">
                         <span className="font-bold text-white block">Faixa de Valor (R$)</span>
                         <input
                           type="number"

@@ -22,7 +22,10 @@ import {
   Monitor,
   Moon,
   TrendingDown,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Activity,
+  FileText,
+  Layers
 } from "lucide-react";
 
 export type CostType = "Fixo" | "Variável";
@@ -606,6 +609,67 @@ export function compressImageFileToBase64(file: File, callback: (base64: string)
   reader.readAsDataURL(file);
 }
 
+/**
+ * Normaliza e migra categorias legadas para o padrão oficial da Sprint 19
+ */
+export function migrateLegacyCategory(category?: string | null, description = ""): string {
+  if (!category) return "Outros";
+  const c = category.trim();
+  const d = (description || "").toLowerCase();
+
+  // Renomeações diretas
+  if (
+    c === "Gastos Pessoais / Besteiras" ||
+    c === "Gastos pessoais/Besteiras" ||
+    c === "Gastos Pessoais/Besteiras" ||
+    c === "Gastos Pessoais / Besteira"
+  ) {
+    return "Gastos Pessoais";
+  }
+  if (
+    c === "Estacionamento/Pedágio" ||
+    c === "Estacionamento / Pedágio" ||
+    c === "Estacionamento / Pedagio" ||
+    c === "Estacionamento/Pedagio"
+  ) {
+    return "Estacionamento";
+  }
+  if (
+    c === "Gasolina/Combustível" ||
+    c === "Gasolina / Combustível" ||
+    c === "Gasolina / Combustivel" ||
+    c === "Gasolina/Combustivel"
+  ) {
+    return "Gasolina";
+  }
+
+  // Divisões baseadas em descrição
+  if (c === "Saúde/Academia" || c === "Saúde / Academia" || c === "Saude/Academia" || c === "Saude / Academia") {
+    return d.includes("academia") || d.includes("smart") || d.includes("gym") || d.includes("musculação")
+      ? "Academia"
+      : "Saúde";
+  }
+  if (
+    c === "Assinaturas/Internet" ||
+    c === "Assinaturas / Internet" ||
+    c === "Assinatura/Internet" ||
+    c === "Assinatura / Internet"
+  ) {
+    return d.includes("internet") || d.includes("fibra") || d.includes("wifi") || d.includes("provedor")
+      ? "Internet"
+      : "Assinaturas";
+  }
+  if (
+    c === "IPVA/Licenciamento" ||
+    c === "IPVA / Licenciamento" ||
+    c === "Ipva/Licenciamento"
+  ) {
+    return d.includes("licenciamento") ? "Licenciamento" : "IPVA";
+  }
+
+  return c;
+}
+
 export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = [
   { name: "Salário", flow: "INCOME" },
   { name: "Benefícios (VA/Combustível)", flow: "INCOME" },
@@ -621,17 +685,20 @@ export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = [
   { name: "A Receber", flow: "EXPENSE" },
   { name: "Alimentação", flow: "EXPENSE" },
   { name: "Moradia", flow: "EXPENSE" },
-  { name: "Gastos Pessoais / Besteiras", flow: "EXPENSE" },
-  { name: "Saúde/Academia", flow: "EXPENSE" },
-  { name: "Assinaturas/Internet", flow: "EXPENSE" },
+  { name: "Gastos Pessoais", flow: "EXPENSE" },
+  { name: "Saúde", flow: "EXPENSE" },
+  { name: "Academia", flow: "EXPENSE" },
+  { name: "Assinaturas", flow: "EXPENSE" },
+  { name: "Internet", flow: "EXPENSE" },
   { name: "Lazer", flow: "EXPENSE" },
   { name: "Educação", flow: "EXPENSE" },
-  { name: "Gasolina/Combustível", flow: "EXPENSE", isAuto: true },
+  { name: "Gasolina", flow: "EXPENSE", isAuto: true },
   { name: "Manutenção", flow: "EXPENSE", isAuto: true },
   { name: "Troca de Óleo", flow: "EXPENSE", isAuto: true },
-  { name: "IPVA/Licenciamento", flow: "EXPENSE", isAuto: true },
+  { name: "IPVA", flow: "EXPENSE", isAuto: true },
+  { name: "Licenciamento", flow: "EXPENSE", isAuto: true },
   { name: "Seguro", flow: "EXPENSE", isAuto: true },
-  { name: "Estacionamento/Pedágio", flow: "EXPENSE", isAuto: true }
+  { name: "Estacionamento", flow: "EXPENSE", isAuto: true }
 ];
 
 export const DEFAULT_PAYMENT_METHODS: string[] = [
@@ -658,16 +725,26 @@ export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   "A Receber": "#f59e0b",
   "Alimentação": "#f43f5e",
   "Moradia": "#8b5cf6",
+  "Gastos Pessoais": "#ec4899",
+  "Saúde": "#06b6d4",
+  "Academia": "#14b8a6",
+  "Assinaturas": "#8b5cf6",
+  "Internet": "#3b82f6",
+  "Lazer": "#a855f7",
+  "Educação": "#0ea5e9",
+  "Gasolina": "#f59e0b",
+  "Manutenção": "#ea580c",
+  "Troca de Óleo": "#d97706",
+  "IPVA": "#e11d48",
+  "Licenciamento": "#f43f5e",
+  "Seguro": "#64748b",
+  "Estacionamento": "#fbbf24",
+  // Aliases de compatibilidade histórica
   "Gastos Pessoais / Besteiras": "#ec4899",
   "Saúde/Academia": "#06b6d4",
   "Assinaturas/Internet": "#3b82f6",
-  "Lazer": "#a855f7",
-  "Educação": "#0ea5e9",
   "Gasolina/Combustível": "#f59e0b",
-  "Manutenção": "#ea580c",
-  "Troca de Óleo": "#d97706",
   "IPVA/Licenciamento": "#e11d48",
-  "Seguro": "#64748b",
   "Estacionamento/Pedágio": "#fbbf24"
 };
 
@@ -795,16 +872,22 @@ export function renderCategorySemanticIcon(category: string, color: string) {
     return <Utensils className="w-3.5 h-3.5" style={style} />;
   if (c.includes("moradia") || c.includes("aluguel") || c.includes("casa"))
     return <Home className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("saúde") || c.includes("academia") || c.includes("médico"))
+  if (c.includes("academia"))
+    return <Activity className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("saúde") || c.includes("médico"))
     return <HeartPulse className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("internet") || c.includes("assinatura"))
+  if (c.includes("internet") || c.includes("fibra"))
     return <Wifi className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("assinatura"))
+    return <Layers className="w-3.5 h-3.5" style={style} />;
   if (c.includes("educação") || c.includes("faculdade") || c.includes("curso"))
     return <GraduationCap className="w-3.5 h-3.5" style={style} />;
   if (c.includes("gasolina") || c.includes("combustível") || c.includes("posto"))
     return <Fuel className="w-3.5 h-3.5" style={style} />;
   if (c.includes("manutenção") || c.includes("óleo") || c.includes("revisão"))
     return <Wrench className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("licenciamento"))
+    return <FileText className="w-3.5 h-3.5" style={style} />;
   if (c.includes("ipva") || c.includes("seguro") || c.includes("estacionamento") || c.includes("veículo"))
     return <Car className="w-3.5 h-3.5" style={style} />;
   if (c.includes("serviço") || c.includes("trabalho"))
@@ -931,13 +1014,13 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
   { id: "tx-0c", date: "2026-09-12", description: "Despesas Gerais Setembro", amount: 1620.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-09-12T08:00:00Z" },
   { id: "tx-1", date: "2026-10-05", description: "Salário Líquido ACS Sistemas", amount: 2071.81, category: "Salário", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
   { id: "tx-2", date: "2026-10-05", description: "Auxílio Combustível + VA ACS", amount: 1365.0, category: "Benefícios (VA/Combustível)", costType: "Fixo", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
-  { id: "tx-4", date: "2026-10-07", description: "Mensalidade Academia", amount: 82.4, category: "Saúde/Academia", costType: "Fixo", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-07T08:00:00Z" },
-  { id: "tx-5", date: "2026-10-08", description: "Internet Fibra Residencial", amount: 68.17, category: "Assinaturas/Internet", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-08T08:00:00Z" },
+  { id: "tx-4", date: "2026-10-07", description: "Mensalidade Academia", amount: 82.4, category: "Academia", costType: "Fixo", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-07T08:00:00Z" },
+  { id: "tx-5", date: "2026-10-08", description: "Internet Fibra Residencial", amount: 68.17, category: "Internet", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-08T08:00:00Z" },
   { id: "tx-6", date: "2026-10-09", description: "Supermercado (Dieta da Semana)", amount: 618.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-09T08:00:00Z" },
-  { id: "tx-7", date: "2026-10-10", description: "Abastecimento Gasolina Comum", amount: 260.0, category: "Gasolina/Combustível", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48200, liters: 44.1, updatedAt: "2026-10-10T08:00:00Z" },
+  { id: "tx-7", date: "2026-10-10", description: "Abastecimento Gasolina Comum", amount: 260.0, category: "Gasolina", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48200, liters: 44.1, updatedAt: "2026-10-10T08:00:00Z" },
   { id: "tx-8", date: "2026-10-11", description: "Troca de Óleo Sintético + Filtro", amount: 310.0, category: "Troca de Óleo", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Inter Black", status: "Pendente / Na Fatura", km: 48520, updatedAt: "2026-10-11T08:00:00Z" },
-  { id: "tx-9", date: "2026-10-12", description: "Camisa Minimalista + Corte de Cabelo", amount: 185.0, category: "Gastos Pessoais / Besteiras", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-12T08:00:00Z" },
-  { id: "tx-10", date: "2026-10-15", description: "Abastecimento Rotina ACS", amount: 245.0, category: "Gasolina/Combustível", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48890, liters: 41.5, updatedAt: "2026-10-15T08:00:00Z" },
+  { id: "tx-9", date: "2026-10-12", description: "Camisa Minimalista + Corte de Cabelo", amount: 185.0, category: "Gastos Pessoais", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-12T08:00:00Z" },
+  { id: "tx-10", date: "2026-10-15", description: "Abastecimento Rotina ACS", amount: 245.0, category: "Gasolina", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48890, liters: 41.5, updatedAt: "2026-10-15T08:00:00Z" },
   { id: "tx-11", date: "2026-10-16", description: "Compra Passada no Cartão (Fone Bluetooth)", amount: 220.0, category: "A Receber", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", debtor: "Lucas (Primo)", paidAmount: 70, updatedAt: "2026-10-16T08:00:00Z" },
   { id: "tx-12", date: "2026-10-17", description: "Empréstimo PIX Combustível", amount: 150.0, category: "A Receber", costType: "Variável", paymentMethod: "PIX", status: "Pago", debtor: "Matheus (ACS)", paidAmount: 150, updatedAt: "2026-10-17T08:00:00Z" }
 ];
@@ -1289,6 +1372,7 @@ export interface PatrimonyDataPoint {
   label: string;
   aportado: number;
   acumulado: number;
+  resgatado?: number;
   [key: string]: unknown;
 }
 
@@ -1348,8 +1432,9 @@ export function calculatePatrimonyEvolution(
         base.push({
           month: m,
           label: formatMonthShortLabel(m),
-          aportado: liquidAporte,
-          acumulado: runningTotal
+          aportado: entry.aportes, // SOMA BRUTA DOS APORTES (NUNCA NEGATIVO)
+          acumulado: runningTotal,
+          resgatado: entry.resgates
         });
       });
 
@@ -1387,8 +1472,9 @@ export function calculatePatrimonyEvolution(
     result.push({
       month: cur,
       label: formatMonthShortLabel(cur),
-      aportado: liquid,
-      acumulado: running
+      aportado: entry.aportes, // SOMA BRUTA DOS APORTES (NUNCA NEGATIVO)
+      acumulado: running,
+      resgatado: entry.resgates
     });
 
     const [yStr, mStr] = cur.split("-");

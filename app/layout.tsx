@@ -14,7 +14,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Coindex — Personal Finance & BI",
-  description: "Sistema financeiro pessoal, Business Intelligence patrimonial e telemetria automotiva."
+  description: "Sistema financeiro pessoal, Business Intelligence patrimonial e telemetria automotiva.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg"
+  }
 };
 
 export default function RootLayout({
