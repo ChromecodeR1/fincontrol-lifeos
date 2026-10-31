@@ -749,13 +749,13 @@ export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const DEFAULT_CHART_THEME: ChartThemeColors = {
-  patrimonyLine: "#818cf8",
-  aporteLine: "#34d399",
-  creditUsedBar: "#f43f5e",
-  creditAvailableBar: "#10b981",
-  odometerLine: "#f59e0b",
-  weightLine: "#10b981",
-  bfLine: "#818cf8"
+  patrimonyLine: "#FF2A85",
+  aporteLine: "#A855F7",
+  creditUsedBar: "#FF2A85",
+  creditAvailableBar: "#00F5D4",
+  odometerLine: "#FF6B4A",
+  weightLine: "#00F5D4",
+  bfLine: "#A855F7"
 };
 
 export const COLOR_PRESETS = [
@@ -1174,7 +1174,7 @@ export function CustomCyberTooltip({
   if (!active || !payload || !payload.length) return null;
   const displayLabel = label && /^\d{4}[-/]\d{2}[-/]\d{2}/.test(label) ? formatDateBR(label) : label;
   return (
-    <div className="bg-slate-950/90 border border-white/10 backdrop-blur-md rounded-lg px-3 py-2 text-xs shadow-xl space-y-1">
+    <div className="bg-[#0d061c]/95 border border-[#FF2A85]/40 shadow-[0_0_20px_rgba(255,42,133,0.25)] backdrop-blur-md rounded-xl px-3.5 py-2.5 text-xs space-y-1">
       {displayLabel && <p className="font-semibold text-slate-300 border-b border-white/10 pb-1 mb-1">{displayLabel}</p>}
       {payload.map((entry, index) => (
         <div key={index} className="flex items-center justify-between gap-3">

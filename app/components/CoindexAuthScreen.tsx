@@ -89,9 +89,9 @@ export default function CoindexAuthScreen({
   };
 
   return (
-    <div className="min-h-screen bg-[#060913] text-slate-100 grid grid-cols-1 lg:grid-cols-12 relative overflow-hidden">
-      <div className="pointer-events-none absolute -top-36 -left-36 w-[420px] h-[420px] rounded-full bg-indigo-600/20 blur-[130px]" />
-      <div className="pointer-events-none absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full bg-emerald-500/15 blur-[140px]" />
+    <div className="min-h-screen bg-[#07030f] text-slate-100 grid grid-cols-1 lg:grid-cols-12 relative overflow-hidden">
+      <div className="pointer-events-none absolute -top-36 -left-36 w-[420px] h-[420px] rounded-full bg-[#FF2A85]/20 blur-[130px]" />
+      <div className="pointer-events-none absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full bg-[#A855F7]/15 blur-[140px]" />
 
       {/* Coluna Esquerda: Identidade Visual Coindex */}
       <div className="hidden lg:flex lg:col-span-7 flex-col justify-between p-12 xl:p-16 border-r border-white/[0.07] bg-gradient-to-br from-slate-950/95 via-[#070b16] to-indigo-950/25 relative z-10">
@@ -289,8 +289,8 @@ export default function CoindexAuthScreen({
               disabled={isLoading}
               className={`w-full py-3 rounded-xl font-extrabold text-white shadow-lg flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 ${
                 mode === "login"
-                  ? "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/25"
-                  : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/25"
+                  ? "bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] shadow-[0_0_20px_rgba(255,42,133,0.35)] border border-pink-400/30"
+                  : "bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] shadow-[0_0_20px_rgba(255,42,133,0.35)] border border-pink-400/30"
               }`}
             >
               {isLoading ? (

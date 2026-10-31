@@ -112,7 +112,7 @@ export default function ChartSettingsPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute right-0 top-10 z-50 w-72 rounded-xl border border-slate-700/80 bg-slate-900/95 p-3.5 text-xs text-slate-200 shadow-2xl backdrop-blur-md"
+      className="absolute right-0 top-10 z-50 w-72 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] p-3.5 text-xs text-slate-200"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="mb-2.5 flex items-center justify-between border-b border-slate-800 pb-2">

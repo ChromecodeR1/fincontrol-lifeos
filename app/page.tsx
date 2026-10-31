@@ -210,13 +210,13 @@ function PatrimonyCyberTooltip({ active, payload, label }: PatrimonyCyberTooltip
   if (!data) return null;
 
   return (
-    <div className="bg-slate-950/95 border border-white/10 backdrop-blur-md rounded-xl px-3.5 py-2.5 text-xs shadow-2xl space-y-1.5 min-w-[210px]">
-      <p className="font-semibold text-slate-300 border-b border-white/10 pb-1 mb-1">
+    <div className="bg-[#0d061c]/95 border border-[#FF2A85]/40 shadow-[0_0_20px_rgba(255,42,133,0.25)] backdrop-blur-md rounded-xl px-3.5 py-2.5 text-xs space-y-1.5 min-w-[210px]">
+      <p className="font-semibold text-pink-200 border-b border-white/10 pb-1 mb-1">
         {label || data.label}
       </p>
       <div className="flex items-center justify-between gap-3">
         <span className="flex items-center gap-1.5 text-slate-400">
-          <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
+          <span className="w-2 h-2 rounded-full bg-[#FF2A85] shrink-0 shadow-[0_0_8px_#FF2A85]" />
           Patrimônio Acumulado:
         </span>
         <strong className="text-white font-mono tabular-nums">
@@ -225,20 +225,20 @@ function PatrimonyCyberTooltip({ active, payload, label }: PatrimonyCyberTooltip
       </div>
       <div className="flex items-center justify-between gap-3">
         <span className="flex items-center gap-1.5 text-slate-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+          <span className="w-2 h-2 rounded-full bg-[#A855F7] shrink-0 shadow-[0_0_8px_#A855F7]" />
           Aportes Brutos no Mês:
         </span>
-        <strong className="text-emerald-400 font-mono tabular-nums">
+        <strong className="text-[#C084FC] font-mono tabular-nums">
           {formatBRL(data.aportado)}
         </strong>
       </div>
       {Boolean(data.resgatado && data.resgatado > 0) && (
         <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/5">
-          <span className="flex items-center gap-1.5 text-rose-300/80">
-            <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+          <span className="flex items-center gap-1.5 text-coral-300/80">
+            <span className="w-2 h-2 rounded-full bg-[#FF6B4A] shrink-0" />
             Resgates no Mês:
           </span>
-          <strong className="text-rose-400 font-mono tabular-nums">
+          <strong className="text-[#FF6B4A] font-mono tabular-nums">
             {formatBRL(data.resgatado || 0)}
           </strong>
         </div>
@@ -1424,13 +1424,14 @@ export default function CoindexApp() {
         const val = t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount;
         map.set(t.category, safeAdd(map.get(t.category) || 0, val));
       });
+    const SYNTHWAVE_DONUT_COLORS = ['#FF2A85', '#FF6B4A', '#A855F7', '#6366F1', '#00F5D4', '#F43F5E', '#D946EF', '#8B5CF6'];
     const sorted = Array.from(map.entries())
-      .map(([name, value]) => ({
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], idx) => ({
         name,
         value,
-        color: categoryColors[name] || "#6366f1"
-      }))
-      .sort((a, b) => b.value - a.value);
+        color: categoryColors[name] || SYNTHWAVE_DONUT_COLORS[idx % SYNTHWAVE_DONUT_COLORS.length]
+      }));
 
     if (sorted.length <= 5) return sorted;
     const top5 = sorted.slice(0, 5);
@@ -1439,7 +1440,7 @@ export default function CoindexApp() {
       top5.push({
         name: "Outros",
         value: othersValue,
-        color: "#64748b"
+        color: "#8B5CF6"
       });
     }
     return top5;
@@ -3382,22 +3383,10 @@ export default function CoindexApp() {
   }
 
   return (
-    <div
-      className={`min-h-screen flex transition-colors duration-300 ${
-        themeMode === "branco"
-          ? "bg-slate-100 text-slate-900"
-          : themeMode === "noturno"
-          ? "bg-black text-slate-100"
-          : "bg-[#060913] text-slate-100"
-      }`}
-    >
+    <div className="min-h-screen flex text-slate-100 bg-[#07030f]">
       <style jsx global>{`
         .glass-card {
-          background: ${themeMode === "branco"
-            ? "rgba(255,255,255,0.94)"
-            : themeMode === "noturno"
-            ? "rgba(10,10,12,0.96)"
-            : "rgba(15,23,42,0.72)"};
+          background: rgba(19, 9, 39, 0.82);
           backdrop-filter: blur(18px);
           transition: all 0.2s ease;
         }
@@ -3426,12 +3415,12 @@ export default function CoindexApp() {
             key={t.id}
             className={`pointer-events-auto p-4 rounded-2xl border shadow-2xl backdrop-blur-xl text-xs flex items-start justify-between gap-3 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 ${
               t.type === "error"
-                ? "bg-slate-900/95 border-rose-500/50 text-rose-100 shadow-rose-950/40"
+                ? "bg-[#110724]/95 border-rose-500/50 text-rose-100 shadow-rose-950/40"
                 : t.type === "warning"
-                ? "bg-slate-900/95 border-amber-500/50 text-amber-100 shadow-amber-950/40"
+                ? "bg-[#110724]/95 border-amber-500/50 text-amber-100 shadow-amber-950/40"
                 : t.type === "success"
-                ? "bg-slate-900/95 border-emerald-500/50 text-emerald-100 shadow-emerald-950/40"
-                : "bg-slate-900/95 border-indigo-500/50 text-slate-100 shadow-indigo-950/40"
+                ? "bg-[#110724]/95 border-[#00F5D4]/50 text-cyan-100 shadow-[0_0_20px_rgba(0,245,212,0.15)]"
+                : "bg-[#110724]/95 border-[#A855F7]/50 text-slate-100 shadow-[0_0_20px_rgba(168,85,247,0.15)]"
             }`}
           >
             <div className="flex items-start gap-2.5">
@@ -3440,9 +3429,9 @@ export default function CoindexApp() {
               ) : t.type === "warning" ? (
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               ) : t.type === "success" ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-4 h-4 text-[#00F5D4] shrink-0 mt-0.5" />
               ) : (
-                <Sparkles className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <Sparkles className="w-4 h-4 text-[#A855F7] shrink-0 mt-0.5" />
               )}
               <div>
                 <strong className="font-bold text-white block">{t.title}</strong>
@@ -3525,7 +3514,7 @@ export default function CoindexApp() {
                   activeTab === tab.id
                     ? tab.id === "spotify"
                       ? "bg-[#1DB954]/20 text-[#1DB954] ring-1 ring-[#1DB954]/40 shadow-lg shadow-[#1DB954]/10"
-                      : "bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-600/25"
+                      : "bg-gradient-to-r from-[#FF2A85] via-[#D946EF] to-[#8B5CF6] text-white shadow-[0_0_20px_rgba(255,42,133,0.40)] border border-pink-400/40 font-semibold"
                     : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
                 }`}
                 title={tab.label}
@@ -3616,8 +3605,6 @@ export default function CoindexApp() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
-              <ThemeSegmentedControl themeMode={themeMode} onChange={changeThemeMode} />
-
               {/* SININHO DE NOTIFICAÇÕES */}
               <div className="relative">
                 <button
@@ -3635,7 +3622,7 @@ export default function CoindexApp() {
                 </button>
 
                 {showBellDropdown && (
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-slate-950 border border-indigo-500/30 shadow-2xl p-4 z-50 text-xs space-y-3">
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] p-4 z-50 text-xs space-y-3">
                     <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                       <div>
                         <strong className="text-white font-bold block">Central de Notificações</strong>
@@ -3747,7 +3734,7 @@ export default function CoindexApp() {
               <button
                 type="button"
                 onClick={() => handleOpenNewTxModal()}
-                className="min-h-[44px] px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition"
+                className="min-h-[44px] px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] text-white font-semibold shadow-[0_0_18px_rgba(255,42,133,0.38)] border border-pink-400/30 transition-all text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-4 h-4" /> Novo Lançamento
               </button>
@@ -3931,15 +3918,15 @@ export default function CoindexApp() {
                         {widget.id === "kpis" && (
                           <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 ${moneyBlur}`}>
                             {/* Card 1: Entradas */}
-                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-emerald-950/40 to-slate-950/90 border border-emerald-500/25 flex flex-col justify-between shadow-lg">
+                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#00F5D4]/10 via-[#0d061c]/90 to-[#07030f] border border-[#00F5D4]/25 flex flex-col justify-between shadow-lg shadow-[#00F5D4]/5">
                               <div>
                                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                                   <span>{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
-                                  <div className="p-1 rounded-lg bg-emerald-500/15 text-emerald-400">
+                                  <div className="p-1 rounded-lg bg-[#00F5D4]/15 text-[#00F5D4]">
                                     <TrendingUp className="w-3.5 h-3.5" />
                                   </div>
                                 </div>
-                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-emerald-400 leading-tight mt-0.5">
+                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#00F5D4] drop-shadow-[0_0_10px_rgba(0,245,212,0.22)] leading-tight mt-0.5">
                                   {formatBRL(monthSummary.income)}
                                 </p>
                               </div>
@@ -3948,7 +3935,7 @@ export default function CoindexApp() {
                                   <span>Média mensal: {formatBRL(monthSummary.income / filterMonthsCount)}</span>
                                 ) : (
                                   <span className="flex items-center gap-1">
-                                    <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
+                                    <ArrowUpRight className="w-3.5 h-3.5 text-[#00F5D4]" />
                                     {monthSummary.incomeDiff >= 0
                                       ? `+${monthSummary.incomeDiff}%`
                                       : `${monthSummary.incomeDiff}%`}{" "}
@@ -3959,15 +3946,15 @@ export default function CoindexApp() {
                             </div>
 
                             {/* Card 2: Saídas & Despesas */}
-                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-rose-950/40 to-slate-950/90 border border-rose-500/25 flex flex-col justify-between shadow-lg">
+                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF2A85]/10 via-[#0d061c]/90 to-[#07030f] border border-[#FF2A85]/30 flex flex-col justify-between shadow-lg shadow-[#FF2A85]/5">
                               <div>
                                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                                   <span>{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
-                                  <div className="p-1 rounded-lg bg-rose-500/15 text-rose-400">
+                                  <div className="p-1 rounded-lg bg-[#FF2A85]/15 text-[#FF2A85]">
                                     <TrendingDown className="w-3.5 h-3.5" />
                                   </div>
                                 </div>
-                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-rose-400 leading-tight mt-0.5">
+                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#FF2A85] drop-shadow-[0_0_10px_rgba(255,42,133,0.25)] leading-tight mt-0.5">
                                   {formatBRL(monthSummary.expense)}
                                 </p>
                               </div>
@@ -3976,7 +3963,7 @@ export default function CoindexApp() {
                                   <span>Média mensal: {formatBRL(monthSummary.expense / filterMonthsCount)}</span>
                                 ) : (
                                   <span className="flex items-center gap-1">
-                                    <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
+                                    <ArrowDownRight className="w-3.5 h-3.5 text-[#FF2A85]" />
                                     {monthSummary.expenseDiff >= 0
                                       ? `+${monthSummary.expenseDiff}%`
                                       : `${monthSummary.expenseDiff}%`}{" "}
@@ -3987,15 +3974,15 @@ export default function CoindexApp() {
                             </div>
 
                             {/* Card 3: Aportes Brutos */}
-                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-indigo-950/40 to-slate-950/90 border border-indigo-500/25 flex flex-col justify-between shadow-lg">
+                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#A855F7]/10 via-[#0d061c]/90 to-[#07030f] border border-[#A855F7]/30 flex flex-col justify-between shadow-lg shadow-[#A855F7]/5">
                               <div>
                                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                                   <span>{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
-                                  <div className="p-1 rounded-lg bg-indigo-500/15 text-indigo-400">
+                                  <div className="p-1 rounded-lg bg-[#A855F7]/15 text-[#C084FC]">
                                     <PiggyBank className="w-3.5 h-3.5" />
                                   </div>
                                 </div>
-                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-indigo-400 leading-tight mt-0.5">
+                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#C084FC] drop-shadow-[0_0_10px_rgba(192,132,252,0.25)] leading-tight mt-0.5">
                                   {formatBRL(monthSummary.aportes)}
                                 </p>
                               </div>
@@ -4011,17 +3998,17 @@ export default function CoindexApp() {
                             </div>
 
                             {/* Card 4: Saldo Livre / Balanço Operacional Líquido */}
-                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-sky-950/40 to-slate-950/90 border border-sky-500/25 flex flex-col justify-between shadow-lg">
+                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF6B4A]/10 via-[#0d061c]/90 to-[#07030f] border border-[#FF6B4A]/25 flex flex-col justify-between shadow-lg shadow-[#FF6B4A]/5">
                               <div>
                                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                                   <span>{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
-                                  <div className="p-1 rounded-lg bg-sky-500/15 text-sky-400">
+                                  <div className="p-1 rounded-lg bg-[#FF6B4A]/15 text-[#FF6B4A]">
                                     <Wallet className="w-3.5 h-3.5" />
                                   </div>
                                 </div>
                                 <p
                                   className={`text-lg sm:text-xl font-bold font-mono tabular-nums leading-tight mt-0.5 ${
-                                    monthSummary.balance >= 0 ? "text-sky-400" : "text-rose-400"
+                                    monthSummary.balance >= 0 ? "text-[#00F5D4] drop-shadow-[0_0_10px_rgba(0,245,212,0.22)]" : "text-[#FF2A85] drop-shadow-[0_0_10px_rgba(255,42,133,0.25)]"
                                   }`}
                                 >
                                   {formatBRL(monthSummary.balance)}
@@ -4032,10 +4019,10 @@ export default function CoindexApp() {
                               {selectedMonth === "ALL" ? (
                                 <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] font-mono tabular-nums">
                                   <span className="text-slate-400 flex items-center gap-1 font-sans">
-                                    <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
+                                    <Sparkles className="w-3 h-3 text-[#A855F7] shrink-0" />
                                     <span>Patrimônio em Caixinhas:</span>
                                   </span>
-                                  <span className="font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                                  <span className="font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums bg-[#00F5D4]/15 text-[#00F5D4] border-[#00F5D4]/30 shadow-[0_0_8px_rgba(0,245,212,0.2)]">
                                     {formatBRL(allTimeReserva.liquido)}
                                   </span>
                                 </div>
@@ -4045,16 +4032,16 @@ export default function CoindexApp() {
                                   title={`Safe-to-Spend: Contas (${formatBRL(safeToSpend.currentCash)}) + Entradas Pendentes (${formatBRL(safeToSpend.pendingIncome)}) - Fixos/Faturas Pendentes (${formatBRL(safeAdd(safeToSpend.pendingDirectExpenses, safeToSpend.pendingInvoices))}) | A Receber Aberto: ${formatBRL(receivablesAnalytics.totalOpen)}`}
                                 >
                                   <span className="text-slate-400 flex items-center gap-1 font-sans">
-                                    <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
+                                    <Sparkles className="w-3 h-3 text-[#A855F7] shrink-0" />
                                     <span>Safe-to-Spend:</span>
                                   </span>
                                   <span
                                     className={`font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums ${
                                       safeToSpend.projected > 200
-                                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                        ? "bg-[#00F5D4]/15 text-[#00F5D4] border-[#00F5D4]/30 shadow-[0_0_8px_rgba(0,245,212,0.2)]"
                                         : safeToSpend.projected >= 0
                                         ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                                        : "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                                        : "bg-[#FF2A85]/15 text-[#FF2A85] border-[#FF2A85]/30 shadow-[0_0_8px_rgba(255,42,133,0.2)]"
                                     }`}
                                   >
                                     {formatBRL(safeToSpend.projected)}
@@ -4070,17 +4057,11 @@ export default function CoindexApp() {
                             {/* Pílulas Minimalistas de Legenda no Cabeçalho do Gráfico (Sprint 16 & 19) */}
                             <div className="flex items-center justify-end gap-2 text-xs">
                               <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ backgroundColor: primarySeriesColor(chartTheme.patrimonyLine) }}
-                                />
+                                <span className="w-2 h-2 rounded-full shrink-0 bg-[#FF2A85] shadow-[0_0_8px_#FF2A85]" />
                                 <span>Patrimônio Acumulado</span>
                               </div>
                               <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ backgroundColor: chartTheme.aporteLine }}
-                                />
+                                <span className="w-2 h-2 rounded-full shrink-0 bg-[#A855F7] shadow-[0_0_8px_#A855F7]" />
                                 <span>Aportes Brutos</span>
                               </div>
                             </div>
@@ -4094,26 +4075,12 @@ export default function CoindexApp() {
                                 >
                                   <defs>
                                     <linearGradient id="gradPatrimony" x1="0" y1="0" x2="0" y2="1">
-                                      <stop
-                                        offset="0%"
-                                        stopColor={primarySeriesColor(chartTheme.patrimonyLine)}
-                                        stopOpacity={0.4}
-                                      />
-                                      <stop
-                                        offset="50%"
-                                        stopColor={primarySeriesColor(chartTheme.patrimonyLine)}
-                                        stopOpacity={0.15}
-                                      />
-                                      <stop
-                                        offset="100%"
-                                        stopColor={primarySeriesColor(chartTheme.patrimonyLine)}
-                                        stopOpacity={0.0}
-                                      />
+                                      <stop offset="0%" stopColor="#FF2A85" stopOpacity={0.45} />
+                                      <stop offset="100%" stopColor="#A855F7" stopOpacity={0.02} />
                                     </linearGradient>
                                     <linearGradient id="gradAporte" x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="0%" stopColor={chartTheme.aporteLine} stopOpacity={0.35} />
-                                      <stop offset="50%" stopColor={chartTheme.aporteLine} stopOpacity={0.12} />
-                                      <stop offset="100%" stopColor={chartTheme.aporteLine} stopOpacity={0.0} />
+                                      <stop offset="0%" stopColor="#A855F7" stopOpacity={0.35} />
+                                      <stop offset="100%" stopColor="#A855F7" stopOpacity={0.0} />
                                     </linearGradient>
                                   </defs>
 
@@ -4121,7 +4088,7 @@ export default function CoindexApp() {
                                     <CartesianGrid
                                       vertical={false}
                                       strokeDasharray="3 3"
-                                      stroke="rgba(148, 163, 184, 0.08)"
+                                      stroke="rgba(168, 85, 247, 0.12)"
                                     />
                                   )}
 
@@ -4158,10 +4125,10 @@ export default function CoindexApp() {
                                     type="monotone"
                                     dataKey="acumulado"
                                     name="Patrimônio Acumulado"
-                                    stroke={primarySeriesColor(chartTheme.patrimonyLine)}
-                                    strokeWidth={2.5}
+                                    stroke="#FF2A85"
+                                    strokeWidth={3}
                                     dot={false}
-                                    activeDot={{ r: 5, strokeWidth: 2, stroke: "#0f172a" }}
+                                    activeDot={{ r: 5, strokeWidth: 2, stroke: "#FF2A85", fill: "#0d061c" }}
                                     fill="url(#gradPatrimony)"
                                     fillOpacity={1}
                                     connectNulls={true}
@@ -4170,10 +4137,10 @@ export default function CoindexApp() {
                                     type="monotone"
                                     dataKey="aportado"
                                     name="Aportes Brutos"
-                                    stroke={chartTheme.aporteLine}
+                                    stroke="#A855F7"
                                     strokeWidth={2.5}
                                     dot={false}
-                                    activeDot={{ r: 5, strokeWidth: 2, stroke: "#0f172a" }}
+                                    activeDot={{ r: 5, strokeWidth: 2, stroke: "#A855F7", fill: "#0d061c" }}
                                     fill="url(#gradAporte)"
                                     fillOpacity={1}
                                     connectNulls={true}
@@ -4628,7 +4595,7 @@ export default function CoindexApp() {
       {/* COMMAND PALETTE MODAL (CTRL + K) */}
       {showCommandModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-indigo-500/30 shadow-2xl overflow-hidden text-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] overflow-hidden text-xs">
             <div className="p-3.5 border-b border-white/10 flex items-center gap-2.5 bg-slate-950/70">
               <Search className="w-4 h-4 text-indigo-400" />
               <input
@@ -4791,7 +4758,7 @@ export default function CoindexApp() {
       {/* MODAL DE CHANGELOG */}
       {showChangelogModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-indigo-500/30 p-6 shadow-2xl space-y-4 text-xs max-h-[80vh] overflow-y-auto">
+          <div className="w-full max-w-lg rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 p-6 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] space-y-4 text-xs max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="text-base font-extrabold text-white">Histórico de Versões (Changelog)</h3>
               <button
@@ -4824,7 +4791,7 @@ export default function CoindexApp() {
       {/* MODAL DE EXCLUSÃO INTELIGENTE DE SÉRIE PARCELADA */}
       {deleteSeriesModal.isOpen && deleteSeriesModal.targetTx && deleteSeriesModal.seriesData && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-slate-900 border border-rose-500/30 p-6 shadow-2xl space-y-4 text-xs">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#FF2A85]/40 p-6 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.2)] space-y-4 text-xs">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
@@ -4949,7 +4916,7 @@ export default function CoindexApp() {
       {/* MODAL DE CONFIRMAÇÃO CUSTOMIZADO (Sprint 15 - Clara Vance) */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-slate-950/95 border border-rose-500/30 p-6 shadow-2xl shadow-rose-950/40 space-y-4 animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-sm rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#FF2A85]/40 p-6 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.2)] space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0">
                 <AlertTriangle className="w-5 h-5" />

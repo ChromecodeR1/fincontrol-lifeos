@@ -58,7 +58,7 @@ export function ProfileModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-3xl bg-slate-950/95 border border-indigo-500/30 p-6 shadow-2xl space-y-6 text-xs animate-in fade-in zoom-in-95">
+      <div className="w-full max-w-md rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 p-6 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] space-y-6 text-xs animate-in fade-in zoom-in-95">
         {/* Cabeçalho */}
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="space-y-0.5">
@@ -221,7 +221,7 @@ export function ProfileModal({
             type="button"
             disabled={isSaving}
             onClick={handleSave}
-            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 transition disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] text-white font-semibold shadow-[0_0_18px_rgba(255,42,133,0.38)] border border-pink-400/30 flex items-center gap-1.5 transition disabled:opacity-50"
           >
             <Check className="w-4 h-4" /> Salvar Perfil
           </button>

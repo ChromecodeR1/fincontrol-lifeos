@@ -1653,7 +1653,9 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <ThemeSegmentedControl themeMode={themeMode} onChange={changeThemeMode} />
+            <span className="px-3 py-1.5 rounded-xl bg-pink-500/15 border border-pink-500/30 text-xs font-bold text-pink-300 flex items-center gap-1.5 shadow-[0_0_12px_rgba(255,42,133,0.2)]">
+              <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Cyberpunk Neon
+            </span>
             <button type="button" onClick={handleExportFullBackupJSON} className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-bold text-emerald-300 flex items-center gap-1.5 transition">
               <Download className="w-3.5 h-3.5" /> Backup (.JSON)
             </button>

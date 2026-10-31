@@ -272,7 +272,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-slate-900 border border-indigo-500/30 p-6 shadow-2xl space-y-4 text-xs"
+        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 p-6 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] space-y-4 text-xs"
       >
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <h3 className="text-base font-extrabold text-white flex items-center gap-2">
@@ -1326,7 +1326,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 ? "bg-sky-600 hover:bg-sky-500 shadow-lg shadow-sky-600/25"
                 : isPostoExpress
                 ? "bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-600/20"
-                : "bg-emerald-600 hover:bg-emerald-500"
+                : "bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] shadow-[0_0_18px_rgba(255,42,133,0.38)] border border-pink-400/30"
             }`}
           >
             {isSavingTx ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

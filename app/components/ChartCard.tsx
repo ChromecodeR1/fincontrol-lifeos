@@ -87,7 +87,7 @@ export default function ChartCard({
       }}
       className={`${spanClass} relative rounded-2xl border transition-all duration-200 ${
         isDropTarget
-          ? "border-indigo-500 ring-2 ring-indigo-500/40"
+          ? "border-[#FF2A85] ring-2 ring-[#FF2A85]/40 shadow-[0_0_20px_rgba(255,42,133,0.3)]"
           : "border-slate-800/80"
       } ${isDragging ? " scale-[0.99] opacity-60" : "opacity-100"} bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm ${className}`}
     >

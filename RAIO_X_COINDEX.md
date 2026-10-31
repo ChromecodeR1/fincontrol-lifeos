@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.11.0`  
-> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 19)  
+> **Versão da Aplicação:** `0.12.0`  
+> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 20 — Design System Cyberpunk Neon)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -296,33 +296,35 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
 
 ---
 
-## 6. Padrões de Interface & Design (Cyber-Glassmorphism)
+## 6. Padrões de Interface & Design (02. Cyberpunk Neon — Synthwave Spark)
 
-1. **Paleta de Superfícies:**
-   - Backgrounds profundos: `#040711` (base geral) e `#0B1324` / `#090D16` (cards).
-   - Vidro Translúcido: Classes `bg-slate-950/95` e `bg-slate-900/90` com `backdrop-blur-xl` ou `backdrop-blur-2xl`.
-   - Bordas Sutis: `border border-white/[0.08]` ou `border-white/10`.
-   - Acentos: Ciano (`#06b6d4`), Esmeralda (`#10b981`), Violeta/Índigo (`#6366f1`).
+1. **Paleta de Superfícies & Atmosfera Laser:**
+   - Fundo base: Obsidian-Violet `--cyber-void: #07030f` com iluminação radial fixa (`#FF2A85` 14%, `#A855F7` 14% e `#6366F1` 10%).
+   - Cards e Janelas: `--cyber-card: rgba(19, 9, 39, 0.82)` com `backdrop-blur-xl`, borda em Electric Purple `rgba(168, 85, 247, 0.20)` e inset laser superior `rgba(255, 42, 133, 0.18)`.
+   - Modais e Popovers Flutuantes: `bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)]`.
+   - Inputs e Selects: `bg-[rgba(13,6,28,0.92)] text-slate-100 border-[#A855F7]/28` com foco vibrante em Neon Pink (`#FF2A85`).
+   - Modo Escuro Permanente: `color-scheme: dark !important;` forçado em `html` e `body`, eliminando seletor de tema frágil e impedindo qualquer elemento branco indesejado.
 
-2. **Slim KPI Cards (Compactação Visual):**
-   - Padding reduzido (`p-4` ou `p-5`), eliminando espaços verticais ociosos.
-   - Tipografia de valor: `text-2xl` a `text-3xl` em `font-bold text-white tracking-tight tabular-nums`.
-   - Rodapé fino e discreto para métricas secundárias (médias mensais, reserva em caixinhas).
+2. **Slim KPI Cards no Padrão Synthwave Spark:**
+   - **Entradas / Receitas:** Neon Mint/Cyan (`text-[#00F5D4] drop-shadow-[0_0_10px_rgba(0,245,212,0.22)]`) com borda `border-[#00F5D4]/25`.
+   - **Saídas & Despesas:** Neon Laser Pink (`text-[#FF2A85] drop-shadow-[0_0_10px_rgba(255,42,133,0.25)]`) com borda `border-[#FF2A85]/30`.
+   - **Aportes / Investimentos:** Electric Violet (`text-[#C084FC] drop-shadow-[0_0_10px_rgba(192,132,252,0.25)]`) com borda `border-[#A855F7]/30`.
+   - **Saldo Livre / Balanço:** Synthwave Coral/Cyan com destaque limpo e rodapé adaptativo de Safe-to-Spend / Caixinhas.
 
-3. **Recharts Customizado (Zero White Rings):**
-   - Reset via `globals.css` das propriedades `:focus` e `:focus-visible` em `.recharts-wrapper`, `.recharts-surface` e `.recharts-sector`.
-   - Cursors escuros semi-transparentes (`rgba(255, 255, 255, 0.03)`).
-   - Tooltips com fundo `bg-slate-950/95`, borda `border-white/10` e sombra de alta elevação.
+3. **Recharts Synthwave & Zero White Rings:**
+   - Reset global via `globals.css` das propriedades `:focus` e `:focus-visible` em `.recharts-wrapper`, `.recharts-surface` e `.recharts-sector`.
+   - **Evolução do Meu Patrimônio:** Série Acumulado com linha `stroke="#FF2A85"` (3px) e gradiente vertical de `rgba(255,42,133,0.45)` para `rgba(168,85,247,0.02)`. Série Aportes Brutos com linha `stroke="#A855F7"` (2.5px) e gradiente vertical `rgba(168,85,247,0.35)`.
+   - **Para Onde Vai o Meu Dinheiro:** Fatias com a paleta harmônica Synthwave `['#FF2A85', '#FF6B4A', '#A855F7', '#6366F1', '#00F5D4', '#F43F5E', '#D946EF', '#8B5CF6']`.
+   - Tooltips cibernéticos violeta escuro (`bg-[#0d061c]/95 border border-[#FF2A85]/40 shadow-[0_0_20px_rgba(255,42,133,0.25)]`).
 
-4. **Identidade Visual — Fintech Prism Logo:**
-   - Hexágono isométrico tridimensional em SVG.
-   - Faceta superior translúcida em Ciano e Esmeralda.
+4. **Identidade Visual — Fintech Prism Logo & Favicon:**
+   - Hexágono isométrico tridimensional em degradê Cyberpunk (`#FF2A85` -> `#A855F7` -> `#00F5D4`).
    - Camadas de liquidez isométricas (Liquidity Strata).
-   - Três barras verticais ascendentes internas representando o índice financeiro em crescimento, coroadas por um vértice luminoso de alta liquidez.
+   - Três barras verticais ascendentes internas de índice com trajetória laser e vértice em Neon Cyan.
 
 ---
 
-## 7. Histórico Completo de Sprints (Sprints 1 a 19)
+## 7. Histórico Completo de Sprints (Sprints 1 a 20)
 
 - **Sprint 1 — Fundação Arquitetural:** Criação da estrutura base em Next.js App Router, estado reativo global, paleta Cyber-Glassmorphism e integração inicial com Supabase e Google Sheets.
 - **Sprint 2 — Seleção Condicional de Pagamento:** Modal de Lançamentos inteligente: exibição condicional de seletores de Cartão de Crédito e Fatura ao escolher método de crédito, ou Banco Emissor para Pix/Débito.
@@ -348,6 +350,15 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
   - Correção de clipping em popovers de filtros da tabela (`z-[100]`) e ativação do botão `+ Novo Lançamento`.
   - Reforma e desmembramento de categorias compostas (`migrateLegacyCategory`).
   - Lançamento da nova identidade vetorial **Fintech Prism** (`app/icon.svg`, `CoindexLogo` e Favicon do navegador).
+- **Sprint 20 — Design System Oficial "02. Cyberpunk Neon — Synthwave Spark":**
+  - Eliminação definitiva do seletor de tema frágil na Topbar e unificação 100% no modo escuro Cyberpunk Neon (`color-scheme: dark !important;`).
+  - Atmosfera com gradientes radiais Obsidian-Violeta e variáveis oficiais `--cyber-*` em `app/globals.css`.
+  - Item ativo da Sidebar lateral estilizado com o gradiente Synthwave Spark (`#FF2A85` -> `#D946EF` -> `#8B5CF6`).
+  - Botão principal `+ Novo Lançamento` com degradê laser vibrante e sombra neon (`#FF2A85` -> `#A855F7`).
+  - KPIs do topo com acentos Neon Mint (`#00F5D4`), Laser Pink (`#FF2A85`), Electric Violet (`#C084FC`) e Coral (`#FF6B4A`).
+  - Gráfico de Patrimônio com curvas magenta/purple e Donut estilizado com a paleta harmônica Synthwave.
+  - Popovers de filtro e modais unificados no estilo vidro violeta escuro `bg-[#110724]/95` com checkboxes em `accent-[#FF2A85]`.
+  - Logo Coindex e Favicon atualizados para a paleta Cyberpunk Neon (`#FF2A85` -> `#A855F7` -> `#00F5D4`).
 
 ---
 
