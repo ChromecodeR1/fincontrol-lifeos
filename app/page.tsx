@@ -2275,7 +2275,7 @@ export default function CoindexApp() {
 
           let cat = "Moradia";
           let pMethod = "PIX";
-          let cType: CostType = "Fixo";
+          const cType: CostType = "Fixo";
           let status: TxStatus = "Pago";
           let cardUsed: string | undefined = undefined;
           let bankAccount: string | undefined = banks[0]?.name || "Nubank";
