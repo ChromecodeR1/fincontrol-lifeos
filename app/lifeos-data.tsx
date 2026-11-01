@@ -52,13 +52,17 @@ import {
   ArrowLeftRight,
   Activity,
   FileText,
-  Layers
+  Layers,
+  Bike,
+  FileCheck,
+  Pill,
+  Landmark
 } from "lucide-react";
 
 export type CostType = "Fixo" | "Variável";
 export type PaymentMethod = string;
-export type TxStatus = "Pago" | "Pendente / Na Fatura";
-export type FlowType = "INCOME" | "EXPENSE" | "INVESTMENT" | "NEUTRAL";
+export type TxStatus = "Pago" | "Pendente" | "Na Fatura" | "Pendente / Na Fatura";
+export type FlowType = "INCOME" | "EXPENSE" | "INVESTMENT" | "NEUTRAL" | "RECEIVABLE";
 export type CurveType = "monotone" | "natural" | "linear" | "step";
 export type ThemeMode = "branco" | "tradicional" | "noturno";
 export type ActiveTab =
@@ -102,10 +106,14 @@ export interface Transaction {
   costType: CostType;
   paymentMethod: PaymentMethod;
   cardUsed?: string;
+  cardId?: string;
   bankAccount?: string;
+  bankId?: string;
   status: TxStatus;
   km?: number;
   liters?: number;
+  fuelType?: "Gasolina" | "Etanol";
+  fullTank?: boolean;
   iconUrl?: string;
   wishlistId?: string;
   updatedAt?: string;
@@ -388,9 +396,21 @@ export function isResgateCategory(category?: string | null): boolean {
   return lower.includes("resgate");
 }
 
-export function normalizeStatus(st?: string): TxStatus {
+export function normalizeStatus(st?: string, paymentMethod?: string): TxStatus {
   if (!st) return "Pago";
-  return st.includes("Pendente") ? "Pendente / Na Fatura" : "Pago";
+  const s = st.trim();
+  if (s === "Pago") return "Pago";
+  if (s === "Na Fatura") return "Na Fatura";
+  if (s === "Pendente") return "Pendente";
+  if (s === "Pendente / Na Fatura" || s.includes("Fatura")) {
+    if (paymentMethod && paymentMethod.toLowerCase().includes("crédito")) return "Na Fatura";
+    return "Pendente";
+  }
+  if (s.includes("Pendente")) {
+    if (paymentMethod && paymentMethod.toLowerCase().includes("crédito")) return "Na Fatura";
+    return "Pendente";
+  }
+  return "Pago";
 }
 
 // Motor de Datas e Calendário Seguro sem UTC Shift (Sprint 21)
@@ -646,6 +666,25 @@ export function migrateLegacyCategory(category?: string | null, description = ""
   const c = category.trim();
   const d = (description || "").toLowerCase();
 
+  // Moradia / Aluguel
+  if (c === "Moradia / Aluguel" || c === "Moradia/Aluguel") {
+    return d.includes("aluguel") || d.includes("condomínio") || d.includes("condominio") ? "Aluguel" : "Moradia";
+  }
+
+  // Alimentação / Restaurante
+  if (c === "Alimentação / Restaurante" || c === "Alimentacao / Restaurante" || c === "Alimentação/Restaurante") {
+    return d.includes("restaurante") || d.includes("bar") || d.includes("churrasco") || d.includes("jantar") || d.includes("almoço") || d.includes("almoco")
+      ? "Restaurante"
+      : "Alimentação";
+  }
+
+  // Educação / Cursos
+  if (c === "Educação / Cursos" || c === "Educacao / Cursos" || c === "Educação/Cursos" || c === "Educacao/Cursos") {
+    return d.includes("curso") || d.includes("udemy") || d.includes("alura") || d.includes("livro") || d.includes("bootcamp")
+      ? "Cursos"
+      : "Educação";
+  }
+
   // Renomeações diretas
   if (
     c === "Gastos Pessoais / Besteiras" ||
@@ -669,7 +708,7 @@ export function migrateLegacyCategory(category?: string | null, description = ""
     c === "Gasolina / Combustivel" ||
     c === "Gasolina/Combustivel"
   ) {
-    return "Gasolina";
+    return "Combustível (Gasolina / Etanol)";
   }
 
   // Divisões baseadas em descrição
@@ -701,6 +740,7 @@ export function migrateLegacyCategory(category?: string | null, description = ""
 
 export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = [
   { name: "Salário", flow: "INCOME" },
+  { name: "Receita Extra", flow: "INCOME" },
   { name: "Benefícios (VA/Combustível)", flow: "INCOME" },
   { name: "Comissão", flow: "INCOME" },
   { name: "Serviços", flow: "INCOME" },
@@ -711,16 +751,27 @@ export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = [
   { name: "Transferência entre Contas", flow: "NEUTRAL" },
   { name: "Recebimento de Empréstimo", flow: "NEUTRAL" },
   { name: "Pagamento de Fatura", flow: "NEUTRAL" },
-  { name: "A Receber", flow: "EXPENSE" },
+  { name: "A Receber", flow: "RECEIVABLE" },
   { name: "Alimentação", flow: "EXPENSE" },
+  { name: "Restaurante", flow: "EXPENSE" },
+  { name: "Delivery", flow: "EXPENSE" },
   { name: "Moradia", flow: "EXPENSE" },
+  { name: "Aluguel", flow: "EXPENSE" },
+  { name: "Água & Gás", flow: "EXPENSE" },
+  { name: "Celular / Telefonia", flow: "EXPENSE" },
+  { name: "Impostos & Taxas", flow: "EXPENSE" },
+  { name: "Transporte / Uber", flow: "EXPENSE" },
+  { name: "Cuidados Pessoais", flow: "EXPENSE" },
   { name: "Gastos Pessoais", flow: "EXPENSE" },
   { name: "Saúde", flow: "EXPENSE" },
+  { name: "Farmácia", flow: "EXPENSE" },
   { name: "Academia", flow: "EXPENSE" },
   { name: "Assinaturas", flow: "EXPENSE" },
   { name: "Internet", flow: "EXPENSE" },
   { name: "Lazer", flow: "EXPENSE" },
   { name: "Educação", flow: "EXPENSE" },
+  { name: "Cursos", flow: "EXPENSE" },
+  { name: "Combustível (Gasolina / Etanol)", flow: "EXPENSE", isAuto: true },
   { name: "Gasolina", flow: "EXPENSE", isAuto: true },
   { name: "Manutenção", flow: "EXPENSE", isAuto: true },
   { name: "Troca de Óleo", flow: "EXPENSE", isAuto: true },
@@ -741,6 +792,7 @@ export const DEFAULT_PAYMENT_METHODS: string[] = [
 
 export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   "Salário": "#10b981",
+  "Receita Extra": "#00F5D4",
   "Benefícios (VA/Combustível)": "#34d399",
   "Comissão": "#059669",
   "Serviços": "#2dd4bf",
@@ -753,14 +805,25 @@ export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   "Pagamento de Fatura": "#8b5cf6",
   "A Receber": "#f59e0b",
   "Alimentação": "#f43f5e",
+  "Restaurante": "#fb7185",
+  "Delivery": "#f97316",
   "Moradia": "#8b5cf6",
+  "Aluguel": "#7c3aed",
+  "Água & Gás": "#0284c7",
+  "Celular / Telefonia": "#38bdf8",
+  "Impostos & Taxas": "#e11d48",
+  "Transporte / Uber": "#f59e0b",
+  "Cuidados Pessoais": "#f472b6",
   "Gastos Pessoais": "#ec4899",
   "Saúde": "#06b6d4",
+  "Farmácia": "#14b8a6",
   "Academia": "#14b8a6",
   "Assinaturas": "#8b5cf6",
   "Internet": "#3b82f6",
   "Lazer": "#a855f7",
   "Educação": "#0ea5e9",
+  "Cursos": "#60a5fa",
+  "Combustível (Gasolina / Etanol)": "#f59e0b",
   "Gasolina": "#f59e0b",
   "Manutenção": "#ea580c",
   "Troca de Óleo": "#d97706",
@@ -769,6 +832,9 @@ export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   "Seguro": "#64748b",
   "Estacionamento": "#fbbf24",
   // Aliases de compatibilidade histórica
+  "Moradia / Aluguel": "#8b5cf6",
+  "Alimentação / Restaurante": "#f43f5e",
+  "Educação / Cursos": "#0ea5e9",
   "Gastos Pessoais / Besteiras": "#ec4899",
   "Saúde/Academia": "#06b6d4",
   "Assinaturas/Internet": "#3b82f6",
@@ -889,37 +955,41 @@ export function renderCategorySemanticIcon(category: string, color: string) {
   if (c.includes("transferência") || c.includes("transferencia"))
     return <ArrowLeftRight className="w-3.5 h-3.5" style={style} />;
   if (c.includes("receber") || c.includes("recebimento")) return <HandCoins className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("salário") || c.includes("comissão") || c.includes("rendimento"))
+  if (c.includes("salário") || c.includes("salario") || c.includes("comissão") || c.includes("comissao") || c.includes("rendimento") || c.includes("receita extra"))
     return <Banknote className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("benefício") || c.includes("ecx") || c.includes("va"))
+  if (c.includes("benefício") || c.includes("beneficio") || c.includes("ecx") || c.includes("va"))
     return <CreditCard className="w-3.5 h-3.5" style={style} />;
   if (c.includes("resgate"))
     return <TrendingDown className="w-3.5 h-3.5" style={style} />;
   if (c.includes("aporte") || c.includes("investimento") || c.includes("reserva"))
-    return <PiggyBank className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("alimentação") || c.includes("mercado") || c.includes("restaurante"))
+    return <Landmark className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("delivery") || c.includes("ifood") || c.includes("entrega") || c.includes("uber eats"))
+    return <Bike className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("farmácia") || c.includes("farmacia") || c.includes("remédio") || c.includes("remedio"))
+    return <Pill className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("alimentação") || c.includes("alimentacao") || c.includes("mercado") || c.includes("restaurante"))
     return <Utensils className="w-3.5 h-3.5" style={style} />;
   if (c.includes("moradia") || c.includes("aluguel") || c.includes("casa"))
     return <Home className="w-3.5 h-3.5" style={style} />;
   if (c.includes("academia"))
     return <Activity className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("saúde") || c.includes("médico"))
+  if (c.includes("saúde") || c.includes("saude") || c.includes("médico") || c.includes("medico"))
     return <HeartPulse className="w-3.5 h-3.5" style={style} />;
   if (c.includes("internet") || c.includes("fibra"))
     return <Wifi className="w-3.5 h-3.5" style={style} />;
   if (c.includes("assinatura"))
     return <Layers className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("educação") || c.includes("faculdade") || c.includes("curso"))
+  if (c.includes("educação") || c.includes("educacao") || c.includes("faculdade") || c.includes("curso"))
     return <GraduationCap className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("gasolina") || c.includes("combustível") || c.includes("posto"))
+  if (c.includes("gasolina") || c.includes("combustível") || c.includes("combustivel") || c.includes("etanol") || c.includes("posto"))
     return <Fuel className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("manutenção") || c.includes("óleo") || c.includes("revisão"))
+  if (c.includes("manutenção") || c.includes("manutencao") || c.includes("óleo") || c.includes("oleo") || c.includes("revisão") || c.includes("revisao"))
     return <Wrench className="w-3.5 h-3.5" style={style} />;
   if (c.includes("licenciamento"))
-    return <FileText className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("ipva") || c.includes("seguro") || c.includes("estacionamento") || c.includes("veículo"))
+    return <FileCheck className="w-3.5 h-3.5" style={style} />;
+  if (c.includes("ipva") || c.includes("seguro") || c.includes("estacionamento") || c.includes("veículo") || c.includes("veiculo"))
     return <Car className="w-3.5 h-3.5" style={style} />;
-  if (c.includes("serviço") || c.includes("trabalho"))
+  if (c.includes("serviço") || c.includes("servico") || c.includes("trabalho"))
     return <Briefcase className="w-3.5 h-3.5" style={style} />;
   if (c.includes("lazer")) return <Coffee className="w-3.5 h-3.5" style={style} />;
   if (c.includes("pessoais") || c.includes("besteira") || c.includes("compra"))
@@ -927,9 +997,62 @@ export function renderCategorySemanticIcon(category: string, color: string) {
   return <Tag className="w-3.5 h-3.5" style={style} />;
 }
 
+export function resolveTransactionFlowType(
+  tx: {
+    category?: string;
+    flowType?: FlowType;
+    isTransfer?: boolean;
+    isInvoicePayment?: boolean;
+    isReceivableSettlement?: boolean;
+    isSplit?: boolean;
+    [key: string]: unknown;
+  },
+  catalog = DEFAULT_CATEGORIES_CATALOG
+): FlowType {
+  if (tx.isTransfer || tx.isInvoicePayment || tx.isReceivableSettlement) return "NEUTRAL";
+  if (tx.flowType) return tx.flowType;
+
+  const cat = (tx.category || "").trim().toLowerCase();
+  if (
+    cat.includes("transferência") ||
+    cat.includes("transferencia") ||
+    cat.includes("pagamento de fatura") ||
+    cat.includes("pagamento fatura") ||
+    cat.includes("recebimento de empréstimo") ||
+    cat.includes("recebimento de emprestimo")
+  ) {
+    return "NEUTRAL";
+  }
+  if (cat === "a receber" || cat.includes("a receber")) {
+    return "RECEIVABLE";
+  }
+  const found = catalog.find((c) => c.name.toLowerCase() === cat);
+  if (found) return found.flow;
+
+  if (
+    cat.includes("salário") ||
+    cat.includes("salario") ||
+    cat.includes("comissão") ||
+    cat.includes("comissao") ||
+    cat.includes("serviços") ||
+    cat.includes("servicos") ||
+    cat.includes("rendimentos") ||
+    cat.includes("benefícios") ||
+    cat.includes("beneficios") ||
+    cat.includes("receita extra")
+  ) {
+    return "INCOME";
+  }
+  if (cat.includes("aporte") || cat.includes("investimento") || cat.includes("reserva") || cat.includes("resgate")) {
+    return "INVESTMENT";
+  }
+  return "EXPENSE";
+}
+
 export function getAutomaticStatus(method: PaymentMethod, category?: string): TxStatus {
-  if (category === "A Receber") return "Pendente / Na Fatura";
-  return method === "Cartão de Crédito" ? "Pendente / Na Fatura" : "Pago";
+  if (category === "A Receber") return "Pendente";
+  if (method === "Cartão de Crédito") return "Na Fatura";
+  return "Pago";
 }
 
 export const INITIAL_BANKS: (BankInstitution & BankItem)[] = [

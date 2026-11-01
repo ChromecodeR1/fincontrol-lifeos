@@ -1,7 +1,25 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Fuel, Settings, Gauge, X, Award, Info } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Fuel,
+  Settings,
+  Gauge,
+  X,
+  Award,
+  Info,
+  Calculator,
+  Zap,
+  Car,
+  ShieldCheck,
+  Sparkles,
+  Percent,
+  CheckCircle2,
+  AlertCircle,
+  Wrench,
+  FileCheck,
+  Coins
+} from "lucide-react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -42,9 +60,15 @@ export interface VehiclesTabProps {
     distanceDriven: number;
     avgKmPerLiter: number;
     costPerKm: number;
+    tcoPerKm?: number;
     fuelTotal: number;
     maintenanceTotal: number;
     totalAutoSpent: number;
+    totalTCO?: number;
+    ipvaTotal?: number;
+    licenciamentoTotal?: number;
+    seguroTotal?: number;
+    estacionamentoTotal?: number;
     kmRecords: Array<{ date: string; km: number; [key: string]: unknown }>;
     [key: string]: unknown;
   };
@@ -101,13 +125,43 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
 
   const inmetroCfg = localInmetroConfig || DEFAULT_AUTO_INMETRO_CONFIG;
 
+  // Calculadora Rápida Etanol vs Gasolina Flex
+  const [calcGasPrice, setCalcGasPrice] = useState<string>("5.99");
+  const [calcEthPrice, setCalcEthPrice] = useState<string>("4.19");
+
   // 1. Filtragem e Análise de Combustível
   const fuelTxs: Transaction[] = autoMetrics.autoTxs.filter(
     (t: Transaction) =>
       t.category.toLowerCase().includes("gasolina") ||
       t.category.toLowerCase().includes("combustível") ||
+      t.category.toLowerCase().includes("etanol") ||
       (t.liters && t.liters > 0)
   );
+
+  // Pré-popula os preços da calculadora com o último registro de cada combustível se houver
+  useEffect(() => {
+    const lastGas = fuelTxs.find(
+      (t) =>
+        t.liters &&
+        t.liters > 0 &&
+        t.amount > 0 &&
+        (t.fuelType === "Gasolina" ||
+          (!t.fuelType && !t.description.toLowerCase().includes("etanol") && !t.category.toLowerCase().includes("etanol")))
+    );
+    if (lastGas && lastGas.liters) {
+      setCalcGasPrice((lastGas.amount / lastGas.liters).toFixed(2));
+    }
+    const lastEth = fuelTxs.find(
+      (t) =>
+        t.liters &&
+        t.liters > 0 &&
+        t.amount > 0 &&
+        (t.fuelType === "Etanol" || t.description.toLowerCase().includes("etanol") || t.category.toLowerCase().includes("etanol"))
+    );
+    if (lastEth && lastEth.liters) {
+      setCalcEthPrice((lastEth.amount / lastEth.liters).toFixed(2));
+    }
+  }, [fuelTxs.length]);
 
   // Abastecimento Mais Caro em Destaque
   const mostExpensiveFuel = fuelTxs.reduce(
@@ -145,6 +199,7 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
     if (dist > 0 && lit > 0) {
       const kml = Number((dist / lit).toFixed(2));
       const isEtanol =
+        curr.fuelType === "Etanol" ||
         curr.description.toLowerCase().includes("etanol") ||
         curr.description.toLowerCase().includes("álcool") ||
         curr.category.toLowerCase().includes("etanol");
@@ -519,13 +574,13 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
 
         <div className="glass-card px-3.5 py-2.5 rounded-2xl border border-indigo-500/25 flex flex-col justify-between">
           <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5 block">
-            Custo Médio / KM
+            Custo / KM (TCO)
           </span>
           <p className={`text-lg sm:text-xl font-bold text-indigo-400 font-mono tabular-nums leading-tight ${moneyBlur}`}>
-            {formatBRL(autoMetrics.costPerKm)}/km
+            {formatBRL(autoMetrics.tcoPerKm ?? autoMetrics.costPerKm)}/km
           </p>
           <span className={`text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums mt-0.5 ${moneyBlur}`}>
-            Total: {formatBRL(autoMetrics.totalAutoSpent)}
+            TCO: {formatBRL(autoMetrics.totalTCO ?? autoMetrics.totalAutoSpent)}
           </span>
         </div>
       </div>
@@ -764,6 +819,252 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
           </p>
         </div>
       </div>
+
+      {/* SPRINT 23: CALCULADORA RÁPIDA ETANOL VS. GASOLINA & TCO REAL POR KM */}
+      {(() => {
+        const gasPriceNum = parseFloat(calcGasPrice) || 0;
+        const ethPriceNum = parseFloat(calcEthPrice) || 0;
+        const parityRatio = gasPriceNum > 0 ? (ethPriceNum / gasPriceNum) * 100 : 0;
+        const inmetroRatio = (inmetroCfg.ethanolKmPerLiter / Math.max(0.1, inmetroCfg.gasolineKmPerLiter)) * 100;
+        const isEtanolAdvantage = parityRatio > 0 && parityRatio <= inmetroRatio;
+        const gasKmCost = inmetroCfg.gasolineKmPerLiter > 0 && gasPriceNum > 0 ? gasPriceNum / inmetroCfg.gasolineKmPerLiter : 0;
+        const ethKmCost = inmetroCfg.ethanolKmPerLiter > 0 && ethPriceNum > 0 ? ethPriceNum / inmetroCfg.ethanolKmPerLiter : 0;
+        const costDiffPerKm = Math.abs(gasKmCost - ethKmCost);
+        const tankKm = 50 * (isEtanolAdvantage ? inmetroCfg.ethanolKmPerLiter : inmetroCfg.gasolineKmPerLiter);
+        const tankSavings = costDiffPerKm * tankKm;
+
+        const totalTCO = autoMetrics.totalTCO ?? autoMetrics.totalAutoSpent;
+        const tcoPerKm = autoMetrics.tcoPerKm ?? autoMetrics.costPerKm;
+        const ipvaVal = Number(autoMetrics.ipvaTotal || 0);
+        const licVal = Number(autoMetrics.licenciamentoTotal || 0);
+        const seguroVal = Number(autoMetrics.seguroTotal || 0);
+        const estacVal = Number(autoMetrics.estacionamentoTotal || 0);
+        const fuelVal = autoMetrics.fuelTotal || 0;
+        const maintVal = autoMetrics.maintenanceTotal || 0;
+
+        const tcoItems = [
+          { label: "Combustível", amount: fuelVal, color: "#f59e0b", icon: Fuel },
+          { label: "Manutenção & Revisões", amount: maintVal, color: "#ef4444", icon: Wrench },
+          { label: "IPVA", amount: ipvaVal, color: "#a855f7", icon: FileCheck },
+          { label: "Licenciamento", amount: licVal, color: "#06b6d4", icon: FileCheck },
+          { label: "Seguro Auto", amount: seguroVal, color: "#3b82f6", icon: ShieldCheck },
+          { label: "Estacionamento / Pedágio", amount: estacVal, color: "#10b981", icon: Coins }
+        ].filter((i) => i.amount > 0);
+
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 1. CALCULADORA RÁPIDA ETANOL VS GASOLINA */}
+            <div className="glass-card p-6 rounded-3xl border border-[#FF2A85]/35 bg-gradient-to-br from-[#1b082e]/80 via-slate-900/90 to-slate-950 shadow-[0_10px_30px_rgba(0,0,0,0.65),0_0_20px_rgba(255,42,133,0.15)] space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-pink-500/20 text-[#FF2A85] border border-pink-500/30">
+                    <Calculator className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                      <span>Calculadora Flex — Etanol vs. Gasolina</span>
+                      <span className="px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-300 border border-pink-500/30 text-[10px] font-mono">
+                        Regra dos 70% + Paridade Real
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Compare os preços na bomba com a relação de consumo real do Ford Fiesta 1.0 ({inmetroCfg.ethanolKmPerLiter} / {inmetroCfg.gasolineKmPerLiter} km/L = {inmetroRatio.toFixed(1)}%).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Inputs de Preço na Bomba */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-2xl bg-slate-950/80 border border-amber-500/30 space-y-1">
+                  <label className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+                    <Fuel className="w-3.5 h-3.5 text-amber-400" /> Gasolina Comum (R$/L)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">R$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={calcGasPrice}
+                      onChange={(e) => setCalcGasPrice(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 text-white font-mono font-bold text-sm outline-none focus:border-amber-400 transition"
+                      placeholder="5,99"
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono block">
+                    Custo: {gasKmCost > 0 ? formatBRL(gasKmCost) : "—"}/km
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-950/80 border border-emerald-500/30 space-y-1">
+                  <label className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                    <span className="text-xs">🌱</span> Etanol Flex (R$/L)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">R$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={calcEthPrice}
+                      onChange={(e) => setCalcEthPrice(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 text-white font-mono font-bold text-sm outline-none focus:border-emerald-400 transition"
+                      placeholder="4,19"
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono block">
+                    Custo: {ethKmCost > 0 ? formatBRL(ethKmCost) : "—"}/km
+                  </span>
+                </div>
+              </div>
+
+              {/* Barra de Paridade Comparativa */}
+              <div className="p-3 rounded-2xl bg-slate-950/60 border border-white/10 space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-slate-300 flex items-center gap-1.5">
+                    <Percent className="w-3.5 h-3.5 text-indigo-400" /> Relação de Preço (Etanol ÷ Gasolina)
+                  </span>
+                  <strong className={`font-mono tabular-nums text-sm ${parityRatio <= inmetroRatio ? "text-emerald-400" : "text-amber-400"}`}>
+                    {parityRatio > 0 ? `${parityRatio.toFixed(1)}%` : "—"}
+                  </strong>
+                </div>
+
+                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden relative">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      parityRatio <= inmetroRatio ? "bg-emerald-500 shadow-[0_0_10px_#10b981]" : "bg-amber-500 shadow-[0_0_10px_#f59e0b]"
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(10, parityRatio))}%` }}
+                  />
+                </div>
+
+                <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                  <span>Regra Geral: 70,0%</span>
+                  <span className="text-indigo-300 font-bold">Paridade Fiesta Flex: {inmetroRatio.toFixed(1)}%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+
+              {/* Veredito Dinâmico */}
+              {parityRatio > 0 && (
+                <div
+                  className={`p-4 rounded-2xl border transition-all ${
+                    isEtanolAdvantage
+                      ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+                      : "bg-amber-950/40 border-amber-500/50 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {isEtanolAdvantage ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                    )}
+                    <strong className="text-sm font-black uppercase tracking-wide">
+                      {isEtanolAdvantage ? "Veredito: Abasteça com ETANOL" : "Veredito: Abasteça com GASOLINA"}
+                    </strong>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    {isEtanolAdvantage ? (
+                      <>
+                        O preço do Etanol está em <strong className="text-emerald-400 font-mono">{parityRatio.toFixed(1)}%</strong> da Gasolina, abaixo do limite de <strong className="text-white font-mono">{inmetroRatio.toFixed(1)}%</strong> do seu Fiesta. Você economiza cerca de <strong className="text-emerald-400 font-mono">{formatBRL(costDiffPerKm)}</strong> por km rodado (~{formatBRL(tankSavings)} por tanque cheio).
+                      </>
+                    ) : (
+                      <>
+                        O preço do Etanol está em <strong className="text-amber-400 font-mono">{parityRatio.toFixed(1)}%</strong> da Gasolina, acima da paridade ideal de <strong className="text-white font-mono">{inmetroRatio.toFixed(1)}%</strong>. A Gasolina Comum oferece maior autonomia e menor custo por km ({formatBRL(gasKmCost)}/km vs {formatBRL(ethKmCost)}/km).
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* 2. CARD DE TCO (CUSTO TOTAL DE PROPRIEDADE POR KM) */}
+            <div className="glass-card p-6 rounded-3xl border border-indigo-500/35 bg-gradient-to-br from-[#12082b]/80 via-slate-900/90 to-slate-950 shadow-[0_10px_30px_rgba(0,0,0,0.65),0_0_20px_rgba(99,102,241,0.15)] space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                    <Car className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                      <span>TCO Real — Custo Total de Propriedade</span>
+                      <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono">
+                        Consolidado
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Soma de Combustível + Manutenção + IPVA + Licenciamento + Seguro Auto + Estacionamento dividida pela quilometragem percorrida.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Destaque TCO Total e TCO por KM */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-indigo-500/30 space-y-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Custo Real por KM (TCO/KM)
+                  </span>
+                  <strong className={`text-2xl font-black text-indigo-300 font-mono tabular-nums block ${moneyBlur}`}>
+                    {formatBRL(tcoPerKm)}/km
+                  </strong>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Com base em {autoMetrics.distanceDriven.toLocaleString("pt-BR")} km rodados
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-pink-500/30 space-y-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Desembolso Total com o Veículo
+                  </span>
+                  <strong className={`text-2xl font-black text-[#FF2A85] font-mono tabular-nums block ${moneyBlur}`}>
+                    {formatBRL(totalTCO)}
+                  </strong>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {autoMetrics.autoTxs.length} registros automotivos
+                  </span>
+                </div>
+              </div>
+
+              {/* Breakdown de Custos do TCO */}
+              <div className="space-y-2 pt-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Composição do Custo de Propriedade
+                </span>
+                <div className="space-y-1.5">
+                  {tcoItems.map((item) => {
+                    const ItemIcon = item.icon;
+                    const pct = totalTCO > 0 ? Math.round((item.amount / totalTCO) * 100) : 0;
+                    return (
+                      <div
+                        key={item.label}
+                        className="p-2.5 rounded-xl bg-slate-950/70 border border-white/5 flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <ItemIcon className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="text-slate-200 font-medium">{item.label}</span>
+                        </div>
+                        <div className="flex items-center gap-2.5 font-mono">
+                          <span className="text-[10px] text-slate-400 font-bold">{pct}%</span>
+                          <strong className={`text-white tabular-nums ${moneyBlur}`}>
+                            {formatBRL(item.amount)}
+                          </strong>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* GRÁFICOS DO VEÍCULO */}
       <div className="grid grid-cols-12 gap-6">

@@ -42,6 +42,8 @@ export interface TransactionFormState {
   thirdPartyName?: string;
   personalAmount?: string;
   linkedReceivableId?: string;
+  fuelType?: "Gasolina" | "Etanol";
+  fullTank?: boolean;
 }
 
 export interface TransactionModalProps {
@@ -390,7 +392,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-sky-500 transition"
               >
                 <option value="Pago">Concluída / Efetuada</option>
-                <option value="Pendente / Na Fatura">Pendente / Agendada</option>
+                <option value="Pendente">Pendente / Agendada</option>
               </select>
             </div>
           </div>
@@ -658,6 +660,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">km</span>
                 </div>
+                {formState.km && autoMetrics.maxKm > 0 && Number(formState.km) < autoMetrics.maxKm && (
+                  <span className="text-[10px] text-amber-400 font-semibold block mt-1 leading-tight">
+                    ⚠️ Atenção: Odômetro digitado ({Number(formState.km).toLocaleString("pt-BR")} km) é menor que o registro anterior ({autoMetrics.maxKm.toLocaleString("pt-BR")} km).
+                  </span>
+                )}
                 {formState.km && autoMetrics.maxKm > 0 && Number(formState.km) > autoMetrics.maxKm && Number(formState.liters) > 0 && (
                   <span className="text-[10px] text-emerald-400 block mt-1 font-mono tabular-nums">
                     ⚡ +{Number(formState.km) - autoMetrics.maxKm} km (
@@ -676,6 +683,24 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500 text-xs tabular-nums"
                 />
               </div>
+            </div>
+
+            {/* Checkbox Tanque Cheio */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-white/10">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formState.fullTank !== false}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, fullTank: e.target.checked }))}
+                  className="w-4 h-4 rounded border-amber-500/50 bg-slate-900 text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
+                />
+                <span className="text-xs font-semibold text-slate-200">
+                  Abastecimento de Tanque Cheio
+                </span>
+              </label>
+              <span className="text-[10px] text-slate-400 font-mono">
+                {formState.fullTank !== false ? "Cálculo exato de km/L" : "Abastecimento parcial"}
+              </span>
             </div>
 
             {/* 5. Posto / Descrição */}
@@ -1282,7 +1307,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-slate-400 block mb-1">Odômetro / KM (Opcional)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-400 block">Odômetro / KM (Opcional)</label>
+                  {autoMetrics.maxKm > 0 && (
+                    <span className="text-[10px] text-indigo-400 font-mono tabular-nums">
+                      Ant.: {autoMetrics.maxKm.toLocaleString("pt-BR")} km
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   placeholder="Ex: 49120"
@@ -1290,6 +1322,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   onChange={(e) => setFormState((prev) => ({ ...prev, km: e.target.value }))}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono tabular-nums"
                 />
+                {formState.km && autoMetrics.maxKm > 0 && Number(formState.km) < autoMetrics.maxKm && (
+                  <span className="text-[10px] text-amber-400 font-semibold block mt-1 leading-tight">
+                    ⚠️ Odômetro informado menor que o anterior ({autoMetrics.maxKm.toLocaleString("pt-BR")} km).
+                  </span>
+                )}
               </div>
               <div>
                 <label className="text-slate-400 block mb-1">Litros Abastecidos (Opcional)</label>
@@ -1302,6 +1339,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono tabular-nums"
                 />
               </div>
+            </div>
+
+            {/* Situação / Status do Lançamento */}
+            <div>
+              <label className="text-slate-400 block mb-1 text-xs font-semibold">Situação / Status</label>
+              <select
+                value={formState.status}
+                onChange={(e) => setFormState((prev) => ({ ...prev, status: e.target.value as TxStatus }))}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-indigo-500 text-xs"
+              >
+                <option value="Pago">Pago / Liquidado</option>
+                <option value="Pendente">Pendente / A Pagar</option>
+                <option value="Na Fatura">Na Fatura do Cartão</option>
+              </select>
             </div>
           </div>
         )}

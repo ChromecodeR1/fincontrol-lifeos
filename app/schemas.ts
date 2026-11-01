@@ -33,11 +33,13 @@ export const TransactionSchema = z
     costType: z.enum(["Fixo", "Variável"] as const, {
       error: "O tipo de custo deve ser 'Fixo' ou 'Variável'."
     }).default("Variável"),
-    status: z.enum(["Pago", "Pendente / Na Fatura"] as const, {
-      error: "A situação deve ser 'Pago' ou 'Pendente / Na Fatura'."
+    status: z.enum(["Pago", "Pendente", "Na Fatura", "Pendente / Na Fatura"] as const, {
+      error: "A situação deve ser 'Pago', 'Pendente' ou 'Na Fatura'."
     }).default("Pago"),
     cardUsed: z.string().trim().optional(),
+    cardId: z.string().trim().optional(),
     bankAccount: z.string().trim().optional(),
+    bankId: z.string().trim().optional(),
     installmentInfo: z.string().optional(),
     installmentGroupId: z.string().optional(),
     invoiceMonth: z.string().optional(),
@@ -45,6 +47,8 @@ export const TransactionSchema = z
     paidAmount: z.number().min(0, "O valor abatido não pode ser negativo.").optional(),
     km: z.number().min(0, "A quilometragem não pode ser negativa.").optional(),
     liters: z.number().min(0, "A litragem não pode ser negativa.").optional(),
+    fuelType: z.enum(["Gasolina", "Etanol"] as const).optional(),
+    fullTank: z.boolean().optional(),
     iconUrl: z.string().optional(),
     wishlistId: z.string().optional(),
     updatedAt: z.string().optional(),
@@ -58,7 +62,7 @@ export const TransactionSchema = z
     linkedReceivableId: z.string().optional(),
     isSplitChild: z.boolean().optional(),
     linkedSplitParentId: z.string().optional(),
-    flowType: z.enum(["INCOME", "EXPENSE", "INVESTMENT", "NEUTRAL"] as const).optional(),
+    flowType: z.enum(["INCOME", "EXPENSE", "INVESTMENT", "NEUTRAL", "RECEIVABLE"] as const).optional(),
     installmentSeriesId: z.string().optional(),
     cashMonth: z.string().optional(),
     isInvoicePayment: z.boolean().optional(),

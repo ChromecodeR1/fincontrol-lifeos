@@ -13,6 +13,7 @@ import {
   Layers,
   CheckCircle2,
   Clock,
+  CreditCard,
   Pencil,
   Trash2,
   ChevronDown
@@ -208,10 +209,18 @@ const TransactionRow = React.memo<TransactionRowProps>(({
           className={`whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium leading-none transition ${
             tx.status === "Pago"
               ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
+              : tx.status === "Na Fatura"
+              ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25"
               : "bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
           }`}
         >
-          {tx.status === "Pago" ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+          {tx.status === "Pago" ? (
+            <CheckCircle2 className="w-3 h-3" />
+          ) : tx.status === "Na Fatura" ? (
+            <CreditCard className="w-3 h-3" />
+          ) : (
+            <Clock className="w-3 h-3" />
+          )}
           {tx.status}
         </button>
       </td>
@@ -290,7 +299,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
     dir: "desc"
   });
   const [activeFilterPopover, setActiveFilterPopover] = useState<TxSortKey | null>(null);
-  const [txStatusFilter, setTxStatusFilter] = useState<"ALL" | "PAGO" | "PENDENTE">("ALL");
+  const [txStatusFilter, setTxStatusFilter] = useState<"ALL" | "PAGO" | "PENDENTE" | "NA_FATURA">("ALL");
   const [columnFilters, setColumnFilters] = useState<TxColumnFilters>({
     categories: [],
     costTypes: [],
@@ -322,7 +331,8 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
     let result = filteredTransactions.filter((tx) => {
       // Filtro rápido de situação
       if (txStatusFilter === "PAGO" && tx.status !== "Pago") return false;
-      if (txStatusFilter === "PENDENTE" && tx.status === "Pago") return false;
+      if (txStatusFilter === "PENDENTE" && (tx.status === "Pago" || tx.status === "Na Fatura")) return false;
+      if (txStatusFilter === "NA_FATURA" && tx.status !== "Na Fatura" && tx.status !== "Pendente / Na Fatura") return false;
 
       // Filtro de categorias por coluna
       if (columnFilters.categories.length > 0 && !columnFilters.categories.includes(tx.category)) {
@@ -485,12 +495,13 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
             {[
               { id: "ALL", label: "Todos" },
               { id: "PAGO", label: "Pagos" },
-              { id: "PENDENTE", label: "Na Fatura / Pendentes" }
+              { id: "NA_FATURA", label: "Na Fatura" },
+              { id: "PENDENTE", label: "Pendentes" }
             ].map((st) => (
               <button
                 key={st.id}
                 type="button"
-                onClick={() => setTxStatusFilter(st.id as "ALL" | "PAGO" | "PENDENTE")}
+                onClick={() => setTxStatusFilter(st.id as "ALL" | "PAGO" | "PENDENTE" | "NA_FATURA")}
                 className={`px-2 py-1 rounded-lg font-bold transition text-xs ${
                   txStatusFilter === st.id ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
                 }`}

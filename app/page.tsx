@@ -144,6 +144,7 @@ import {
   calculatePatrimonyEvolution,
   calculateStaticStatusSummary,
   migrateLegacyCategory,
+  resolveTransactionFlowType,
   getUserItem,
   setUserItem,
   removeUserItem,
@@ -617,6 +618,8 @@ export default function CoindexApp() {
     thirdPartyName?: string;
     personalAmount?: string;
     linkedReceivableId?: string;
+    fuelType?: "Gasolina" | "Etanol";
+    fullTank?: boolean;
   }>({
     date: "2026-10-20",
     description: "",
@@ -638,7 +641,9 @@ export default function CoindexApp() {
     thirdPartyAmount: "",
     thirdPartyName: "",
     personalAmount: "",
-    linkedReceivableId: ""
+    linkedReceivableId: "",
+    fuelType: "Gasolina",
+    fullTank: true
   });
 
   // Estados das Abas Secundárias
@@ -1629,12 +1634,40 @@ export default function CoindexApp() {
     const distanceDriven = Math.max(0, maxKm - minKm);
     const totalLiters = autoTxs.reduce((a, b) => a + (b.liters || 0), 0);
     const avgKmPerLiter = totalLiters > 0 && distanceDriven > 0 ? distanceDriven / totalLiters : 11.4;
-    const fuelTotal = autoTxs.filter((t) => t.category.includes("Gasolina")).reduce((a, b) => a + b.amount, 0);
-    const maintenanceTotal = autoTxs
-      .filter((t) => !t.category.includes("Gasolina"))
-      .reduce((a, b) => a + b.amount, 0);
+
+    const isFuelCat = (c: string) => {
+      const lower = c.toLowerCase();
+      return lower.includes("combustível") || lower.includes("combustivel") || lower.includes("gasolina") || lower.includes("etanol");
+    };
+
+    let fuelTotal = 0;
+    let maintenanceTotal = 0;
+    let ipvaTotal = 0;
+    let licenciamentoTotal = 0;
+    let seguroTotal = 0;
+    let estacionamentoTotal = 0;
+
+    for (const t of autoTxs) {
+      const lower = t.category.toLowerCase();
+      if (isFuelCat(t.category) || (t.liters && t.liters > 0)) {
+        fuelTotal += t.amount;
+      } else if (lower.includes("ipva")) {
+        ipvaTotal += t.amount;
+      } else if (lower.includes("licenciamento")) {
+        licenciamentoTotal += t.amount;
+      } else if (lower.includes("seguro")) {
+        seguroTotal += t.amount;
+      } else if (lower.includes("estacionamento") || lower.includes("pedágio") || lower.includes("pedagio")) {
+        estacionamentoTotal += t.amount;
+      } else {
+        maintenanceTotal += t.amount;
+      }
+    }
+
     const totalAutoSpent = fuelTotal + maintenanceTotal;
+    const totalTCO = fuelTotal + maintenanceTotal + ipvaTotal + licenciamentoTotal + seguroTotal + estacionamentoTotal;
     const costPerKm = distanceDriven > 0 ? totalAutoSpent / distanceDriven : 0;
+    const tcoPerKm = distanceDriven > 0 ? totalTCO / distanceDriven : 0;
 
     return {
       autoTxs: autoTxs.slice().reverse(),
@@ -1644,8 +1677,14 @@ export default function CoindexApp() {
       avgKmPerLiter,
       fuelTotal,
       maintenanceTotal,
+      ipvaTotal,
+      licenciamentoTotal,
+      seguroTotal,
+      estacionamentoTotal,
       totalAutoSpent,
-      costPerKm
+      totalTCO,
+      costPerKm,
+      tcoPerKm
     };
   }, [transactions, categoriesCatalog]);
 
@@ -1924,7 +1963,9 @@ export default function CoindexApp() {
       thirdPartyAmount: tx.thirdPartyAmount != null ? String(tx.thirdPartyAmount) : "",
       thirdPartyName: tx.thirdPartyName || "",
       personalAmount: tx.personalAmount != null ? String(tx.personalAmount) : "",
-      linkedReceivableId: tx.linkedReceivableId || ""
+      linkedReceivableId: tx.linkedReceivableId || "",
+      fuelType: tx.fuelType || (isEtanol ? "Etanol" : "Gasolina"),
+      fullTank: tx.fullTank ?? true
     });
     setShowTxModal(true);
   };
@@ -1943,6 +1984,10 @@ export default function CoindexApp() {
       : (newTx.bankAccount || undefined);
     const savedCardUsed = isCredit ? (newTx.cardUsed || undefined) : undefined;
 
+    const matchedBank = banks.find((b) => b.name === resolvedBank || (resolvedBank && b.id === resolvedBank));
+    const resolvedBankId = matchedBank?.id || (isCredit ? matchedCard?.bankId : undefined);
+    const resolvedCardId = isCredit ? matchedCard?.id : undefined;
+
     const isTransferTx = Boolean(newTx.isTransfer || newTx.category === "Transferência entre Contas");
     const isSplitTx = Boolean(!isTransferTx && newTx.isSplit && newTx.category !== "A Receber");
     const parsedThirdAmount = isSplitTx && newTx.thirdPartyAmount ? parseFloat(newTx.thirdPartyAmount) : undefined;
@@ -1950,6 +1995,23 @@ export default function CoindexApp() {
     const calculatedPersonal = isSplitTx && parsedThirdAmount != null
       ? safeSub(totalAmount, parsedThirdAmount)
       : undefined;
+
+    const resolvedFlow = resolveTransactionFlowType(
+      { category: newTx.category, isTransfer: isTransferTx, isSplit: isSplitTx },
+      categoriesCatalog
+    );
+    const resolvedFuelType = newTx.fuelType || (isPostoExpress ? expressFuelType : undefined);
+    const resolvedFullTank = newTx.fullTank !== false;
+
+    // Alerta de Odômetro Menor
+    if (newTx.km && autoMetrics.maxKm > 0 && Number(newTx.km) < autoMetrics.maxKm) {
+      notify(
+        "Odômetro Menor",
+        `O KM digitado (${Number(newTx.km).toLocaleString("pt-BR")}) é menor que o registro anterior (${autoMetrics.maxKm.toLocaleString("pt-BR")} km).`,
+        "warning",
+        "CONFIG"
+      );
+    }
 
     // Validação Estrita com Schema Zod (Sprint 10 - Lucas Viana & Sprint 13)
     const validation = validateTransactionData({
@@ -2009,10 +2071,13 @@ export default function CoindexApp() {
                 ...t,
                 description: finalDescription,
                 category: newTx.category,
+                flowType: resolvedFlow,
                 costType: newTx.costType,
                 paymentMethod: newTx.paymentMethod,
                 cardUsed: savedCardUsed,
                 bankAccount: resolvedBank,
+                cardId: resolvedCardId,
+                bankId: resolvedBankId,
                 installmentInfo: itemInfo,
                 installmentGroupId: commonGroupId,
                 invoiceMonth: itemInvoiceMonth,
@@ -2057,9 +2122,10 @@ export default function CoindexApp() {
               description: `Divisão: ${sanitizeText(newTx.description)}`,
               amount: parsedThirdAmount,
               category: "A Receber",
+              flowType: "RECEIVABLE",
               costType: "Variável",
               paymentMethod: "Outro",
-              status: "Pendente / Na Fatura",
+              status: "Pendente",
               debtor: cleanThirdName,
               paidAmount: 0,
               isSplitChild: true,
@@ -2079,13 +2145,18 @@ export default function CoindexApp() {
                 description: sanitizeText(newTx.description),
                 amount: totalAmount,
                 category: newTx.category,
+                flowType: resolvedFlow,
                 costType: newTx.costType,
                 paymentMethod: newTx.paymentMethod,
                 cardUsed: savedCardUsed,
                 bankAccount: resolvedBank,
+                cardId: resolvedCardId,
+                bankId: resolvedBankId,
                 status: newTx.status,
                 km: newTx.km ? Number(newTx.km) : undefined,
                 liters: newTx.liters ? Number(newTx.liters) : undefined,
+                fuelType: resolvedFuelType,
+                fullTank: resolvedFullTank,
                 invoiceMonth: itemInvoiceMonth,
                 cashMonth: itemCashMonth,
                 debtor: newTx.category === "A Receber" ? sanitizeText(newTx.debtor) : t.debtor,
@@ -2149,11 +2220,14 @@ export default function CoindexApp() {
             description: sanitizeText(newTx.description),
             amount: slice.amount,
             category: newTx.category,
+            flowType: resolvedFlow,
             costType: newTx.costType,
             paymentMethod: newTx.paymentMethod,
             cardUsed: savedCardUsed,
             bankAccount: resolvedBank,
-            status: "Pendente / Na Fatura",
+            cardId: resolvedCardId,
+            bankId: resolvedBankId,
+            status: "Na Fatura",
             installmentInfo: `${slice.installmentNumber}/${slice.totalInstallments}`,
             installmentGroupId: seriesId,
             installmentSeriesId: seriesId,
@@ -2191,9 +2265,10 @@ export default function CoindexApp() {
             description: `Divisão: ${sanitizeText(newTx.description)}`,
             amount: parsedThirdAmount,
             category: "A Receber",
+            flowType: "RECEIVABLE",
             costType: "Variável",
             paymentMethod: "Outro",
-            status: "Pendente / Na Fatura",
+            status: "Pendente",
             debtor: cleanThirdName,
             paidAmount: 0,
             isSplitChild: true,
@@ -2208,13 +2283,18 @@ export default function CoindexApp() {
           description: sanitizeText(newTx.description),
           amount: totalAmount,
           category: newTx.category,
+          flowType: resolvedFlow,
           costType: newTx.costType,
           paymentMethod: newTx.paymentMethod,
           cardUsed: savedCardUsed,
           bankAccount: resolvedBank,
+          cardId: resolvedCardId,
+          bankId: resolvedBankId,
           status: newTx.status,
           km: newTx.km ? Number(newTx.km) : undefined,
           liters: newTx.liters ? Number(newTx.liters) : undefined,
+          fuelType: resolvedFuelType,
+          fullTank: resolvedFullTank,
           invoiceMonth: itemInvoiceMonth,
           cashMonth: itemCashMonth,
           debtor: newTx.category === "A Receber" ? sanitizeText(newTx.debtor) : undefined,
@@ -2262,7 +2342,12 @@ export default function CoindexApp() {
   };
 
   const handleToggleStatus = (tx: Transaction) => {
-    const nextStatus: TxStatus = tx.status === "Pago" ? "Pendente / Na Fatura" : "Pago";
+    let nextStatus: TxStatus;
+    if (tx.status === "Pago") {
+      nextStatus = tx.paymentMethod === "Cartão de Crédito" ? "Na Fatura" : "Pendente";
+    } else {
+      nextStatus = "Pago";
+    }
     const changedItem: Transaction = {
       ...tx,
       status: nextStatus,
@@ -2700,10 +2785,39 @@ export default function CoindexApp() {
       bankId: validation.data.bankId || undefined,
       bankName: validation.data.bankName || undefined
     };
+
+    const oldCard = editingCardId ? cards.find((c) => c.id === editingCardId) : null;
     const updated = editingCardId ? cards.map((c) => (c.id === editingCardId ? cardObj : c)) : [...cards, cardObj];
     setCards(updated);
     localStorage.setItem("lifeos_cards_v8", JSON.stringify(updated));
     upsertCardInDb(cardObj);
+
+    // Cascata SSOT: Ao renomear cartão, atualiza todas as transações vinculadas mantendo histórico e faturas
+    if (editingCardId && oldCard && (oldCard.name !== cardObj.name || oldCard.bankName !== cardObj.bankName)) {
+      const changedTxs: Transaction[] = [];
+      const updatedTxs = transactions.map((t) => {
+        if (t.cardId === editingCardId || (t.cardUsed && t.cardUsed === oldCard.name)) {
+          const up: Transaction = {
+            ...t,
+            cardUsed: cardObj.name,
+            cardId: cardObj.id,
+            bankAccount: cardObj.bankName || t.bankAccount,
+            bankId: cardObj.bankId || t.bankId,
+            updatedAt: new Date().toISOString()
+          };
+          changedTxs.push(up);
+          return up;
+        }
+        return t;
+      });
+
+      if (changedTxs.length > 0) {
+        setTransactions(updatedTxs);
+        setUserItem("lifeos_txs_v8", JSON.stringify(updatedTxs), currentUserId);
+        void upsertTransactionsInDb(changedTxs, debtorMap);
+      }
+    }
+
     setEditingCardId(null);
     setNewCard({ name: "", brand: "Mastercard Black", limit: "", closingDay: "25", dueDay: "5", logoUrl: "", bankId: "" });
     notify("Cartão Salvo", `${cardObj.name} configurado com sucesso.`, "success", "CONFIG");
@@ -2751,19 +2865,65 @@ export default function CoindexApp() {
       limit: validation.data.limit,
       limitType: validation.data.limitType || "Cartão de Crédito"
     };
+    const oldBank = editingBankId ? banks.find((b) => b.id === editingBankId) : null;
     const updated = editingBankId
       ? banks.map((b) => (b.id === editingBankId ? bankObj : b))
       : [...banks, bankObj];
     setBanks(updated);
     localStorage.setItem("lifeos_banks_v1", JSON.stringify(updated));
 
-    // SSOT: Se o nome do banco foi alterado, sincroniza nos cartões vinculados
-    if (editingBankId) {
+    // SSOT Cascata: Sincroniza nos cartões vinculados e nas transações vinculadas mantendo integridade
+    if (editingBankId && oldBank && oldBank.name !== bankObj.name) {
       const updatedCards = cards.map((c) =>
-        c.bankId === editingBankId ? { ...c, bankName: bankObj.name } : c
+        c.bankId === editingBankId || c.bankName === oldBank.name
+          ? { ...c, bankId: bankObj.id, bankName: bankObj.name }
+          : c
       );
       setCards(updatedCards);
       localStorage.setItem("lifeos_cards_v8", JSON.stringify(updatedCards));
+
+      const changedTxs: Transaction[] = [];
+      const updatedTxs = transactions.map((t) => {
+        let changed = false;
+        let newAccount = t.bankAccount;
+        let newSource = t.sourceBank;
+        let newDest = t.destinationBank;
+        let newBankId = t.bankId;
+
+        if (t.bankId === editingBankId || t.bankAccount === oldBank.name) {
+          newAccount = bankObj.name;
+          newBankId = bankObj.id;
+          changed = true;
+        }
+        if (t.sourceBank === oldBank.name) {
+          newSource = bankObj.name;
+          changed = true;
+        }
+        if (t.destinationBank === oldBank.name) {
+          newDest = bankObj.name;
+          changed = true;
+        }
+
+        if (changed) {
+          const up: Transaction = {
+            ...t,
+            bankAccount: newAccount,
+            sourceBank: newSource,
+            destinationBank: newDest,
+            bankId: newBankId,
+            updatedAt: new Date().toISOString()
+          };
+          changedTxs.push(up);
+          return up;
+        }
+        return t;
+      });
+
+      if (changedTxs.length > 0) {
+        setTransactions(updatedTxs);
+        setUserItem("lifeos_txs_v8", JSON.stringify(updatedTxs), currentUserId);
+        void upsertTransactionsInDb(changedTxs, debtorMap);
+      }
     }
 
     setEditingBankId(null);
@@ -2794,7 +2954,7 @@ export default function CoindexApp() {
       (t) =>
         t.paymentMethod === "Cartão de Crédito" &&
         t.cardUsed === cardName &&
-        t.status === "Pendente / Na Fatura"
+        (t.status === "Na Fatura" || t.status === "Pendente / Na Fatura")
     );
     if (pendingTxs.length === 0) {
       notify("Fatura Sem Pendências", `O cartão ${cardName} não possui saldo utilizado em aberto.`, "info", "FINANCE");
@@ -2812,7 +2972,7 @@ export default function CoindexApp() {
       if (
         t.paymentMethod === "Cartão de Crédito" &&
         t.cardUsed === cardName &&
-        t.status === "Pendente / Na Fatura"
+        (t.status === "Na Fatura" || t.status === "Pendente / Na Fatura")
       ) {
         const paidTx: Transaction = {
           ...t,

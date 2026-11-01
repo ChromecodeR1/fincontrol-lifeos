@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.14.0`  
-> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 22 — Isolamento por Usuário no Cache Local, Soft Delete contra Ressurreição de Exclusões e Validação Zod com Quarentena)  
+> **Versão da Aplicação:** `0.15.0`  
+> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 23 — Fonte Única de Tipos Zod, Catálogo 100% Limpo, Vínculo em Cascata Bancos/Cartões e Telemetria Automotiva Flex & TCO Real)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -119,26 +119,30 @@ fincontrol-lifeos/
 ## 3. Interfaces TypeScript Oficiais
 
 ```ts
-// Transação Financeira Completa
+// Transação Financeira Completa (Sprint 23)
 export interface Transaction {
   id: string;
-  date: string; // Formato estrito YYYY-MM-DD
+  date: string; // Formato DD-MM-YYYY (puro local anti-UTC shift)
   description: string;
   amount: number; // Armazenado como float, calculado via toCents/fromCents
   category: string;
   costType: "Fixo" | "Variável";
   paymentMethod: string;
-  status: "Pago" | "Pendente / Na Fatura";
-  flowType?: "INCOME" | "EXPENSE" | "INVESTMENT";
-  cardName?: string;
-  invoiceCompetence?: string; // YYYY-MM da fatura do cartão
-  bankName?: string;
+  status: "Pago" | "Pendente" | "Na Fatura" | "Pendente / Na Fatura";
+  flowType?: "INCOME" | "EXPENSE" | "INVESTMENT" | "NEUTRAL" | "RECEIVABLE";
+  cardUsed?: string;
+  cardId?: string; // Vínculo estável contra quebra ao renomear
+  bankAccount?: string;
+  bankId?: string; // Vínculo estável contra quebra ao renomear
+  invoiceMonth?: string; // YYYY-MM da competência de fatura
+  cashMonth?: string;    // YYYY-MM do mês de desembolso real
   km?: number;
-  fuelLiters?: number;
+  liters?: number;
+  fuelType?: "Gasolina" | "Etanol";
+  fullTank?: boolean;
   // Gestão de Séries Parceladas
-  isInstallment?: boolean;
-  installmentCurrent?: number;
-  installmentTotal?: number;
+  installmentInfo?: string;
+  installmentGroupId?: string;
   installmentSeriesId?: string;
   // Transferência Neutra entre Contas Bancárias
   isTransfer?: boolean;
@@ -150,9 +154,18 @@ export interface Transaction {
   thirdPartyName?: string;
   personalAmount?: number;
   linkedReceivableId?: string;
+  isSplitChild?: boolean;
+  linkedSplitParentId?: string;
+  debtor?: string;
+  paidAmount?: number;
+  isInvoicePayment?: boolean;
+  isReceivableSettlement?: boolean;
+  wishlistId?: string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  deletedAt?: string; // Soft delete / lápide local
+  rev?: number;
 }
 
 // Instituição / Conta Bancária
@@ -382,6 +395,20 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
   - **Soft Delete e Lápides Locais (`recordTombstone`):** Inclusão de `deletedAt?: string` e `rev?: number` em `Transaction`, `CreditCardItem`, `BankInstitution`, `StaticStatusItem` e `BrainNote`. Sistema de lápides locais armazena os IDs excluídos no storage namespace do usuário, garantindo que sincronizações futuras com o Supabase ou restaurações parciais de cache nunca ressuscitem itens deletados.
   - **Indicador de Sincronização em Tempo Real:** Badge com status em tempo real (🟢 Sincronizado, 🟡 Sincronizando..., ⚪ Offline (Salvo Localmente), 🔴 Erro de Sync com timestamp da última operação) adicionado na Topbar ao lado do seletor de mês e no rodapé do perfil na Sidebar.
   - **Validação de Backup JSON com Zod & Quarentena (`FullBackupSchema`):** Exportação versionada (`schemaVersion: 2`) com data de geração em `DD-MM-YYYY`. Importação validada por Zod (`validateAndQuarantineBackup`), isolando registros corrompidos ou com schema inválido em relatório de quarentena (`quarantine.details`) registrado nos logs do sistema sem quebrar a tela. Modal de Perfil oferece escolha entre "Mesclar com dados atuais (Recomendado)" e "Substituir tudo".
+- **Sprint 23 — Fonte Única de Tipos Zod, Catálogo 100% Limpo, Vínculo em Cascata Bancos/Cartões e Telemetria Automotiva Flex & TCO Real:**
+  - **Higienização do Catálogo de Categorias & FlowType Obrigatório:**
+    - Eliminação completa de barras compostas no catálogo e no migrador `migrateLegacyCategory`: `Moradia` e `Aluguel`, `Alimentação` e `Restaurante`, `Educação` e `Cursos`.
+    - Adição de categorias essenciais: `Água & Gás`, `Celular / Telefonia`, `Impostos & Taxas`, `Transporte / Uber`, `Cuidados Pessoais` e `Receita Extra`.
+    - Resolução determinística de fluxo financeiro via `resolveTransactionFlowType(tx, catalog)` com tipo unificado `FlowType = "INCOME" | "EXPENSE" | "INVESTMENT" | "NEUTRAL" | "RECEIVABLE"`.
+    - Status Semânticos Oficiais: Separação de `Pendente / Na Fatura` em `Pago` (verde/CheckCircle2), `Pendente` (âmbar/Clock para boletos/contas) e `Na Fatura` (violeta/CreditCard para despesas de cartão), com filtro rápido dedicado `NA_FATURA` na `TransactionsTableAdvanced`.
+    - Novos ícones semânticos em `renderCategorySemanticIcon`: `Bike` (Delivery), `FileCheck` (Licenciamento), `Pill` (Farmácia), `Landmark` (Aporte) e `Banknote` (Salário/Receitas).
+  - **Proteção contra Quebra de Histórico ao Renomear Bancos ou Cartões:**
+    - Inclusão dos campos de vínculo imutável `bankId?: string` e `cardId?: string` em `Transaction` e `TransactionSchema`.
+    - Em `handleSaveBank` e `handleSaveCard`, sincronização em cascata automática de todas as transações vinculadas (`bankAccount`, `sourceBank`, `destinationBank`, `cardUsed`, `bankId`, `cardId`) tanto em memória quanto no `setUserItem` e Supabase PostgreSQL, assegurando que renomear instituições ou cartões nunca quebre os saldos históricos ou faturas em aberto.
+  - **Telemetria Automotiva Flex & TCO Real (`app/components/VehiclesTab.tsx`):**
+    - Suporte nativo ao tipo de combustível (`fuelType: "Gasolina" | "Etanol"`) e flag de tanque cheio (`fullTank: boolean`) no Posto Express e modo padrão, com validação inteligente emitindo aviso inline caso o odômetro digitado seja menor que o registro anterior.
+    - **Calculadora Rápida Etanol vs. Gasolina:** Comparativo em tempo real entre a Regra dos 70% e a Paridade Real do Ford Fiesta 1.0 Flex (`ethanolKmPerLiter / gasolineKmPerLiter` = 70,8%), exibindo veredito dinâmico em Cyberpunk Neon, custo por km de cada combustível e projeção de economia por tanque cheio de 50L.
+    - **Indicador de TCO (Custo Total de Propriedade por KM):** Consolidação contábil completa somando Combustível + Manutenção & Óleo + IPVA + Licenciamento + Seguro Auto + Estacionamento/Pedágio, exibindo o valor total acumulado e o custo real por km (`formatBRL(tcoPerKm)}/km`) com breakdown visual detalhado por categoria.
 
 ---
 
