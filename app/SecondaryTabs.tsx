@@ -118,7 +118,7 @@ export interface SecondaryTabsProps {
   };
   handleAssignDebtor: (txId: string, debtorName: string) => void;
   handlePartialPaymentReceivable: (tx: Transaction, addAmount: number, destBank?: string) => void;
-  notify: (title: string, subtitle?: string, type?: "success" | "warning" | "info", cat?: any) => void;
+  notify: (title: string, subtitle?: string, type?: "success" | "warning" | "info" | "error", cat?: any, onUndo?: () => void, undoLabel?: string) => void;
   editingCardId: string | null;
   setEditingCardId: (id: string | null) => void;
   newCard: { name: string; brand: string; limit: string; closingDay: string; dueDay: string; logoUrl: string; bankId: string };

@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.16.0`  
-> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 24 — Refinamento Óptico WCAG no Cyberpunk Neon, Paleta Donut de Alto Contraste, ComposedChart Duplo no Patrimônio e Glossário nos KPIs)  
+> **Versão da Aplicação:** `0.17.0`  
+> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 25 — UX Avançada: Desfazer nos Toasts, Exportação CSV pt-BR com BOM UTF-8, Mini-Calculadora no Campo de Valor e Modo Privacidade Completo)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -427,6 +427,27 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
   - **Glossário de Fórmulas e Seletor de Regime Contábil nos 4 KPIs:**
     - Seletor rápido de visualização contábil: **Regime de Competência** (despesas na data da compra) vs. **Regime de Caixa** (despesas de cartão alocadas no mês do vencimento/pagamento da fatura via `cashMonth || invoiceMonth`).
     - Ícones informativos `"ⓘ"` (`Info`) com tooltips cyberpunk detalhando a fórmula exata e regra contábil de cada métrica: Entradas, Saídas, Aportes Brutos, Resultado Operacional e Safe-to-Spend Projetado.
+- **Sprint 25 — UX Avançada: Botão "Desfazer" nos Toasts, Exportação CSV pt-BR com BOM UTF-8, Mini-Calculadora no Campo de Valor e Modo Privacidade Completo:**
+  - **Toast com Ação de Desfazer (`onUndo`):**
+    - Interface `ToastMessage` expandida com `onUndo?: () => void` e `undoLabel?: string`.
+    - Ao excluir transações (`handleDeleteTransaction`), parcelas de compras parceladas (`handleConfirmDeleteInstallment`) ou alterar rapidamente o status de um lançamento (`handleToggleStatus`), o Toast flutuante exibe o botão `"↩ Desfazer"` ativo durante 5 segundos.
+    - O clique no botão desfaz imediatamente a exclusão ou alteração de status em memória e no Supabase PostgreSQL, com confirmação visual via toast de sucesso.
+  - **Exportação CSV Padrão Microsoft Excel Brasil (`exportTableCSV`):**
+    - Respeita integralmente os filtros ativos na tabela (`processedTxs`).
+    - Prefixo UTF-8 BOM (`\uFEFF`) garantindo abertura perfeita de acentos e caracteres em português no Excel sem telas de configuração de codificação.
+    - Ponto-e-vírgula (`;`) como separador nativo para sistemas operacionais pt-BR.
+    - Datas formatadas estritamente em `DD-MM-YYYY` e valores monetários com vírgula decimal pt-BR (`1234,56`).
+    - Blindagem contra CSV Injection / Formula Injection: sanitização de células de texto iniciadas por `=`, `+`, `-` ou `@`, prefixando aspa simples (`'`).
+    - Nomenclatura automática de download: `coindex_lancamentos_DD-MM-YYYY.csv`.
+  - **Modal de Lançamento Turbinado (`TransactionModal.tsx`):**
+    - **Mini-Calculadora no Campo de Valor:** Parser de expressões matemáticas puras (`evaluateMathExpression`) nos campos de valor (modo padrão, Posto Express e transferências entre contas). Permite somas, subtrações, divisões e multiplicações (ex: `45,90 + 12,50` -> `58,40`) calculadas automaticamente ao sair do campo (`onBlur`) ou ao pressionar `Enter`.
+    - **Atalhos Rápidos de Data de 1 Clique:** Botões rápidos `"Hoje"` (`todayBR()`) e `"Ontem"` (`getYesterdayBR()`) ao lado de todos os seletores de data.
+    - **Botão "Salvar e Criar Outro":** Permite registrar despesas ou receitas sucessivas com alta velocidade sem fechar e reabrir o modal, mantendo a data preenchida e resetando os demais campos com foco automático no valor.
+  - **Modo Privacidade Completo & Busca sem Acento:**
+    - Persistência da preferência de privacidade no `localStorage` (`coindex_privacy_mode`).
+    - Máscara visual de desfoque (`moneyBlur`) aplicada universalmente ao valor central do Donut, tooltips de gráficos Recharts (`PatrimonyCyberTooltip` e `CustomCyberTooltip`), cards de KPIs, limites de cartões e saldos bancários.
+    - Normalização Unicode NFD (`normalizeSearchText`) na busca da tabela avançada e na Command Palette (`Ctrl+K`), permitindo encontrar registros ignorando acentos gráficos e caixa alta/baixa (ex: "agua" encontra "Água & Gás", "uber" encontra "Transporte / Uber").
+    - Interceptação de atalho global `Ctrl+K` e `Cmd+K` com `e.preventDefault()` e `e.stopPropagation()`.
 
 ---
 

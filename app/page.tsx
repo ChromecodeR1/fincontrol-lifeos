@@ -154,7 +154,9 @@ import {
   recordTombstones,
   getTombstones,
   isTombstoned,
-  clearUserSessionStorage
+  clearUserSessionStorage,
+  normalizeSearchText,
+  evaluateMathExpression
 } from "./lifeos-data";
 import {
   validateTransactionData,
@@ -223,9 +225,10 @@ interface PatrimonyCyberTooltipProps {
   active?: boolean;
   payload?: PatrimonyTooltipPayloadItem[];
   label?: string;
+  moneyBlur?: string;
 }
 
-function PatrimonyCyberTooltip({ active, payload, label }: PatrimonyCyberTooltipProps) {
+function PatrimonyCyberTooltip({ active, payload, label, moneyBlur = "" }: PatrimonyCyberTooltipProps) {
   if (!active || !payload || !payload.length) return null;
   const data = payload[0]?.payload;
   if (!data) return null;
@@ -240,7 +243,7 @@ function PatrimonyCyberTooltip({ active, payload, label }: PatrimonyCyberTooltip
           <span className="w-2 h-2 rounded-full bg-[#FF2A85] shrink-0 shadow-[0_0_8px_#FF2A85]" />
           Patrimônio Acumulado:
         </span>
-        <strong className="text-white font-mono tabular-nums">
+        <strong className={`text-white font-mono tabular-nums ${moneyBlur}`}>
           {formatBRL(data.acumulado)}
         </strong>
       </div>
@@ -249,7 +252,7 @@ function PatrimonyCyberTooltip({ active, payload, label }: PatrimonyCyberTooltip
           <span className="w-2 h-2 rounded-full bg-[#A855F7] shrink-0 shadow-[0_0_8px_#A855F7]" />
           Aportes Brutos no Mês:
         </span>
-        <strong className="text-[#C084FC] font-mono tabular-nums">
+        <strong className={`text-[#C084FC] font-mono tabular-nums ${moneyBlur}`}>
           {formatBRL(data.aportado)}
         </strong>
       </div>
@@ -259,7 +262,7 @@ function PatrimonyCyberTooltip({ active, payload, label }: PatrimonyCyberTooltip
             <span className="w-2 h-2 rounded-full bg-[#FF6B4A] shrink-0" />
             Resgates no Mês:
           </span>
-          <strong className="text-[#FF6B4A] font-mono tabular-nums">
+          <strong className={`text-[#FF6B4A] font-mono tabular-nums ${moneyBlur}`}>
             {formatBRL(data.resgatado || 0)}
           </strong>
         </div>
@@ -284,7 +287,24 @@ export default function CoindexApp() {
   // Navegação, Command Palette (Ctrl+K), Filtros Rápidos e Tema
   const [activeTab, setActiveTab] = useState<ActiveTab>("dashboard");
   const [themeMode, setThemeMode] = useState<ThemeMode>("tradicional");
-  const [privacyMode, setPrivacyMode] = useState(false);
+  const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return localStorage.getItem("coindex_privacy_mode") === "true";
+      } catch {}
+    }
+    return false;
+  });
+
+  const togglePrivacyMode = useCallback(() => {
+    setPrivacyMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("coindex_privacy_mode", String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState("2026-10");
   const [accountingRegime, setAccountingRegime] = useState<"competencia" | "caixa">("competencia");
@@ -732,19 +752,22 @@ export default function CoindexApp() {
     }
   }, []);
 
-  // Sistema de Notificações Flutuantes (Toasts + Gravação de Log no Supabase)
+  // Sistema de Notificações Flutuantes (Toasts com Undo Action + Gravação de Log no Supabase)
   const notify = useCallback(
     (
       title: string,
       subtitle?: string,
       type: "success" | "warning" | "info" | "error" = "info",
-      logCategory?: SystemLogEntry["category"]
+      logCategory?: SystemLogEntry["category"],
+      onUndo?: () => void,
+      undoLabel?: string
     ) => {
       const id = `toast-${Date.now()}-${Math.random()}`;
-      setToasts((prev) => [...prev.slice(-3), { id, title, subtitle, type }]);
+      const duration = onUndo ? 5000 : 3500;
+      setToasts((prev) => [...prev.slice(-3), { id, title, subtitle, type, onUndo, undoLabel }]);
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 3500); // 3.5 segundos auto-fechamento suave (Sprint 15)
+      }, duration);
 
       if (logCategory) {
         const entry: SystemLogEntry = {
@@ -766,11 +789,12 @@ export default function CoindexApp() {
     [currentUser]
   );
 
-  // Atalho de Teclado Global: Ctrl + K
+  // Atalho de Teclado Global: Ctrl + K / Cmd + K com e.preventDefault() estrito
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        e.stopPropagation();
         if (currentUser) setShowCommandModal((prev) => !prev);
       } else if (e.key === "Escape") {
         setShowCommandModal(false);
@@ -1350,12 +1374,12 @@ export default function CoindexApp() {
       })
       .filter((t) => {
         if (!searchQuery.trim()) return true;
-        const q = searchQuery.toLowerCase();
+        const q = normalizeSearchText(searchQuery);
         return (
-          t.description.toLowerCase().includes(q) ||
-          t.category.toLowerCase().includes(q) ||
-          t.paymentMethod.toLowerCase().includes(q) ||
-          (t.debtor && t.debtor.toLowerCase().includes(q))
+          normalizeSearchText(t.description).includes(q) ||
+          normalizeSearchText(t.category).includes(q) ||
+          normalizeSearchText(t.paymentMethod).includes(q) ||
+          (t.debtor && normalizeSearchText(t.debtor).includes(q))
         );
       })
       .sort((a, b) => compareDatesBR(b.date, a.date));
@@ -1383,12 +1407,12 @@ export default function CoindexApp() {
       if (quickFilter === "CARTAO" && t.paymentMethod !== "Cartão de Crédito") return false;
       if (quickFilter === "PIX" && t.paymentMethod !== "PIX") return false;
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+        const q = normalizeSearchText(searchQuery);
         return (
-          t.description.toLowerCase().includes(q) ||
-          t.category.toLowerCase().includes(q) ||
-          t.paymentMethod.toLowerCase().includes(q) ||
-          (t.debtor && t.debtor.toLowerCase().includes(q))
+          normalizeSearchText(t.description).includes(q) ||
+          normalizeSearchText(t.category).includes(q) ||
+          normalizeSearchText(t.paymentMethod).includes(q) ||
+          (t.debtor && normalizeSearchText(t.debtor).includes(q))
         );
       }
       return true;
@@ -1880,7 +1904,12 @@ export default function CoindexApp() {
 
     const escapeCell = (val: string | number | undefined) => {
       if (val === undefined || val === null) return "";
-      const str = String(val).replace(/"/g, '""').replace(/;/g, ",");
+      let str = String(val);
+      // Blindagem contra CSV Injection / Injeção de Fórmulas no Excel (=, +, -, @)
+      if (/^[=+\-@]/.test(str)) {
+        str = `'${str}`;
+      }
+      str = str.replace(/"/g, '""').replace(/;/g, ",");
       return `"${str}"`;
     };
 
@@ -2026,9 +2055,10 @@ export default function CoindexApp() {
   };
 
   // CRUD de Lançamentos Conectado ao Supabase
-  const handleSaveTransaction = async (e: React.FormEvent) => {
+  const handleSaveTransaction = async (e: React.FormEvent, createAnother: boolean = false) => {
     e.preventDefault();
-    const totalAmount = parseFloat(newTx.amount);
+    const evaluatedAmountStr = evaluateMathExpression(newTx.amount);
+    const totalAmount = parseFloat(evaluatedAmountStr) || 0;
     const isCredit = newTx.paymentMethod === "Cartão de Crédito";
     const matchedCard = isCredit ? cards.find((c) => c.name === newTx.cardUsed) : undefined;
     const resolvedBank = isCredit
@@ -2392,8 +2422,26 @@ export default function CoindexApp() {
       }
     } finally {
       setIsSavingTx(false);
-      setShowTxModal(false);
+      if (createAnother) {
+        setNewTx((prev) => ({
+          ...prev,
+          description: "",
+          amount: "",
+          km: "",
+          liters: "",
+          thirdPartyAmount: "",
+          thirdPartyName: "",
+          personalAmount: "",
+          installments: "1"
+        }));
+      } else {
+        setShowTxModal(false);
+      }
     }
+  };
+
+  const handleSaveAndNewTransaction = async (e: React.FormEvent) => {
+    await handleSaveTransaction(e, true);
   };
 
   const handleToggleStatus = (tx: Transaction) => {
@@ -2403,6 +2451,7 @@ export default function CoindexApp() {
     } else {
       nextStatus = "Pago";
     }
+    const previousTx = { ...tx };
     const changedItem: Transaction = {
       ...tx,
       status: nextStatus,
@@ -2411,9 +2460,22 @@ export default function CoindexApp() {
     };
     const updated = transactions.map((t) => (t.id === tx.id ? changedItem : t));
     setTransactions(updated);
-    localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
+    setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
     upsertTransactionsInDb([changedItem], debtorMap);
-    notify("Situação Alterada", `${tx.description} marcado como ${nextStatus}.`, "info", "FINANCE");
+    notify(
+      "Situação Alterada",
+      `${tx.description} marcado como ${nextStatus}.`,
+      "info",
+      "FINANCE",
+      () => {
+        const reverted = transactions.map((t) => (t.id === tx.id ? previousTx : t));
+        setTransactions(reverted);
+        setUserItem("lifeos_txs_v8", JSON.stringify(reverted), currentUserId);
+        upsertTransactionsInDb([previousTx], debtorMap);
+        notify("Alteração Desfeita!", `${tx.description} voltou para ${previousTx.status}.`, "info", "FINANCE");
+      },
+      "↩ Desfazer"
+    );
   };
 
   const handleDeleteTransaction = (id: string) => {
@@ -2432,12 +2494,14 @@ export default function CoindexApp() {
 
     askConfirmation({
       title: "Excluir Lançamento?",
-      description: `Deseja realmente excluir "${tx.description}" (${formatBRL(tx.amount)})? Esta ação é irreversível.`,
+      description: `Deseja realmente excluir "${tx.description}" (${formatBRL(tx.amount)})? Esta ação pode ser desfeita.`,
       confirmLabel: "Sim, Excluir",
       danger: true,
       onConfirm: async () => {
         const childId = tx.linkedReceivableId;
         const parentId = tx.linkedSplitParentId;
+        const previousTransactions = [...transactions];
+        const txsToRestore = transactions.filter((t) => t.id === id || t.id === childId);
 
         const updated = transactions
           .filter((t) => t.id !== id && t.id !== childId)
@@ -2465,7 +2529,19 @@ export default function CoindexApp() {
         if (childId) {
           await deleteTransactionInDb(childId);
         }
-        notify("Lançamento Removido", `"${tx.description}" excluído com sucesso.`, "warning", "FINANCE");
+        notify(
+          "Lançamento Removido",
+          `"${tx.description}" excluído com sucesso.`,
+          "warning",
+          "FINANCE",
+          () => {
+            setTransactions(previousTransactions);
+            setUserItem("lifeos_txs_v8", JSON.stringify(previousTransactions), currentUserId);
+            upsertTransactionsInDb(txsToRestore, debtorMap);
+            notify("Lançamento Restaurado!", `"${tx.description}" foi restaurado com sucesso.`, "success", "FINANCE");
+          },
+          "↩ Desfazer"
+        );
       }
     });
   };
@@ -2473,6 +2549,7 @@ export default function CoindexApp() {
   const handleConfirmDeleteInstallment = async (deleteAll: boolean) => {
     if (!deleteSeriesModal.targetTx || !deleteSeriesModal.seriesData) return;
     setIsDeletingSeries(true);
+    const previousTransactions = [...transactions];
     try {
       if (deleteAll) {
         const seriesList = deleteSeriesModal.seriesData.series;
@@ -2486,10 +2563,18 @@ export default function CoindexApp() {
           "Série Parcelada Removida",
           `Todas as ${idsToDelete.size} parcelas foram excluídas e o limite do cartão foi liberado.`,
           "warning",
-          "FINANCE"
+          "FINANCE",
+          () => {
+            setTransactions(previousTransactions);
+            setUserItem("lifeos_txs_v8", JSON.stringify(previousTransactions), currentUserId);
+            upsertTransactionsInDb(seriesList, debtorMap);
+            notify("Série Parcelada Restaurada!", `${seriesList.length} parcelas foram restauradas.`, "success", "FINANCE");
+          },
+          "↩ Desfazer"
         );
       } else {
         const targetId = deleteSeriesModal.targetTx.id;
+        const deletedTx = deleteSeriesModal.targetTx;
         recordTombstone(targetId, currentUserId);
         const updated = transactions.filter((t) => t.id !== targetId);
         setTransactions(updated);
@@ -2497,9 +2582,16 @@ export default function CoindexApp() {
         await deleteTransactionInDb(targetId);
         notify(
           "Parcela Removida",
-          `A parcela (${deleteSeriesModal.targetTx.installmentInfo || "individual"}) foi excluída com sucesso.`,
+          `A parcela (${deletedTx.installmentInfo || "individual"}) foi excluída com sucesso.`,
           "warning",
-          "FINANCE"
+          "FINANCE",
+          () => {
+            setTransactions(previousTransactions);
+            setUserItem("lifeos_txs_v8", JSON.stringify(previousTransactions), currentUserId);
+            upsertTransactionsInDb([deletedTx], debtorMap);
+            notify("Parcela Restaurada!", `A parcela foi restaurada com sucesso.`, "success", "FINANCE");
+          },
+          "↩ Desfazer"
         );
       }
     } finally {
@@ -3874,6 +3966,19 @@ export default function CoindexApp() {
                 {t.subtitle && (
                   <span className="text-slate-300 text-[11px] leading-snug block mt-0.5">{t.subtitle}</span>
                 )}
+                {t.onUndo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      t.onUndo?.();
+                      setToasts((prev) => prev.filter((item) => item.id !== t.id));
+                    }}
+                    className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-[#00F5D4]/20 border border-white/20 hover:border-[#00F5D4]/40 text-[#00F5D4] font-bold text-[11px] transition cursor-pointer shadow-sm"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>{t.undoLabel || "↩ Desfazer"}</span>
+                  </button>
+                )}
               </div>
             </div>
             <button
@@ -4169,7 +4274,7 @@ export default function CoindexApp() {
               {/* BOTÃO DE PRIVACIDADE SOMENTE COM O SÍMBOLO DO OLHO */}
               <button
                 type="button"
-                onClick={() => setPrivacyMode(!privacyMode)}
+                onClick={togglePrivacyMode}
                 className={`min-h-[44px] min-w-[44px] p-2.5 rounded-xl border transition flex items-center justify-center ${
                   privacyMode
                     ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
@@ -4709,7 +4814,7 @@ export default function CoindexApp() {
                                       return `${num}`;
                                     }}
                                   />
-                                  <Tooltip content={<PatrimonyCyberTooltip />} cursor={false} />
+                                  <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
                                   {milestones.map((m) => (
                                     <ReferenceLine key={m.id} yAxisId="left" y={m.value} stroke={m.color} strokeDasharray="3 3" />
                                   ))}
@@ -4775,7 +4880,7 @@ export default function CoindexApp() {
                                       />
                                     ))}
                                   </Pie>
-                                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
+                                  <Tooltip content={<CustomCyberTooltip isCurrency={true} moneyBlur={moneyBlur} />} cursor={false} />
                                 </PieChart>
                               </ResponsiveContainer>
 
@@ -4892,7 +4997,7 @@ export default function CoindexApp() {
                                   )}
                                   <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
                                   <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => formatBRL(Number(v))} />
-                                  <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
+                                  <Tooltip content={<CustomCyberTooltip isCurrency={true} moneyBlur={moneyBlur} />} cursor={false} />
                                   {cfg.showLegend && <Legend wrapperStyle={{ fontSize: "11px" }} />}
                                   <Bar
                                     dataKey="usado"
@@ -5257,7 +5362,7 @@ export default function CoindexApp() {
                   label: "Alternar Modo Privacidade (Olho)",
                   action: () => {
                     setShowCommandModal(false);
-                    setPrivacyMode((p) => !p);
+                    togglePrivacyMode();
                   },
                   icon: <Eye className="w-3.5 h-3.5 text-sky-400" />
                 },
@@ -5310,7 +5415,7 @@ export default function CoindexApp() {
                   icon: <Settings className="w-3.5 h-3.5 text-slate-300" />
                 }
               ]
-                .filter((item) => item.label.toLowerCase().includes(commandQuery.toLowerCase()))
+                .filter((item) => normalizeSearchText(item.label).includes(normalizeSearchText(commandQuery)))
                 .map((cmd, idx) => (
                   <button
                     key={idx}
@@ -5332,6 +5437,7 @@ export default function CoindexApp() {
         isOpen={showTxModal}
         onClose={() => setShowTxModal(false)}
         onSubmit={handleSaveTransaction}
+        onSaveAndNew={handleSaveAndNewTransaction}
         isSavingTx={isSavingTx}
         editingTxId={editingTxId}
         isEditingSeries={isEditingSeries}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { Fuel, Wallet, X, Layers, Gauge, CreditCard, Loader2, ArrowLeftRight, Users, Sparkles } from "lucide-react";
+import { Fuel, Wallet, X, Layers, Gauge, CreditCard, Loader2, ArrowLeftRight, Users, Sparkles, Plus } from "lucide-react";
 import {
   BankItem,
   CategoryCatalogItem,
@@ -13,11 +13,13 @@ import {
   TxStatus,
   formatBRL,
   formatDateBR,
+  todayBR,
   toSortableISO,
   compareDatesBR,
   getYearMonthKey,
   getAutomaticStatus,
-  getCardInvoiceCompetence
+  getCardInvoiceCompetence,
+  evaluateMathExpression
 } from "@/app/lifeos-data";
 
 export interface TransactionFormState {
@@ -50,6 +52,7 @@ export interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
+  onSaveAndNew?: (e: React.FormEvent) => void;
   isSavingTx: boolean;
   editingTxId: string | null;
   isEditingSeries: boolean;
@@ -77,6 +80,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
+  onSaveAndNew,
   isSavingTx,
   editingTxId,
   isEditingSeries,
@@ -96,6 +100,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   autoMetrics,
   transactions = []
 }) => {
+  const getYesterdayBR = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
   // SPRINT 14: Smart Auto-Fill & Memória Inteligente baseada no Histórico
   const [hasAutoFilled, setHasAutoFilled] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -349,7 +362,25 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-slate-300 font-bold block mb-1">Data da Transferência *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-300 font-bold block text-xs">Data da Transferência *</label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setFormState((prev) => ({ ...prev, date: todayBR() }))}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                    >
+                      Hoje
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormState((prev) => ({ ...prev, date: getYesterdayBR() }))}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                    >
+                      Ontem
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="date"
                   required
@@ -359,15 +390,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 />
               </div>
               <div>
-                <label className="text-slate-300 font-bold block mb-1">Valor Transferido (R$) *</label>
+                <label className="text-slate-300 font-bold block mb-1 text-xs">Valor Transferido (R$) *</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
+                  type="text"
+                  inputMode="decimal"
                   required
                   placeholder="0,00"
                   value={formState.amount}
                   onChange={(e) => setFormState((prev) => ({ ...prev, amount: e.target.value }))}
+                  onBlur={() => setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }));
+                    }
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono tabular-nums text-base font-extrabold outline-none focus:border-sky-500 transition"
                 />
               </div>
@@ -579,12 +616,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">R$</span>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     required
-                    placeholder="0,00"
+                    placeholder="0,00 ou ex: 150 + 20"
                     value={formState.amount}
                     onChange={(e) => setFormState((prev) => ({ ...prev, amount: e.target.value }))}
+                    onBlur={() => setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }));
+                      }
+                    }}
                     className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500"
                   />
                 </div>
@@ -674,7 +718,25 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-300 font-bold block mb-1">Data</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-300 font-bold block text-xs">Data</label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setFormState((prev) => ({ ...prev, date: todayBR() }))}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                    >
+                      Hoje
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormState((prev) => ({ ...prev, date: getYesterdayBR() }))}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                    >
+                      Ontem
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="date"
                   required
@@ -975,18 +1037,43 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">R$</span>
                   <input
                     ref={amountInputRef}
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     required
-                    placeholder="0,00"
+                    placeholder="0,00 ou ex: 45,90 + 12,50"
                     value={formState.amount}
                     onChange={(e) => setFormState((prev) => ({ ...prev, amount: e.target.value }))}
+                    onBlur={() => setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }));
+                      }
+                    }}
                     className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-indigo-500 font-mono tabular-nums transition"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-slate-400 block mb-1 text-xs font-semibold">Data</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-400 block text-xs font-semibold">Data</label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setFormState((prev) => ({ ...prev, date: todayBR() }))}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                    >
+                      Hoje
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormState((prev) => ({ ...prev, date: getYesterdayBR() }))}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                    >
+                      Ontem
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="date"
                   required
@@ -1361,10 +1448,29 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition flex items-center justify-center"
+            className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition flex items-center justify-center cursor-pointer"
           >
             Cancelar
           </button>
+          {onSaveAndNew && !editingTxId && !isEditingSeries && (
+            <button
+              type="button"
+              disabled={
+                isSavingTx ||
+                (Boolean(formState.isTransfer) && (formState.sourceBank || formState.bankAccount) === formState.destinationBank) ||
+                (Boolean(formState.isSplit) && (
+                  (parseFloat(formState.thirdPartyAmount || "0") || 0) <= 0 ||
+                  (parseFloat(formState.thirdPartyAmount || "0") || 0) >= (parseFloat(evaluateMathExpression(formState.amount) || "0") || 0) ||
+                  !formState.thirdPartyName?.trim()
+                ))
+              }
+              onClick={onSaveAndNew}
+              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-purple-500/30 text-purple-200 hover:text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-sm"
+            >
+              {isSavingTx ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 text-purple-400" />}
+              <span>Salvar e Criar Outro</span>
+            </button>
+          )}
           <button
             type="submit"
             disabled={
@@ -1372,7 +1478,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               (Boolean(formState.isTransfer) && (formState.sourceBank || formState.bankAccount) === formState.destinationBank) ||
               (Boolean(formState.isSplit) && (
                 (parseFloat(formState.thirdPartyAmount || "0") || 0) <= 0 ||
-                (parseFloat(formState.thirdPartyAmount || "0") || 0) >= (parseFloat(formState.amount || "0") || 0) ||
+                (parseFloat(formState.thirdPartyAmount || "0") || 0) >= (parseFloat(evaluateMathExpression(formState.amount) || "0") || 0) ||
                 !formState.thirdPartyName?.trim()
               ))
             }

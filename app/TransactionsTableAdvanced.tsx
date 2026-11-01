@@ -26,7 +26,8 @@ import {
   formatDateBR,
   compareDatesBR,
   parseInstallmentInfo,
-  renderCategorySemanticIcon
+  renderCategorySemanticIcon,
+  normalizeSearchText
 } from "./lifeos-data";
 
 export type TxSortKey = "date" | "description" | "category" | "costType" | "paymentMethod" | "km" | "status" | "amount";
@@ -363,9 +364,9 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
       }
       // Filtro de data
       if (columnFilters.dateQuery) {
-        const q = columnFilters.dateQuery.toLowerCase();
-        const brDate = formatDateBR(tx.date).toLowerCase();
-        if (!brDate.includes(q) && !tx.date.includes(q)) return false;
+        const q = normalizeSearchText(columnFilters.dateQuery);
+        const brDate = normalizeSearchText(formatDateBR(tx.date));
+        if (!brDate.includes(q) && !normalizeSearchText(tx.date).includes(q)) return false;
       }
 
       return true;
@@ -413,6 +414,76 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
   const handleLoadAll = useCallback(() => {
     setVisibleCount(processedTxs.length);
   }, [processedTxs.length]);
+
+  const exportTableCSV = useCallback(() => {
+    const headers = [
+      "Data",
+      "Descrição",
+      "Categoria",
+      "Fluxo",
+      "Tipo de Custo",
+      "Método de Pagamento",
+      "Cartão / Banco",
+      "Situação",
+      "Valor (R$)",
+      "Odômetro (KM)",
+      "Litros",
+      "Devedor",
+      "Parcela"
+    ];
+
+    const sanitizeCell = (val: string | number | undefined | null) => {
+      if (val === undefined || val === null) return "";
+      let str = String(val);
+      // Blindagem contra CSV Injection / Injeção de Fórmulas no Excel (=, +, -, @)
+      if (/^[=+\-@]/.test(str)) {
+        str = `'${str}`;
+      }
+      str = str.replace(/"/g, '""').replace(/;/g, ",");
+      return `"${str}"`;
+    };
+
+    const rows = processedTxs.map((t) => {
+      const flow = t.flowType || getFlowType(t.category);
+      const flowLabel =
+        flow === "INCOME"
+          ? "Entrada"
+          : flow === "INVESTMENT"
+          ? "Investimento"
+          : flow === "NEUTRAL"
+          ? "Neutro / Compensação"
+          : "Saída";
+      const formattedAmount = t.amount.toFixed(2).replace(".", ",");
+      return [
+        sanitizeCell(formatDateBR(t.date)),
+        sanitizeCell(t.description),
+        sanitizeCell(t.category),
+        sanitizeCell(flowLabel),
+        sanitizeCell(t.costType),
+        sanitizeCell(t.paymentMethod),
+        sanitizeCell(t.cardUsed || t.bankAccount || "-"),
+        sanitizeCell(t.status),
+        `"${formattedAmount}"`,
+        sanitizeCell(t.km != null ? t.km : ""),
+        sanitizeCell(t.liters != null ? String(t.liters).replace(".", ",") : ""),
+        sanitizeCell(t.debtor || ""),
+        sanitizeCell(t.installmentInfo || "À vista")
+      ].join(";");
+    });
+
+    const BOM = "\uFEFF";
+    const csvContent = BOM + [headers.map((h) => `"${h}"`).join(";"), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const nowBR = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
+    link.download = `Lancamentos_Coindex_${nowBR}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [processedTxs, getFlowType]);
 
   const hasActiveFiltersOrSort =
     txStatusFilter !== "ALL" ||
@@ -524,7 +595,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
 
           <button
             type="button"
-            onClick={handleExportCSV}
+            onClick={exportTableCSV}
             className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-slate-200 font-bold flex items-center gap-1.5 transition"
             title="Exportar planilha compatível com Microsoft Excel"
           >

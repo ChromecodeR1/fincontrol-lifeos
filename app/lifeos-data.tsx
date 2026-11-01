@@ -318,6 +318,8 @@ export interface ToastMessage {
   title: string;
   subtitle?: string;
   type: "success" | "warning" | "info" | "error";
+  onUndo?: () => void;
+  undoLabel?: string;
 }
 
 export interface SystemLogEntry {
@@ -1314,13 +1316,15 @@ interface CustomCyberTooltipProps {
   payload?: TooltipPayloadEntry[];
   label?: string;
   isCurrency?: boolean;
+  moneyBlur?: string;
 }
 
 export function CustomCyberTooltip({
   active,
   payload,
   label,
-  isCurrency = true
+  isCurrency = true,
+  moneyBlur = ""
 }: CustomCyberTooltipProps) {
   if (!active || !payload || !payload.length) return null;
   const displayLabel = label && /^\d{4}[-/]\d{2}[-/]\d{2}/.test(label) ? formatDateBR(label) : label;
@@ -1336,13 +1340,50 @@ export function CustomCyberTooltip({
             />
             {entry.name}:
           </span>
-          <strong className="text-white font-mono tabular-nums">
+          <strong className={`text-white font-mono tabular-nums ${moneyBlur}`}>
             {isCurrency ? formatBRL(Number(entry.value)) : entry.value}
           </strong>
         </div>
       ))}
     </div>
   );
+}
+
+export function normalizeSearchText(str: string | undefined | null): string {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+export function evaluateMathExpression(input: string): string {
+  if (!input || !input.trim()) return "";
+  let expr = input.trim();
+  expr = expr.replace(/\s+/g, " ");
+  expr = expr.replace(/(\d+)\.(\d{3})/g, "$1$2");
+  expr = expr.replace(/,/g, ".");
+  
+  if (/^[0-9]+(\.[0-9]+)?$/.test(expr)) {
+    const n = parseFloat(expr);
+    return isNaN(n) ? input : n.toFixed(2);
+  }
+
+  if (!/^[0-9+\-*/.()\s]+$/.test(expr)) {
+    return input;
+  }
+
+  try {
+    const fn = new Function(`"use strict"; return (${expr});`);
+    const val = fn();
+    if (typeof val === "number" && !isNaN(val) && isFinite(val) && val >= 0) {
+      return val.toFixed(2);
+    }
+  } catch {
+    // Retorna original se inválido
+  }
+  return input;
 }
 
 export function ThemeSegmentedControl({
