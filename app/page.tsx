@@ -117,6 +117,15 @@ import {
   ThemeSegmentedControl,
   renderCategorySemanticIcon,
   formatDateBR,
+  todayBR,
+  todayISO,
+  toSortableISO,
+  compareDatesBR,
+  getYearMonthKey,
+  distributeInstallments,
+  generateInstallmentSeriesId,
+  calculateInvoiceAndCashMonths,
+  isNeutralFlow,
   isResgateCategory,
   AutoInmetroConfig,
   DEFAULT_AUTO_INMETRO_CONFIG,
@@ -1264,6 +1273,14 @@ export default function CoindexApp() {
       if (found) return found.flow;
       const lower = category.toLowerCase();
       if (
+        lower.includes("transferência") ||
+        lower.includes("pagamento de fatura") ||
+        lower.includes("pagamento fatura") ||
+        lower.includes("recebimento de empréstimo")
+      ) {
+        return "NEUTRAL";
+      }
+      if (
         lower.includes("salário") ||
         lower.includes("benefício") ||
         lower.includes("comissão") ||
@@ -1292,7 +1309,7 @@ export default function CoindexApp() {
 
   const filteredTransactions = useMemo(() => {
     return transactions
-      .filter((t) => (selectedMonth === "ALL" ? true : t.date.startsWith(selectedMonth)))
+      .filter((t) => (selectedMonth === "ALL" ? true : getYearMonthKey(t.date) === selectedMonth))
       .filter((t) => {
         if (quickFilter === "FIXO") return t.costType === "Fixo";
         if (quickFilter === "VARIAVEL") return t.costType === "Variável";
@@ -1310,20 +1327,22 @@ export default function CoindexApp() {
           (t.debtor && t.debtor.toLowerCase().includes(q))
         );
       })
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => compareDatesBR(b.date, a.date));
   }, [transactions, selectedMonth, quickFilter, searchQuery]);
 
   const monthSummary = useMemo(() => {
     const calcFor = (list: Transaction[]) => {
-      const nonTransferList = list.filter((t) => !t.isTransfer && !t.isSplitChild && t.category !== "Transferência entre Contas");
-      const income = safeAdd(...nonTransferList.filter((t) => getFlowType(t.category) === "INCOME").map((t) => t.amount));
+      const nonTransferList = list.filter(
+        (t) => !isNeutralFlow(t) && !t.isSplitChild && getFlowType(t.category) !== "NEUTRAL"
+      );
+      const income = safeAdd(...nonTransferList.filter((t) => (t.flowType || getFlowType(t.category)) === "INCOME").map((t) => t.amount));
       const expense = safeAdd(
         ...nonTransferList
-          .filter((t) => getFlowType(t.category) === "EXPENSE")
+          .filter((t) => (t.flowType || getFlowType(t.category)) === "EXPENSE")
           .map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
       );
 
-      const investmentTxs = nonTransferList.filter((t) => getFlowType(t.category) === "INVESTMENT");
+      const investmentTxs = nonTransferList.filter((t) => (t.flowType || getFlowType(t.category)) === "INVESTMENT");
       const aportesMes = safeAdd(...investmentTxs.filter((t) => !isResgateCategory(t.category)).map((t) => t.amount));
       const resgatesMes = safeAdd(...investmentTxs.filter((t) => isResgateCategory(t.category)).map((t) => t.amount));
 
@@ -1356,7 +1375,7 @@ export default function CoindexApp() {
 
     const current = calcFor(filteredTransactions);
     const prevPrefix = getPreviousMonthPrefix(selectedMonth);
-    const prevList = prevPrefix ? transactions.filter((t) => t.date.startsWith(prevPrefix)) : [];
+    const prevList = prevPrefix ? transactions.filter((t) => getYearMonthKey(t.date) === prevPrefix) : [];
     const prev = calcFor(prevList);
 
     const pctDiff = (currVal: number, prevVal: number) => {
@@ -1397,7 +1416,7 @@ export default function CoindexApp() {
   const filterMonthsCount = useMemo(() => {
     if (selectedMonth !== "ALL") return 1;
     const monthsSet = new Set(
-      filteredTransactions.map((t) => t.date.slice(0, 7)).filter((m) => /^\d{4}-\d{2}$/.test(m))
+      filteredTransactions.map((t) => getYearMonthKey(t.date)).filter((m) => /^\d{4}-\d{2}$/.test(m))
     );
     return Math.max(1, monthsSet.size);
   }, [selectedMonth, filteredTransactions]);
@@ -1462,15 +1481,15 @@ export default function CoindexApp() {
     // 1. Saldo Atual em Contas: somatório de saldos reais de todas as contas bancárias cadastradas
     const currentCash = safeAdd(...banks.map((b) => calculateBankBalance(b, transactions, getFlowType)));
 
-    // 2. Receitas Pendentes do Mês (excluindo transferências)
+    // 2. Receitas Pendentes do Mês (excluindo fluxos neutros e transferências)
     const pendingIncome = safeAdd(
       ...filteredTransactions
         .filter(
           (t) =>
-            !t.isTransfer &&
+            !isNeutralFlow(t) &&
             !t.isSplitChild &&
-            t.category !== "Transferência entre Contas" &&
-            getFlowType(t.category) === "INCOME" &&
+            getFlowType(t.category) !== "NEUTRAL" &&
+            (t.flowType || getFlowType(t.category)) === "INCOME" &&
             t.status !== "Pago"
         )
         .map((t) => t.amount)
@@ -1481,19 +1500,34 @@ export default function CoindexApp() {
       ...filteredTransactions
         .filter(
           (t) =>
-            !t.isTransfer &&
+            !isNeutralFlow(t) &&
             !t.isSplitChild &&
-            t.category !== "Transferência entre Contas" &&
-            getFlowType(t.category) === "EXPENSE" &&
+            getFlowType(t.category) !== "NEUTRAL" &&
+            (t.flowType || getFlowType(t.category)) === "EXPENSE" &&
             t.status !== "Pago" &&
             t.paymentMethod !== "Cartão de Crédito"
         )
         .map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
     );
 
-    // 4. Faturas Abertas de Cartão
+    // 4. Faturas Abertas de Cartão considerando mês de caixa (cashMonth)
     const pendingInvoices = safeAdd(
       ...cards.map((c) => {
+        if (selectedMonth !== "ALL") {
+          const cardCashTxs = transactions.filter(
+            (t) =>
+              !t.isSplitChild &&
+              t.paymentMethod === "Cartão de Crédito" &&
+              t.cardUsed === c.name &&
+              t.status === "Pendente / Na Fatura" &&
+              (t.cashMonth
+                ? t.cashMonth === selectedMonth
+                : t.invoiceMonth
+                ? t.invoiceMonth === selectedMonth
+                : getYearMonthKey(t.date) === selectedMonth)
+          );
+          return safeAdd(...cardCashTxs.map((t) => t.amount));
+        }
         const exp = calculateCardExposure(c, transactions);
         return exp.used;
       })
@@ -1734,15 +1768,18 @@ export default function CoindexApp() {
     };
 
     const rows = filteredTransactions.map((t) => {
+      const flow = t.flowType || getFlowType(t.category);
       const flowLabel =
-        getFlowType(t.category) === "INCOME"
+        flow === "INCOME"
           ? "Entrada"
-          : getFlowType(t.category) === "INVESTMENT"
+          : flow === "INVESTMENT"
           ? "Investimento"
+          : flow === "NEUTRAL"
+          ? "Neutro / Compensação"
           : "Saída";
       const formattedAmount = t.amount.toFixed(2).replace(".", ",");
       return [
-        escapeCell(t.date),
+        escapeCell(formatDateBR(t.date)),
         escapeCell(t.description),
         escapeCell(t.category),
         escapeCell(flowLabel),
@@ -1791,7 +1828,7 @@ export default function CoindexApp() {
     setIsPostoExpress(isFuel);
     setExpressFuelType("Gasolina");
     setNewTx({
-      date: new Date().toISOString().split("T")[0],
+      date: todayBR(),
       description: isFuel ? "Abastecimento Gasolina Comum" : "",
       amount: "",
       category: isFuel ? "Gasolina" : cat,
@@ -1976,7 +2013,11 @@ export default function CoindexApp() {
           );
         } else {
           let editedItem: Transaction | null = null;
-          const itemInvoiceMonth = isCredit ? getCardInvoiceCompetence(newTx.date, matchedCard?.closingDay) : undefined;
+          const invData = isCredit
+            ? calculateInvoiceAndCashMonths(newTx.date, matchedCard?.closingDay, matchedCard?.dueDay)
+            : null;
+          const itemInvoiceMonth = invData?.invoiceCompetence;
+          const itemCashMonth = invData?.cashMonth;
 
           const existingTx = transactions.find((t) => t.id === editingTxId);
           const existingChildId = existingTx?.linkedReceivableId;
@@ -2023,6 +2064,7 @@ export default function CoindexApp() {
                 km: newTx.km ? Number(newTx.km) : undefined,
                 liters: newTx.liters ? Number(newTx.liters) : undefined,
                 invoiceMonth: itemInvoiceMonth,
+                cashMonth: itemCashMonth,
                 debtor: newTx.category === "A Receber" ? sanitizeText(newTx.debtor) : t.debtor,
                 isTransfer: isTransferTx,
                 sourceBank: newTx.sourceBank || resolvedBank,
@@ -2070,31 +2112,30 @@ export default function CoindexApp() {
           }
         }
       } else if (installmentsCount > 1 && isCredit) {
-        const groupId = `grp-${Date.now()}`;
-        const totalCents = toCents(totalAmount);
-        const baseSliceCents = Math.floor(totalCents / installmentsCount);
-        const firstSliceCents = totalCents - baseSliceCents * (installmentsCount - 1);
-        const baseSlice = fromCents(baseSliceCents);
-        const firstSlice = fromCents(firstSliceCents);
+        const slices = distributeInstallments(totalAmount, installmentsCount);
+        const seriesId = generateInstallmentSeriesId(newTx.description, newTx.date, totalAmount);
         const createdList: Transaction[] = [];
 
-        for (let i = 0; i < installmentsCount; i++) {
+        for (let i = 0; i < slices.length; i++) {
+          const slice = slices[i];
           const instDate = addMonthsToDate(newTx.date, i);
-          const instInvoiceMonth = getCardInvoiceCompetence(instDate, matchedCard?.closingDay);
+          const invData = calculateInvoiceAndCashMonths(instDate, matchedCard?.closingDay, matchedCard?.dueDay);
           createdList.push({
             id: `tx-${Date.now()}-${i}`,
             date: instDate,
             description: sanitizeText(newTx.description),
-            amount: i === 0 ? firstSlice : baseSlice,
+            amount: slice.amount,
             category: newTx.category,
             costType: newTx.costType,
             paymentMethod: newTx.paymentMethod,
             cardUsed: savedCardUsed,
             bankAccount: resolvedBank,
             status: "Pendente / Na Fatura",
-            installmentInfo: `${i + 1}/${installmentsCount}`,
-            installmentGroupId: groupId,
-            invoiceMonth: instInvoiceMonth,
+            installmentInfo: `${slice.installmentNumber}/${slice.totalInstallments}`,
+            installmentGroupId: seriesId,
+            installmentSeriesId: seriesId,
+            invoiceMonth: invData.invoiceCompetence,
+            cashMonth: invData.cashMonth,
             debtor: newTx.category === "A Receber" ? sanitizeText(newTx.debtor) : undefined,
             updatedAt: nowIso
           });
@@ -2105,12 +2146,16 @@ export default function CoindexApp() {
         await upsertTransactionsInDb(createdList, debtorMap);
         notify(
           "Compra Parcelada Criada!",
-          `${installmentsCount}x de ${formatBRL(baseSlice)} salvas no Supabase.`,
+          `${installmentsCount}x de ${formatBRL(slices[slices.length - 1].amount)} salvas no Supabase.`,
           "success",
           "FINANCE"
         );
       } else {
-        const itemInvoiceMonth = isCredit ? getCardInvoiceCompetence(newTx.date, matchedCard?.closingDay) : undefined;
+        const invData = isCredit
+          ? calculateInvoiceAndCashMonths(newTx.date, matchedCard?.closingDay, matchedCard?.dueDay)
+          : null;
+        const itemInvoiceMonth = invData?.invoiceCompetence;
+        const itemCashMonth = invData?.cashMonth;
         const parentId = `tx-${Date.now()}`;
         let childItem: Transaction | null = null;
         let childId: string | undefined = undefined;
@@ -2148,6 +2193,7 @@ export default function CoindexApp() {
           km: newTx.km ? Number(newTx.km) : undefined,
           liters: newTx.liters ? Number(newTx.liters) : undefined,
           invoiceMonth: itemInvoiceMonth,
+          cashMonth: itemCashMonth,
           debtor: newTx.category === "A Receber" ? sanitizeText(newTx.debtor) : undefined,
           isTransfer: isTransferTx,
           sourceBank: newTx.sourceBank || resolvedBank,
@@ -2326,8 +2372,8 @@ export default function CoindexApp() {
     const nextPaidCents = Math.min(txAmountCents, currPaidCents + addCents);
     const nextPaid = fromCents(nextPaidCents);
     const nextStatus: TxStatus = nextPaidCents >= txAmountCents ? "Pago" : "Pendente / Na Fatura";
-    const nowIso = new Date().toISOString();
-    const todayStr = nowIso.split("T")[0];
+    const nowIso = todayISO();
+    const todayStr = todayBR();
     const debtorName = tx.debtor || debtorMap[tx.id] || "Devedor";
 
     const changedTx: Transaction = {
@@ -2343,6 +2389,8 @@ export default function CoindexApp() {
       description: `Recebimento: ${debtorName} (${tx.description})`,
       amount: cleanAmount,
       category: "Recebimento de Empréstimo",
+      flowType: "NEUTRAL",
+      isReceivableSettlement: true,
       costType: "Variável",
       paymentMethod: "PIX",
       bankAccount: targetBank,
@@ -2724,8 +2772,8 @@ export default function CoindexApp() {
     }
 
     const totalInvoice = safeAdd(...pendingTxs.map((t) => t.amount));
-    const nowIso = new Date().toISOString();
-    const todayStr = nowIso.split("T")[0];
+    const nowIso = todayISO();
+    const todayStr = todayBR();
     const resolvedOriginBank = originBankName || banks[0]?.name || "Nubank";
 
     // 1. Marca as transações da fatura como "Pago"
@@ -2748,13 +2796,15 @@ export default function CoindexApp() {
       return t;
     });
 
-    // 2. Gera a transação de saída correspondente no Banco escolhido
+    // 2. Gera a transação de saída correspondente no Banco escolhido com neutralidade contábil
     const invoicePaymentTx: Transaction = {
       id: `tx-inv-${Date.now()}`,
       date: todayStr,
       description: `Pagamento Fatura ${cardName}`,
       amount: totalInvoice,
       category: "Pagamento de Fatura",
+      flowType: "NEUTRAL",
+      isInvoicePayment: true,
       costType: "Fixo",
       paymentMethod: "Débito em Conta",
       bankAccount: resolvedOriginBank,
@@ -2819,7 +2869,7 @@ export default function CoindexApp() {
 
     const newTxItem: Transaction = {
       id: `tx-wish-${Date.now()}`,
-      date: new Date().toISOString().split("T")[0],
+      date: todayBR(),
       description: isWithdraw ? `Resgate Caixinha: ${w.title}` : `Aporte Caixinha: ${w.title}`,
       amount: absVal,
       category: isWithdraw ? "Resgate Caixinha" : "Aporte / Investimento",
@@ -2871,12 +2921,12 @@ export default function CoindexApp() {
     };
     const updated = editingBioId
       ? bioLogs.map((b) => (b.id === editingBioId ? bioObj : b))
-      : [...bioLogs, bioObj].sort((a, b) => a.date.localeCompare(b.date));
+      : [...bioLogs, bioObj].sort((a, b) => compareDatesBR(a.date, b.date));
     setBioLogs(updated);
     localStorage.setItem("lifeos_bio_v8", JSON.stringify(updated));
     upsertBioLogInDb(bioObj);
     setEditingBioId(null);
-    setNewBio({ date: new Date().toISOString().split("T")[0], weight: "", bf: "" });
+    setNewBio({ date: todayBR(), weight: "", bf: "" });
   };
 
   const handleDeleteBioLog = (id: string) => {
@@ -2916,7 +2966,7 @@ export default function CoindexApp() {
     const parsedPrice = newNote.itemType === "wish" && newNote.price ? Number(newNote.price) || 0 : undefined;
     const noteObj: BrainNote = {
       id: editingNoteId || `n-${Date.now()}`,
-      date: new Date().toISOString().split("T")[0],
+      date: todayBR(),
       title: newNote.title.trim(),
       content: finalDesc,
       description: finalDesc,
@@ -2926,7 +2976,7 @@ export default function CoindexApp() {
       priority: newNote.itemType === "wish" ? newNote.priority || "Planejado" : undefined,
       storeUrl: newNote.storeUrl?.trim() || undefined,
       completed: Boolean(newNote.completed),
-      completedAt: newNote.completed ? new Date().toISOString().split("T")[0] : undefined
+      completedAt: newNote.completed ? todayBR() : undefined
     };
     const updated = editingNoteId
       ? notes.map((n) => (n.id === editingNoteId ? { ...n, ...noteObj } : n))
@@ -2955,7 +3005,7 @@ export default function CoindexApp() {
       return {
         ...n,
         completed: nextCompleted,
-        completedAt: nextCompleted ? new Date().toISOString().split("T")[0] : undefined
+        completedAt: nextCompleted ? todayBR() : undefined
       };
     });
     setNotes(updated);
@@ -3195,7 +3245,7 @@ export default function CoindexApp() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `coindex-backup-${new Date().toISOString().split("T")[0]}.json`;
+    a.download = `coindex-backup-${todayBR()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     notify("Backup Exportado com Sucesso!", "Arquivo JSON gerado e salvo.", "success", "CONFIG");

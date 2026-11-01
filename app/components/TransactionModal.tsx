@@ -12,6 +12,10 @@ import {
   Transaction,
   TxStatus,
   formatBRL,
+  formatDateBR,
+  toSortableISO,
+  compareDatesBR,
+  getYearMonthKey,
   getAutomaticStatus,
   getCardInvoiceCompetence
 } from "@/app/lifeos-data";
@@ -120,7 +124,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const historyCatalog = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
     const map = new Map<string, HistorySuggestion>();
-    const sorted = [...transactions].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const sorted = [...transactions].sort((a, b) => compareDatesBR(b.date || "", a.date || ""));
 
     for (const t of sorted) {
       if (t.isTransfer || t.category === "Transferência entre Contas" || t.isSplitChild) continue;
@@ -347,8 +351,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <input
                   type="date"
                   required
-                  value={formState.date}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, date: e.target.value }))}
+                  value={toSortableISO(formState.date) || formState.date}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, date: formatDateBR(e.target.value) }))}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-sky-500 transition"
                 />
               </div>
@@ -667,8 +671,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <input
                   type="date"
                   required
-                  value={formState.date}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, date: e.target.value }))}
+                  value={toSortableISO(formState.date) || formState.date}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, date: formatDateBR(e.target.value) }))}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500 text-xs tabular-nums"
                 />
               </div>
@@ -752,8 +756,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   {(() => {
                     const matched = cards.find((c) => c.name === formState.cardUsed);
                     if (!matched?.closingDay) return null;
-                    const comp = getCardInvoiceCompetence(formState.date, matched.closingDay);
-                    const purchaseMonth = formState.date.slice(0, 7);
+                    const comp = getCardInvoiceCompetence(formState.date, matched.closingDay, matched.dueDay);
+                    const purchaseMonth = getYearMonthKey(formState.date);
                     if (!comp || comp <= purchaseMonth) return null;
                     const [compY, compM] = comp.split("-");
                     return (
@@ -961,8 +965,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <input
                   type="date"
                   required
-                  value={formState.date}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, date: e.target.value }))}
+                  value={toSortableISO(formState.date) || formState.date}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, date: formatDateBR(e.target.value) }))}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-indigo-500 tabular-nums text-xs transition"
                 />
               </div>
@@ -1064,8 +1068,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   {(() => {
                     const matched = cards.find((c) => c.name === formState.cardUsed);
                     if (!matched?.closingDay) return null;
-                    const comp = getCardInvoiceCompetence(formState.date, matched.closingDay);
-                    const purchaseMonth = formState.date.slice(0, 7);
+                    const comp = getCardInvoiceCompetence(formState.date, matched.closingDay, matched.dueDay);
+                    const purchaseMonth = getYearMonthKey(formState.date);
                     if (!comp || comp <= purchaseMonth) return null;
                     const [compY, compM] = comp.split("-");
                     return (

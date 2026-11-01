@@ -23,6 +23,7 @@ import {
   FlowType,
   formatBRL,
   formatDateBR,
+  compareDatesBR,
   parseInstallmentInfo,
   renderCategorySemanticIcon
 } from "./lifeos-data";
@@ -365,7 +366,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
       result = [...result].sort((a, b) => {
         let cmp = 0;
         if (sortConfig.key === "date") {
-          cmp = a.date.localeCompare(b.date);
+          cmp = compareDatesBR(a.date, b.date);
         } else if (sortConfig.key === "amount") {
           cmp = a.amount - b.amount;
         } else if (sortConfig.key === "km") {

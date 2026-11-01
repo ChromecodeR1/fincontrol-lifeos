@@ -20,7 +20,7 @@ import {
   CategoryCatalogItem, SystemLogEntry, ThemeMode, FlowType, APP_VERSION,
   formatBRL, sanitizeText, compressImageFileToBase64, renderCategorySemanticIcon,
   CustomCyberTooltip, ThemeSegmentedControl, buildWhatsAppChargeText,
-  formatDateBR, AutoInmetroConfig, DEFAULT_AUTO_INMETRO_CONFIG, DashboardWidgetConfig,
+  formatDateBR, todayBR, toSortableISO, getYearMonthKey, compareDatesBR, AutoInmetroConfig, DEFAULT_AUTO_INMETRO_CONFIG, DashboardWidgetConfig,
   parseInstallmentInfo, toCents, fromCents, safeAdd, safeSub,
   calculateCardExposure, calculateBankExposure, calculateStaticStatusSummary
 } from "./lifeos-data";
@@ -282,7 +282,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     const targetMonth =
       props.selectedMonth && props.selectedMonth !== "ALL"
         ? props.selectedMonth
-        : new Date().toISOString().slice(0, 7);
+        : getYearMonthKey(todayBR());
 
     const normalizeDesc = (str: string) =>
       str
@@ -291,7 +291,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         .replace(/[\u0300-\u036f]/g, "")
         .trim();
 
-    const txsInMonth = transactions.filter((t) => t.date.startsWith(targetMonth));
+    const txsInMonth = transactions.filter((t) => getYearMonthKey(t.date) === targetMonth);
 
     const checkIsLaunched = (title: string) => {
       const itemTitle = normalizeDesc(title);
@@ -949,12 +949,12 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-extrabold text-white">{editingBioId ? "Editar Medição" : "Nova Pesagem"}</h3>
               {editingBioId && (
-                <button type="button" onClick={() => { setEditingBioId(null); setNewBio({ date: new Date().toISOString().split("T")[0], weight: "", bf: "" }); }} className="text-[11px] text-rose-400 hover:underline">
+                <button type="button" onClick={() => { setEditingBioId(null); setNewBio({ date: todayBR(), weight: "", bf: "" }); }} className="text-[11px] text-rose-400 hover:underline">
                   Cancelar
                 </button>
               )}
             </div>
-            <input type="date" required value={newBio.date} onChange={(e) => setNewBio({ ...newBio, date: e.target.value })} className={inputClass} />
+            <input type="date" required value={toSortableISO(newBio.date) || newBio.date} onChange={(e) => setNewBio({ ...newBio, date: formatDateBR(e.target.value) })} className={inputClass} />
             <div className="grid grid-cols-2 gap-2.5">
               <input type="number" step="0.1" required placeholder="Peso (kg)" value={newBio.weight} onChange={(e) => setNewBio({ ...newBio, weight: e.target.value })} className={inputClass} />
               <input type="number" step="0.1" placeholder="BF % (Opcional)" value={newBio.bf} onChange={(e) => setNewBio({ ...newBio, bf: e.target.value })} className={inputClass} />

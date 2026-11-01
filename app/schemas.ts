@@ -21,7 +21,7 @@ export const TransactionSchema = z
       .string({ error: "A data é obrigatória." })
       .trim()
       .min(1, "A data do lançamento não pode estar vazia.")
-      .regex(/^\d{4}-\d{2}-\d{2}/, "A data deve estar no formato AAAA-MM-DD."),
+      .regex(/^(\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4}|\d{2}\/\d{2}\/\d{4})/, "A data deve estar no formato DD-MM-AAAA ou AAAA-MM-DD."),
     category: z
       .string({ error: "A categoria é obrigatória." })
       .trim()
@@ -57,7 +57,12 @@ export const TransactionSchema = z
     personalAmount: z.number().min(0, "A sua parte não pode ser negativa.").optional(),
     linkedReceivableId: z.string().optional(),
     isSplitChild: z.boolean().optional(),
-    linkedSplitParentId: z.string().optional()
+    linkedSplitParentId: z.string().optional(),
+    flowType: z.enum(["INCOME", "EXPENSE", "INVESTMENT", "NEUTRAL"] as const).optional(),
+    installmentSeriesId: z.string().optional(),
+    cashMonth: z.string().optional(),
+    isInvoicePayment: z.boolean().optional(),
+    isReceivableSettlement: z.boolean().optional()
   })
   .refine(
     (data) => {

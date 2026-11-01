@@ -2,6 +2,33 @@
 
 import React from "react";
 import {
+  todayBR,
+  todayISO,
+  parseDateParts,
+  formatDateBR,
+  toSortableISO,
+  addMonthsSafe,
+  addMonthsToDateBR,
+  addMonthsToDateISO,
+  getYearMonthKey,
+  getYearMonthInfo,
+  compareDatesBR,
+  formatMonthShortLabelBR,
+  daysInMonth
+} from "./lib/domain/date-br";
+import {
+  toCents,
+  fromCents,
+  safeAdd,
+  safeSub,
+  formatBRL,
+  distributeInstallments,
+  generateInstallmentSeriesId,
+  calculateInvoiceAndCashMonths,
+  getCardInvoiceCompetence,
+  isNeutralFlow
+} from "./lib/domain/finance";
+import {
   Banknote,
   CreditCard,
   PiggyBank,
@@ -31,7 +58,7 @@ import {
 export type CostType = "Fixo" | "Variável";
 export type PaymentMethod = string;
 export type TxStatus = "Pago" | "Pendente / Na Fatura";
-export type FlowType = "INCOME" | "EXPENSE" | "INVESTMENT";
+export type FlowType = "INCOME" | "EXPENSE" | "INVESTMENT" | "NEUTRAL";
 export type CurveType = "monotone" | "natural" | "linear" | "step";
 export type ThemeMode = "branco" | "tradicional" | "noturno";
 export type ActiveTab =
@@ -84,7 +111,12 @@ export interface Transaction {
   updatedAt?: string;
   installmentInfo?: string;
   installmentGroupId?: string;
+  installmentSeriesId?: string;
   invoiceMonth?: string;
+  cashMonth?: string;
+  flowType?: FlowType;
+  isInvoicePayment?: boolean;
+  isReceivableSettlement?: boolean;
   debtor?: string;
   paidAmount?: number;
   isTransfer?: boolean;
@@ -344,75 +376,40 @@ export function normalizeStatus(st?: string): TxStatus {
   return st.includes("Pendente") ? "Pendente / Na Fatura" : "Pago";
 }
 
-export function formatBRL(val: number): string {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val ? val : 0);
-}
-
-// Matemática Financeira Blindada em Centavos Inteiros (Sprint 8)
-export function toCents(val: number): number {
-  return Math.round((Number(val) || 0) * 100);
-}
-
-export function fromCents(cents: number): number {
-  return Math.round(Number(cents) || 0) / 100;
-}
-
-export function safeAdd(...values: number[]): number {
-  const sumCents = values.reduce((acc, v) => acc + toCents(v), 0);
-  return fromCents(sumCents);
-}
-
-export function safeSub(a: number, b: number): number {
-  return fromCents(toCents(a) - toCents(b));
-}
-
-// Competência Real da Fatura vs. Data da Compra sem shift de fuso horário (UTC-3)
-export function getCardInvoiceCompetence(
-  purchaseDateISO: string,
-  cardClosingDay?: number
-): string {
-  if (!purchaseDateISO) return "";
-  const dateOnly = purchaseDateISO.trim().split("T")[0].replace(/\//g, "-");
-  const parts = dateOnly.split("-");
-  if (parts.length < 3) return "";
-
-  const y = parseInt(parts[0], 10);
-  const m = parseInt(parts[1], 10);
-  const d = parseInt(parts[2], 10);
-
-  if (isNaN(y) || isNaN(m) || isNaN(d)) return "";
-
-  if (cardClosingDay && cardClosingDay > 0 && d >= cardClosingDay) {
-    const nextYear = y + Math.floor(m / 12);
-    const nextMonth = (m % 12) + 1;
-    return `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
-  }
-
-  return `${y}-${String(m).padStart(2, "0")}`;
-}
-
-export function formatDateBR(dateStr?: string | null): string {
-  if (!dateStr) return "";
-  const trimmed = dateStr.trim();
-  // Já está no formato DD/MM/AAAA
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) return trimmed;
-  // AAAA-MM-DD ou AAAA/MM/DD (com ou sem timestamp T...)
-  const dateOnly = trimmed.split("T")[0].replace(/\//g, "-");
-  const parts = dateOnly.split("-");
-  if (parts.length === 3 && parts[0].length === 4) {
-    const [year, month, day] = parts;
-    return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
-  }
-  return dateStr;
-}
+// Motor de Datas e Calendário Seguro sem UTC Shift (Sprint 21)
+export {
+  todayBR,
+  todayISO,
+  parseDateParts,
+  formatDateBR,
+  toSortableISO,
+  addMonthsSafe,
+  addMonthsToDateBR,
+  addMonthsToDateISO,
+  getYearMonthKey,
+  getYearMonthInfo,
+  compareDatesBR,
+  formatMonthShortLabelBR,
+  daysInMonth,
+  toCents,
+  fromCents,
+  safeAdd,
+  safeSub,
+  formatBRL,
+  distributeInstallments,
+  generateInstallmentSeriesId,
+  calculateInvoiceAndCashMonths,
+  getCardInvoiceCompetence,
+  isNeutralFlow
+};
 
 export function addMonthsToDate(dateStr: string, monthsToAdd: number): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const targetYear = y + Math.floor((m - 1 + monthsToAdd) / 12);
-  const targetMonth = ((m - 1 + monthsToAdd) % 12) + 1;
-  const maxDaysInMonth = new Date(targetYear, targetMonth, 0).getDate();
-  const safeDay = Math.min(d ? d : 1, maxDaysInMonth);
-  return `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+  if (!dateStr) return "";
+  const clean = dateStr.trim();
+  if (/^\d{2}[-\/]\d{2}[-\/]\d{4}/.test(clean)) {
+    return addMonthsToDateBR(clean, monthsToAdd);
+  }
+  return addMonthsToDateISO(clean, monthsToAdd);
 }
 
 export function getPreviousMonthPrefix(monthPrefix: string): string {
@@ -483,6 +480,7 @@ export function parseInstallmentInfo(tx: Transaction): {
 
   const baseDescription = desc.replace(suffixRegex, "").trim();
   const isInstallment = Boolean(
+    tx.installmentSeriesId ||
     tx.installmentGroupId ||
     (total && total > 1) ||
     Boolean(tx.installmentInfo && tx.installmentInfo.includes("/"))
@@ -501,15 +499,16 @@ export function getInstallmentSeries(
   allTransactions: Transaction[]
 ): InstallmentSeriesData {
   const parsedTarget = parseInstallmentInfo(targetTx);
+  const seriesId = targetTx.installmentSeriesId || targetTx.installmentGroupId;
 
-  if (targetTx.installmentGroupId) {
+  if (seriesId) {
     const series = allTransactions
-      .filter((t) => t.installmentGroupId === targetTx.installmentGroupId)
+      .filter((t) => t.installmentSeriesId === seriesId || t.installmentGroupId === seriesId)
       .sort((a, b) => {
         const pa = parseInstallmentInfo(a);
         const pb = parseInstallmentInfo(b);
         if (pa.current && pb.current) return pa.current - pb.current;
-        return a.date.localeCompare(b.date);
+        return compareDatesBR(a.date, b.date);
       });
 
     return {
@@ -517,7 +516,7 @@ export function getInstallmentSeries(
       baseDescription: parsedTarget.baseDescription,
       currentInstallment: parsedTarget.current,
       totalInstallments: parsedTarget.total || series.length,
-      groupId: targetTx.installmentGroupId,
+      groupId: seriesId,
       series: series.length > 0 ? series : [targetTx]
     };
   }
@@ -548,7 +547,7 @@ export function getInstallmentSeries(
       const pa = parseInstallmentInfo(a);
       const pb = parseInstallmentInfo(b);
       if (pa.current && pb.current) return pa.current - pb.current;
-      return a.date.localeCompare(b.date);
+      return compareDatesBR(a.date, b.date);
     });
 
   return {
@@ -679,9 +678,9 @@ export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = [
   { name: "Aporte / Investimento", flow: "INVESTMENT" },
   { name: "Resgate", flow: "INVESTMENT" },
   { name: "Resgate Caixinha", flow: "INVESTMENT" },
-  { name: "Transferência entre Contas", flow: "INVESTMENT" },
-  { name: "Recebimento de Empréstimo", flow: "INCOME" },
-  { name: "Pagamento de Fatura", flow: "EXPENSE" },
+  { name: "Transferência entre Contas", flow: "NEUTRAL" },
+  { name: "Recebimento de Empréstimo", flow: "NEUTRAL" },
+  { name: "Pagamento de Fatura", flow: "NEUTRAL" },
   { name: "A Receber", flow: "EXPENSE" },
   { name: "Alimentação", flow: "EXPENSE" },
   { name: "Moradia", flow: "EXPENSE" },
@@ -1342,13 +1341,33 @@ export function calculateBankBalance(
       continue;
     }
 
+    if (t.isInvoicePayment || t.category === "Pagamento de Fatura") {
+      const isPaidByThisBank =
+        (t.bankAccount && t.bankAccount.toLowerCase() === bName) ||
+        (t.sourceBank && t.sourceBank.toLowerCase() === bName);
+      if (isPaidByThisBank) {
+        balanceCents -= toCents(t.amount);
+      }
+      continue;
+    }
+
+    if (t.isReceivableSettlement || t.category === "Recebimento de Empréstimo") {
+      const isReceivedInThisBank =
+        (t.bankAccount && t.bankAccount.toLowerCase() === bName) ||
+        (t.destinationBank && t.destinationBank.toLowerCase() === bName);
+      if (isReceivedInThisBank) {
+        balanceCents += toCents(t.amount);
+      }
+      continue;
+    }
+
     const isThisBank =
       (t.bankAccount && t.bankAccount.toLowerCase() === bName) ||
       (!t.bankAccount && t.cardUsed && t.cardUsed.toLowerCase().includes(bName));
 
     if (!isThisBank) continue;
 
-    const flow = getFlowType(t.category);
+    const flow = t.flowType || getFlowType(t.category);
     if (flow === "INCOME") {
       balanceCents += toCents(t.amount);
     } else if (flow === "EXPENSE") {
@@ -1403,7 +1422,7 @@ export function calculatePatrimonyEvolution(
     );
   });
 
-  const hasEarlyHistory = investTxs.some((t) => t.date < "2026-05");
+  const hasEarlyHistory = investTxs.some((t) => getYearMonthKey(t.date) < "2026-05");
 
   if (!hasEarlyHistory) {
     const base: PatrimonyDataPoint[] = [...baseHistorical];
@@ -1411,7 +1430,7 @@ export function calculatePatrimonyEvolution(
 
     const monthsMap = new Map<string, { aportes: number; resgates: number }>();
     investTxs.forEach((t) => {
-      const m = t.date.slice(0, 7);
+      const m = getYearMonthKey(t.date);
       if (m > "2026-08") {
         const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
         if (isResgateCategory(t.category)) {
@@ -1444,7 +1463,7 @@ export function calculatePatrimonyEvolution(
   // Agrupa todas as transações de investimento por mês
   const monthsMap = new Map<string, { aportes: number; resgates: number }>();
   investTxs.forEach((t) => {
-    const m = t.date.slice(0, 7);
+    const m = getYearMonthKey(t.date);
     const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
     if (isResgateCategory(t.category)) {
       entry.resgates = safeAdd(entry.resgates, t.amount);

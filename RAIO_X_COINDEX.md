@@ -1,13 +1,13 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.12.0`  
-> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 20 — Design System Cyberpunk Neon)  
+> **Versão da Aplicação:** `0.13.0`  
+> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 21 — Motor Contábil Puro & Padronização Global de Datas DD-MM-YYYY)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
 
 ## 1. Visão Geral da Arquitetura & Stack Tecnológica
 
-O **Coindex** é uma plataforma corporativa e pessoal de Business Intelligence (BI) financeiro, telemetria patrimonial, gestão de cartões de crédito e telemetria automotiva, construída sob a estética **Cyber-Glassmorphism**.
+O **Coindex** é uma plataforma corporativa e pessoal de Business Intelligence (BI) financeiro, telemetria patrimonial, gestão de cartões de crédito e telemetria automotiva, construída sob a estética **Cyber-Glassmorphism** e design system **Cyberpunk Neon (Synthwave Spark)**.
 
 ### Stack Base:
 - **Framework:** Next.js 16.4.2 (App Router, Turbopack, Cache Components, Partial Prefetching).
@@ -29,29 +29,32 @@ O código do Coindex é modularizado para evitar sobrecarga de componentes monol
 ```
 fincontrol-lifeos/
 ├── app/
-│   ├── page.tsx                           # Dashboard executivo principal, orquestrador de estado e layout (4.993 linhas)
-│   ├── SecondaryTabs.tsx                  # Renderizador de abas secundárias (Status, Histórico, Devedores, etc.) (2.324 linhas)
-│   ├── TransactionsTableAdvanced.tsx      # Tabela avançada de lançamentos, filtros popover e paginação (1.122 linhas)
-│   ├── lifeos-data.tsx                    # Schemas, interfaces, dados iniciais, cálculos contábeis e migrações (1.530 linhas)
-│   ├── schemas.ts                         # Schemas Zod de validação estrita (246 linhas)
-│   ├── globals.css                        # Tailwind v4, scrollbars cibernéticas e reset visual Recharts (72 linhas)
-│   ├── layout.tsx                         # RootLayout, fontes Geist e metadados de Favicon (37 linhas)
+│   ├── page.tsx                           # Dashboard executivo principal, orquestrador de estado e layout
+│   ├── SecondaryTabs.tsx                  # Renderizador de abas secundárias (Status, Histórico, Devedores, etc.)
+│   ├── TransactionsTableAdvanced.tsx      # Tabela avançada de lançamentos, filtros popover e paginação
+│   ├── lifeos-data.tsx                    # Schemas, interfaces, dados iniciais, cálculos contábeis e migrações
+│   ├── schemas.ts                         # Schemas Zod de validação estrita
+│   ├── globals.css                        # Tailwind v4, scrollbars cibernéticas e tema Cyberpunk Neon
+│   ├── layout.tsx                         # RootLayout, fontes Geist e metadados de Favicon
 │   ├── icon.svg                           # Favicon vetorial oficial da Fintech Prism
-│   ├── components/
-│   │   ├── TransactionModal.tsx           # Modal completo de novo lançamento/edição (1.348 linhas)
-│   │   ├── SpotifyModule.tsx              # Player cibernético, telemetria e rateio familiar do Spotify (1.342 linhas)
-│   │   ├── VehiclesTab.tsx                # Telemetria automotiva, consumo km/L e Inmetro (999 linhas)
-│   │   ├── BanksTab.tsx                   # Gestão de contas bancárias, cartões e limites (912 linhas)
-│   │   ├── ChartSettingsPopover.tsx       # Popover de customização de cores/curvas/tipos de gráficos (305 linhas)
-│   │   ├── CoindexAuthScreen.tsx          # Tela de login/cadastro Supabase RLS cibernética (318 linhas)
-│   │   ├── ProfileModal.tsx               # Modal de perfil, avatar base64 e backup JSON (233 linhas)
-│   │   ├── CoindexLogo.tsx                # Componente da logo Fintech Prism (isométrica) (186 linhas)
-│   │   ├── ChartCard.tsx                  # Container arrastável (Drag-and-Drop) de cards Recharts (173 linhas)
-│   │   └── SpotifyLogo.tsx                # Ícone vetorial do Spotify (40 linhas)
 │   ├── lib/
-│   │   ├── services/coindex-supabase.ts   # CRUD completo e persistência no Supabase PostgreSQL (798 linhas)
-│   │   ├── services/spotify-supabase.ts   # Persistência de tokens e preferências Spotify (360 linhas)
+│   │   ├── domain/
+│   │   │   ├── date-br.ts                 # Motor de Datas Brasileiro Puro (DD-MM-YYYY, anti-UTC shift)
+│   │   │   └── finance.ts                 # Motor Contábil Puro (Centavos inteiros, restos exatos, competência/caixa)
+│   │   ├── services/coindex-supabase.ts   # CRUD completo e persistência no Supabase PostgreSQL
+│   │   ├── services/spotify-supabase.ts   # Persistência de tokens e preferências Spotify
 │   │   └── supabase/                      # Clientes Supabase Client & Server
+│   ├── components/
+│   │   ├── TransactionModal.tsx           # Modal completo de novo lançamento/edição
+│   │   ├── SpotifyModule.tsx              # Player cibernético, telemetria e rateio familiar do Spotify
+│   │   ├── VehiclesTab.tsx                # Telemetria automotiva, consumo km/L e Inmetro
+│   │   ├── BanksTab.tsx                   # Gestão de contas bancárias, cartões e limites
+│   │   ├── ChartSettingsPopover.tsx       # Popover de customização de cores/curvas/tipos de gráficos
+│   │   ├── CoindexAuthScreen.tsx          # Tela de login/cadastro Supabase RLS cibernética
+│   │   ├── ProfileModal.tsx               # Modal de perfil, avatar base64 e backup JSON
+│   │   ├── CoindexLogo.tsx                # Componente da logo Fintech Prism (isométrica)
+│   │   ├── ChartCard.tsx                  # Container arrastável (Drag-and-Drop) de cards Recharts
+│   │   └── SpotifyLogo.tsx                # Ícone vetorial do Spotify
 │   └── api/auth/route.ts                  # Rota Next.js de autenticação e sessão
 ```
 
@@ -359,6 +362,18 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
   - Gráfico de Patrimônio com curvas magenta/purple e Donut estilizado com a paleta harmônica Synthwave.
   - Popovers de filtro e modais unificados no estilo vidro violeta escuro `bg-[#110724]/95` com checkboxes em `accent-[#FF2A85]`.
   - Logo Coindex e Favicon atualizados para a paleta Cyberpunk Neon (`#FF2A85` -> `#A855F7` -> `#00F5D4`).
+- **Sprint 21 — Padronização Global de Datas DD-MM-YYYY & Motor Contábil Puro:**
+  - **Motor de Datas Brasileiro (`app/lib/domain/date-br.ts`):**
+    - Eliminação completa dos bugs de fuso horário UTC (`new Date("YYYY-MM-DD")` e `toISOString()` que avançavam para o dia seguinte às 21h em `America/Fortaleza` UTC-3).
+    - Funções puras: `todayBR()` (retorna `"DD-MM-YYYY"` local), `todayISO()`, `formatDateBR()`, `toSortableISO()`, `addMonthsSafe()`, `daysInMonth()`, `getYearMonthKey()`, `compareDatesBR()`.
+    - Exibição padronizada estritamente em `DD-MM-YYYY` em todas as tabelas, modais, cabeçalhos e relatórios CSV (`handleExportCSV`).
+    - Campos nativos de `<input type="date">` sincronizados bidirecionalmente via `toSortableISO()` e `formatDateBR()`.
+  - **Motor Contábil Puro e Centavos Blindados (`app/lib/domain/finance.ts`):**
+    - `toCents()` com suporte a números e strings pt-BR (`"1.234,56"`), precisão de 15 dígitos e normalização estrita de `-0`.
+    - Distribuição exata de parcelas (`distributeInstallments`): resto da divisão em centavos é alocado na 1ª parcela (`33,34 + 33,33 + 33,33 = 100,00`).
+    - Agrupamento prioritário de parcelas via `installmentSeriesId` imutável (`generateInstallmentSeriesId`).
+    - Competência de fatura (`invoiceCompetence`) vs. Mês de desembolso de caixa (`cashMonth`) via `calculateInvoiceAndCashMonths`: se `dueDay <= closingDay`, o desembolso real é projetado no mês seguinte para o *Safe-to-Spend*.
+    - Neutralidade contábil estrita (`flowType: "NEUTRAL"`): quitações de fatura (`handlePayCardInvoice`) e liquidações de recebíveis/split (`handlePartialPaymentReceivable`) atualizam saldos em contas bancárias sem inflar as saídas operacionais ou entradas líquidas do mês.
 
 ---
 
