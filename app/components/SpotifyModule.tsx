@@ -768,7 +768,7 @@ export default function SpotifyModule({ ownerDisplayName = "Sabrino" }: SpotifyM
             <button
               type="button"
               onClick={handleUndoLastAction}
-              className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 font-semibold text-white hover:bg-indigo-500"
+              className="inline-flex items-center gap-1 rounded-lg bg-[#0A84FF] px-2.5 py-1 font-semibold text-white hover:bg-[#0070E0] shadow-sm cursor-pointer"
             >
               <Undo2 className="h-3.5 w-3.5" />
               Desfazer

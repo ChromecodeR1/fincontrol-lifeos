@@ -500,7 +500,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </select>
             <input type="number" step="0.01" required placeholder="Valor Mensal (R$)" value={newStatusItem.amount} onChange={(e) => setNewStatusItem({ ...newStatusItem, amount: e.target.value })} className={inputClass} />
             <input type="text" placeholder="Observação (Ex: Dia 5)" value={newStatusItem.notes} onChange={(e) => setNewStatusItem({ ...newStatusItem, notes: e.target.value })} className={inputClass} />
-            <button type="submit" className={`w-full py-3 rounded-xl text-white font-extrabold shadow-lg transition-all ${editingStatusId ? "bg-emerald-600 hover:bg-emerald-500" : "bg-indigo-600 hover:bg-indigo-500"}`}>
+            <button type="submit" className={`w-full py-3 rounded-xl text-white font-semibold shadow-sm transition-all cursor-pointer ${editingStatusId ? "bg-emerald-600 hover:bg-emerald-500" : "bg-[#0A84FF] hover:bg-[#0070E0]"}`}>
               {editingStatusId ? "✓ Salvar Alterações" : "+ Adicionar ao Meu Status"}
             </button>
           </form>
@@ -1127,7 +1127,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               <input type="number" required placeholder="Alvo" value={newOkr.target} onChange={(e) => setNewOkr({ ...newOkr, target: e.target.value })} className={inputClass} />
               <input type="text" placeholder="Unid (R$, km)" value={newOkr.unit} onChange={(e) => setNewOkr({ ...newOkr, unit: e.target.value })} className={inputClass} />
             </div>
-            <button type="submit" className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold shadow-lg transition">
+            <button type="submit" className="w-full py-2.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-semibold shadow-sm transition cursor-pointer">
               + Adicionar Meta
             </button>
           </form>
@@ -1260,9 +1260,9 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               <button
                 type="button"
                 onClick={() => setMuralFilter("ALL")}
-                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                   muralFilter === "ALL"
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20"
+                    ? "bg-[#0A84FF] text-white shadow-sm ring-1 ring-white/20"
                     : "bg-slate-900/90 text-slate-400 hover:text-white border border-white/5"
                 }`}
               >
@@ -1273,9 +1273,9 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               <button
                 type="button"
                 onClick={() => setMuralFilter("NOTES")}
-                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                   muralFilter === "NOTES"
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20"
+                    ? "bg-[#0A84FF] text-white shadow-sm ring-1 ring-white/20"
                     : "bg-slate-900/90 text-slate-400 hover:text-white border border-white/5"
                 }`}
               >
@@ -1308,10 +1308,10 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   key={t}
                   type="button"
                   onClick={() => setSelectedNoteTag(t)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-bold transition ${
+                  className={`px-3 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${
                     selectedNoteTag === t
-                      ? "bg-indigo-600 text-white shadow"
-                      : "bg-slate-900 text-slate-400 hover:text-white"
+                      ? "bg-[#0A84FF] text-white shadow-sm"
+                      : "bg-slate-900 text-slate-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   {t === "ALL" ? "Todas as Tags" : t}
@@ -1482,9 +1482,9 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               <button
                 type="button"
                 onClick={() => setNewNote({ ...newNote, itemType: "note" })}
-                className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition ${
+                className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                   newNote.itemType !== "wish"
-                    ? "bg-indigo-600 text-white shadow"
+                    ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
@@ -1663,7 +1663,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               <Upload className="w-3.5 h-3.5" /> Restaurar
               <input type="file" accept=".json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFullBackupJSON(f); }} />
             </label>
-            <label className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5 transition shadow-sm">
+            <label className="px-3 py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white text-xs font-medium cursor-pointer flex items-center gap-1.5 transition shadow-sm">
               <Camera className="w-3.5 h-3.5" /> Foto de Perfil
               <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpdateProfileAvatar(f); }} />
             </label>
@@ -1981,7 +1981,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 type="submit"
                 className={`px-4 py-2.5 rounded-xl text-white font-extrabold shrink-0 transition ${
                   editingMethodName
-                    ? "bg-indigo-600 hover:bg-indigo-500"
+                    ? "bg-[#0A84FF] hover:bg-[#0070E0]"
                     : "bg-emerald-600 hover:bg-emerald-500"
                 }`}
               >
@@ -2137,7 +2137,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     className={`px-4 py-2 rounded-xl text-white font-extrabold transition ${
                       editingCategoryName
                         ? "bg-emerald-600 hover:bg-emerald-500 shadow-lg"
-                        : "bg-indigo-600 hover:bg-indigo-500"
+                        : "bg-[#0A84FF] hover:bg-[#0070E0]"
                     }`}
                   >
                     {editingCategoryName ? "✓ Salvar Alterações" : "+ Criar Categoria"}

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { RotateCcw, Check } from "lucide-react";
 
 export type ChartLineCurve = "monotone" | "linear" | "step";
@@ -53,6 +54,7 @@ export const CHART_COLOR_PALETTE: ReadonlyArray<{ id: string; label: string; hex
 interface ChartSettingsPopoverProps {
   isOpen: boolean;
   onClose: () => void;
+  anchorRef?: React.RefObject<HTMLElement | null>;
   chartKind: ChartKind;
   hasMultipleSeries?: boolean;
   settings: ChartWidgetSettings;
@@ -65,6 +67,7 @@ interface ChartSettingsPopoverProps {
 export default function ChartSettingsPopover({
   isOpen,
   onClose,
+  anchorRef,
   chartKind,
   hasMultipleSeries = false,
   settings,
@@ -74,9 +77,36 @@ export default function ChartSettingsPopover({
   onSizeChange
 }: ChartSettingsPopoverProps) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [coords, setCoords] = useState<{ top: number; right: number }>({ top: 40, right: 16 });
+
+  const updatePosition = useCallback(() => {
+    if (!anchorRef?.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    const popoverWidth = 320; // w-80 é 320px
+    const spacing = 8;
+
+    let top = rect.bottom + spacing;
+    const estimatedHeight = Math.min(window.innerHeight * 0.82, 540);
+
+    // Se transbordar na parte inferior e houver espaço acima, abre para cima
+    if (top + estimatedHeight > window.innerHeight && rect.top > estimatedHeight + spacing) {
+      top = Math.max(16, rect.top - estimatedHeight - spacing);
+    } else if (top + estimatedHeight > window.innerHeight) {
+      top = Math.max(16, window.innerHeight - estimatedHeight - 16);
+    }
+
+    let right = window.innerWidth - rect.right;
+    if (right < 16) right = 16;
+    if (window.innerWidth - right < popoverWidth + 16) {
+      right = Math.max(16, window.innerWidth - popoverWidth - 16);
+    }
+
+    setCoords({ top, right });
+  }, [anchorRef]);
 
   useEffect(() => {
     if (!isOpen) return;
+    updatePosition();
 
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -85,20 +115,30 @@ export default function ChartSettingsPopover({
     }
 
     function handleMouseDown(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(target) &&
+        (!anchorRef?.current || !anchorRef.current.contains(target))
+      ) {
         onClose();
       }
     }
 
-    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
     document.addEventListener("mousedown", handleMouseDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("mousedown", handleMouseDown);
-    };
-  }, [isOpen, onClose]);
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
 
-  if (!isOpen) return null;
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [isOpen, onClose, updatePosition, anchorRef]);
+
+  if (!isOpen || typeof document === "undefined") return null;
 
   const currentDisplayType: ChartDisplayType =
     settings.chartType || (chartKind === "bar" ? "bar" : chartKind === "line" ? "line" : "area");
@@ -124,10 +164,15 @@ export default function ChartSettingsPopover({
     });
   };
 
-  return (
+  return createPortal(
     <div
       ref={popoverRef}
-      className="absolute right-0 top-10 z-50 w-80 max-h-[85vh] overflow-y-auto rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] p-4 text-xs text-slate-200"
+      style={{
+        position: "fixed",
+        top: `${coords.top}px`,
+        right: `${coords.right}px`
+      }}
+      className="z-[9999] w-80 max-h-[82vh] overflow-y-auto rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] p-4 text-xs text-slate-200"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-2.5">
@@ -138,7 +183,7 @@ export default function ChartSettingsPopover({
         <button
           type="button"
           onClick={handleRestoreDefault}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 transition hover:bg-white/10 hover:text-white"
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 transition hover:bg-white/10 hover:text-white cursor-pointer"
           title="Restaurar padrão deste gráfico"
         >
           <RotateCcw className="h-3 w-3" />
@@ -161,7 +206,7 @@ export default function ChartSettingsPopover({
                   key={opt.id}
                   type="button"
                   onClick={() => updateField("chartType", opt.id)}
-                  className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition ${
+                  className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition cursor-pointer ${
                     currentDisplayType === opt.id
                       ? "bg-[#0A84FF] text-white shadow-sm"
                       : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
@@ -187,14 +232,14 @@ export default function ChartSettingsPopover({
                     type="button"
                     onClick={() => updateField("color", swatch.id)}
                     title={swatch.label}
-                    className={`relative flex h-6 w-6 items-center justify-center rounded-full border transition ${
+                    className={`relative flex h-6 w-6 items-center justify-center rounded-full border transition cursor-pointer ${
                       selected
-                        ? "scale-110 border-white ring-2 ring-[#0A84FF]/70 shadow-sm"
-                        : "border-slate-700 opacity-80 hover:opacity-100 hover:scale-105"
+                        ? "scale-110 border-white ring-2 ring-[#0A84FF] shadow-md"
+                        : "border-slate-700/80 opacity-80 hover:opacity-100 hover:scale-105"
                     }`}
                     style={{ background: swatch.hex }}
                   >
-                    {selected && <Check className="h-3 w-3 text-white drop-shadow" />}
+                    {selected && <Check className="h-3 w-3 text-white drop-shadow stroke-[3]" />}
                   </button>
                 );
               })}
@@ -219,9 +264,9 @@ export default function ChartSettingsPopover({
                     key={opt.id}
                     type="button"
                     onClick={() => updateField("curveType", opt.id)}
-                    className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
+                    className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition cursor-pointer ${
                       settings.curveType === opt.id
-                        ? "bg-[#5E5CE6] text-white shadow-sm"
+                        ? "bg-[#0A84FF] text-white shadow-sm"
                         : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                     }`}
                   >
@@ -245,9 +290,9 @@ export default function ChartSettingsPopover({
                     key={opt.label}
                     type="button"
                     onClick={() => updateField("strokeWidth", opt.width)}
-                    className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
+                    className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition cursor-pointer ${
                       settings.strokeWidth === opt.width
-                        ? "bg-slate-800 text-white font-bold border border-white/10"
+                        ? "bg-[#0A84FF] text-white shadow-sm"
                         : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                     }`}
                   >
@@ -272,9 +317,9 @@ export default function ChartSettingsPopover({
                 key={opt.id}
                 type="button"
                 onClick={() => updateField("height", opt.id)}
-                className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
+                className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition cursor-pointer ${
                   (settings.height || "normal") === opt.id
-                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    ? "bg-[#0A84FF] text-white shadow-sm"
                     : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                 }`}
               >
@@ -292,9 +337,9 @@ export default function ChartSettingsPopover({
               <button
                 type="button"
                 onClick={() => onSizeChange("half")}
-                className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
+                className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition cursor-pointer ${
                   size === "half"
-                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    ? "bg-[#0A84FF] text-white shadow-sm"
                     : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                 }`}
               >
@@ -303,9 +348,9 @@ export default function ChartSettingsPopover({
               <button
                 type="button"
                 onClick={() => onSizeChange("full")}
-                className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
+                className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition cursor-pointer ${
                   size === "full"
-                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    ? "bg-[#0A84FF] text-white shadow-sm"
                     : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                 }`}
               >
@@ -325,7 +370,7 @@ export default function ChartSettingsPopover({
                   type="checkbox"
                   checked={settings.fillArea}
                   onChange={(e) => updateField("fillArea", e.target.checked)}
-                  className="h-4 w-4 rounded accent-[#0A84FF]"
+                  className="h-4 w-4 rounded accent-[#0A84FF] cursor-pointer"
                 />
               </label>
 
@@ -335,7 +380,7 @@ export default function ChartSettingsPopover({
                   type="checkbox"
                   checked={settings.showDots}
                   onChange={(e) => updateField("showDots", e.target.checked)}
-                  className="h-4 w-4 rounded accent-[#0A84FF]"
+                  className="h-4 w-4 rounded accent-[#0A84FF] cursor-pointer"
                 />
               </label>
             </>
@@ -348,7 +393,7 @@ export default function ChartSettingsPopover({
                 type="checkbox"
                 checked={settings.showGrid}
                 onChange={(e) => updateField("showGrid", e.target.checked)}
-                className="h-4 w-4 rounded accent-[#0A84FF]"
+                className="h-4 w-4 rounded accent-[#0A84FF] cursor-pointer"
               />
             </label>
           )}
@@ -360,7 +405,7 @@ export default function ChartSettingsPopover({
                 type="checkbox"
                 checked={settings.showLegend}
                 onChange={(e) => updateField("showLegend", e.target.checked)}
-                className="h-4 w-4 rounded accent-[#0A84FF]"
+                className="h-4 w-4 rounded accent-[#0A84FF] cursor-pointer"
               />
             </label>
           )}
@@ -372,7 +417,7 @@ export default function ChartSettingsPopover({
                 type="checkbox"
                 checked={settings.showDataLabels}
                 onChange={(e) => updateField("showDataLabels", e.target.checked)}
-                className="h-4 w-4 rounded accent-[#0A84FF]"
+                className="h-4 w-4 rounded accent-[#0A84FF] cursor-pointer"
               />
             </label>
           )}
@@ -383,9 +428,9 @@ export default function ChartSettingsPopover({
               <button
                 type="button"
                 onClick={() => updateField("zeroHandling", "include")}
-                className={`rounded-md py-1 text-center text-[11px] font-medium transition ${
+                className={`rounded-md py-1 text-center text-[11px] font-semibold transition cursor-pointer ${
                   settings.zeroHandling === "include"
-                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    ? "bg-[#0A84FF] text-white shadow-sm"
                     : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                 }`}
               >
@@ -394,9 +439,9 @@ export default function ChartSettingsPopover({
               <button
                 type="button"
                 onClick={() => updateField("zeroHandling", "omit")}
-                className={`rounded-md py-1 text-center text-[11px] font-medium transition ${
+                className={`rounded-md py-1 text-center text-[11px] font-semibold transition cursor-pointer ${
                   settings.zeroHandling === "omit"
-                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    ? "bg-[#0A84FF] text-white shadow-sm"
                     : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                 }`}
               >
@@ -406,6 +451,7 @@ export default function ChartSettingsPopover({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

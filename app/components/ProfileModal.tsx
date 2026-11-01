@@ -232,7 +232,7 @@ export function ProfileModal({
                   <label
                     className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition ${
                       restoreMode === "merge"
-                        ? "bg-indigo-600/20 border-indigo-500 text-white"
+                        ? "bg-[#0A84FF]/20 border-[#0A84FF] text-white"
                         : "bg-slate-900/60 border-white/5 text-slate-400 hover:border-white/15"
                     }`}
                   >

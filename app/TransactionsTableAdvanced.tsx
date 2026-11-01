@@ -573,8 +573,8 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                 key={st.id}
                 type="button"
                 onClick={() => setTxStatusFilter(st.id as "ALL" | "PAGO" | "PENDENTE" | "NA_FATURA")}
-                className={`px-2 py-1 rounded-lg font-bold transition text-xs ${
-                  txStatusFilter === st.id ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+                className={`px-2.5 py-1 rounded-lg font-semibold transition text-xs cursor-pointer ${
+                  txStatusFilter === st.id ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
                 }`}
               >
                 {st.label}
@@ -673,7 +673,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
 
       <div
         className={`rounded-2xl border border-white/[0.06] transition-all relative ${
-          activeFilterPopover ? "min-h-[380px] overflow-visible pb-20" : "overflow-x-auto"
+          activeFilterPopover ? "z-[80] min-h-[380px] overflow-visible pb-20" : "z-10 overflow-x-auto"
         }`}
       >
         <table className="w-full text-left border-collapse text-xs">
@@ -705,7 +705,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "date" && (
-                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] z-[100] space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
                         <span className="font-bold text-white block">Filtrar por Data</span>
                         <input
                           type="text"
@@ -727,7 +727,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                           <button
                             type="button"
                             onClick={() => setActiveFilterPopover(null)}
-                            className="px-2 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-bold"
+                            className="px-2.5 py-1 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white text-[10px] font-medium shadow-sm transition cursor-pointer"
                           >
                             Fechar
                           </button>
@@ -777,7 +777,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "category" && (
-                      <div className="absolute left-0 mt-2 p-3 w-64 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] z-[100] space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-64 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
                         <div className="flex items-center justify-between pb-1 border-b border-white/10">
                           <span className="font-bold text-white">Selecionar Categorias</span>
                           <button
@@ -815,7 +815,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                         <button
                           type="button"
                           onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-[11px] mt-1"
+                          className="w-full py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[11px] mt-1 cursor-pointer"
                         >
                           Concluir
                         </button>
@@ -851,7 +851,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "costType" && (
-                      <div className="absolute left-0 mt-2 p-3 w-44 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] z-[100] space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-44 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
                         <span className="font-bold text-white block">Tipo de Custo</span>
                         {["Fixo", "Variável"].map((cType) => (
                           <label
@@ -875,7 +875,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                         <button
                           type="button"
                           onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1 rounded-lg bg-indigo-600 text-white font-bold text-[10px]"
+                          className="w-full py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer"
                         >
                           Fechar
                         </button>
@@ -911,7 +911,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "paymentMethod" && (
-                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] z-[100] space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
                         <div className="flex items-center justify-between pb-1 border-b border-white/10">
                           <span className="font-bold text-white">Métodos</span>
                           <button
@@ -946,7 +946,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                         <button
                           type="button"
                           onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-[10px]"
+                          className="w-full py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer"
                         >
                           Fechar
                         </button>
@@ -982,7 +982,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "km" && (
-                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] z-[100] space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
                         <label className="flex items-center gap-2 text-slate-200 cursor-pointer">
                           <input
                             type="checkbox"
@@ -997,7 +997,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                         <button
                           type="button"
                           onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1 rounded-lg bg-indigo-600 text-white font-bold text-[10px]"
+                          className="w-full py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer"
                         >
                           Fechar
                         </button>
@@ -1033,7 +1033,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "status" && (
-                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] z-[100] space-y-2 text-xs">
+                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
                         <span className="font-bold text-white block">Situação</span>
                         {["Pago", "Pendente / Na Fatura"].map((st) => (
                           <label
@@ -1057,7 +1057,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                         <button
                           type="button"
                           onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1 rounded-lg bg-indigo-600 text-white font-bold text-[10px]"
+                          className="w-full py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer"
                         >
                           Fechar
                         </button>
@@ -1086,7 +1086,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       <Filter className="w-3 h-3" />
                     </button>
                     {activeFilterPopover === "amount" && (
-                      <div className="absolute right-0 mt-2 p-3 w-52 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] z-[100] space-y-2 text-xs text-left">
+                      <div className="absolute right-0 mt-2 p-3 w-52 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs text-left">
                         <span className="font-bold text-white block">Faixa de Valor (R$)</span>
                         <input
                           type="number"
@@ -1119,7 +1119,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                           <button
                             type="button"
                             onClick={() => setActiveFilterPopover(null)}
-                            className="px-2 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-bold"
+                            className="px-2.5 py-1 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white text-[10px] font-medium shadow-sm transition cursor-pointer"
                           >
                             Fechar
                           </button>
@@ -1188,7 +1188,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
             <button
               type="button"
               onClick={handleLoadMore}
-              className="px-4 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 font-bold transition flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-[#0A84FF]/20 hover:bg-[#0A84FF]/30 text-[#0A84FF] border border-[#0A84FF]/40 font-semibold transition flex items-center gap-1.5 cursor-pointer"
             >
               <ChevronDown className="w-3.5 h-3.5" /> Carregar mais {Math.min(BATCH_INCREMENT, processedTxs.length - visibleCount)}
             </button>

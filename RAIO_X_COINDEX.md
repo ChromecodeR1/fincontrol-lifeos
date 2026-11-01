@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.19.0`  
-> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 27 — Implementação do Design System "Apple Copilot Pure — Cupertino Light & Dark" + Formatação Tipográfica Apple no Layout Atual)  
+> **Versão da Aplicação:** `0.20.0`  
+> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 28 — Correção Global de Sobreposição / Stacking Context via Portals e Elevação Dinâmica, Contraste do Termômetro e Unificação de Controles Cupertino)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -486,6 +486,16 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - Gráfico de Patrimônio: Curva de Patrimônio Acumulado em `#0A84FF` e curva suave de Aportes Brutos em `#5E5CE6`.
     - Gráfico Donut de Despesas: Paleta oficial Apple Cupertino `['#0A84FF', '#30D158', '#FF9F0A', '#BF5AF2', '#FF453A', '#64D2FF', '#5E5CE6', '#8E8E93']`.
     - Identidade Visual: Logo `CoindexLogo` e Favicon `icon.svg` atualizados para o gradiente de alta fidelidade Cupertino (`#0A84FF` -> `#5E5CE6` -> `#30D158`).
+- **Sprint 28 — Correção Global de Sobreposição / Stacking Context via Portals e Elevação Dinâmica, Contraste do Termômetro e Unificação de Controles Cupertino:**
+  - **Arquitetura Anti-Stacking Context em Três Camadas:**
+    - **Camada 1 (Portals com `react-dom`):** `ChartSettingsPopover` reconstruído usando `createPortal(..., document.body)` com `position: fixed` e coordenadas dinâmicas (`getBoundingClientRect()`), sincronizando no scroll e resize e fechando ao clicar fora ou pressionar `Esc`. Possui `z-[9999]` e `max-h-[82vh] overflow-y-auto`, eliminando qualquer sobreposição ou corte por cards inferiores.
+    - **Camada 2 (Elevação Automática nos Cards):** `ChartCard` e containers do dashboard com elevação dinâmica (`popoverOpen ? "z-[80] overflow-visible" : "z-10 focus-within:z-[80]"`), complementado por regras em `app/globals.css`.
+    - **Camada 3 (Tooltips `"ⓘ"`, Popovers de Filtro e Dropdown de Notificações):** Elevação para `z-[9999]` e classes de Cupertino Glassmorphism nos 7 popovers de coluna da tabela (`TransactionsTableAdvanced.tsx`), central de notificações da topbar e tooltips explicativos do regime contábil e dos 4 KPIs.
+  - **Correção de Contraste e Visibilidade do Termômetro:**
+    - Segregação óptica dos valores de consumo e teto no card "Termômetro de Gastos Pessoais": valor gasto destacado em verde/vermelho (`#30D158` / `#FF453A`), barra `/` em `text-slate-400` e limite orçamentário em `text-slate-300 font-semibold tabular-nums`, garantindo legibilidade instantânea em light e dark mode.
+  - **Unificação dos Controles Segmentados e Cores no Padrão Cupertino:**
+    - Pílulas selecionadas padronizadas com Apple Blue (`bg-[#0A84FF] text-white shadow-sm`): barra de filtros rápidos (`Todos | Fixos | Variáveis | Cartão | PIX`), seletores de curva, espessura, altura e zeros no popover de gráficos, abas de filtro na tabela de transações e filtros do mural de notas.
+    - Seletor de cores no `ChartSettingsPopover` com anel indicador e checkmark nítidos, sincronizando a cor primária da curva e do degradê instantaneamente.
 
 ---
 

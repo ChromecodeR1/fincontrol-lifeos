@@ -184,3 +184,17 @@ select:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* SPRINT 28: Elevação Automática de Stacking Context para Cards e Popovers */
+.card-elevation-context:focus-within,
+.card-elevation-context[data-state="open"],
+.glass-card:focus-within {
+  z-index: 80 !important;
+  overflow: visible !important;
+}
+
+/* Suporte de isolamento a portais flutuantes do sistema */
+.popover-portal-container {
+  position: fixed !important;
+  z-index: 9999 !important;
+}

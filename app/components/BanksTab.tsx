@@ -402,7 +402,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
 
           <button
             type="submit"
-            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold shadow-lg transition"
+            className="w-full py-2.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-semibold shadow-sm transition cursor-pointer"
           >
             {editingBankId ? "✓ Salvar Banco e Limites" : "+ Cadastrar Banco"}
           </button>
@@ -577,7 +577,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
             </div>
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold shadow-lg transition"
+              className="w-full py-3 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-semibold shadow-sm transition cursor-pointer"
             >
               {editingCardId ? "✓ Salvar Alterações" : "+ Cadastrar Cartão"}
             </button>

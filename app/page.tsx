@@ -4234,11 +4234,11 @@ export default function CoindexApp() {
               </div>
 
               {/* SININHO DE NOTIFICAÇÕES */}
-              <div className="relative">
+              <div className={`relative ${showBellDropdown ? "z-[9999]" : "z-40"}`}>
                 <button
                   type="button"
                   onClick={() => setShowBellDropdown((prev) => !prev)}
-                  className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition flex items-center justify-center"
+                  className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition flex items-center justify-center cursor-pointer"
                   title="Notificações"
                 >
                   <Bell className="w-4 h-4" />
@@ -4250,7 +4250,7 @@ export default function CoindexApp() {
                 </button>
 
                 {showBellDropdown && (
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] p-4 z-50 text-xs space-y-3">
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] p-4 z-[9999] text-xs space-y-3">
                     <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                       <div>
                         <strong className="text-white font-bold block">Central de Notificações</strong>
@@ -4262,7 +4262,7 @@ export default function CoindexApp() {
                         <button
                           type="button"
                           onClick={handleMarkAllNotificationsViewed}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
                         >
                           <Check className="w-3 h-3" /> Visualizar todas
                         </button>
@@ -4273,8 +4273,8 @@ export default function CoindexApp() {
                       <button
                         type="button"
                         onClick={() => setBellViewMode("unread")}
-                        className={`py-1.5 rounded-lg transition ${
-                          bellViewMode === "unread" ? "bg-indigo-600 text-white" : "text-slate-400"
+                        className={`py-1.5 rounded-lg transition cursor-pointer ${
+                          bellViewMode === "unread" ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
                         }`}
                       >
                         Pendentes ({unreadNotifications.length})
@@ -4282,8 +4282,8 @@ export default function CoindexApp() {
                       <button
                         type="button"
                         onClick={() => setBellViewMode("viewed")}
-                        className={`py-1.5 rounded-lg transition ${
-                          bellViewMode === "viewed" ? "bg-slate-800 text-white" : "text-slate-400"
+                        className={`py-1.5 rounded-lg transition cursor-pointer ${
+                          bellViewMode === "viewed" ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
                         }`}
                       >
                         Visualizadas ({viewedNotifications.length})
@@ -4414,7 +4414,7 @@ export default function CoindexApp() {
 
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/90 border border-white/[0.08] text-[11px]">
-                    <Filter className="w-3.5 h-3.5 text-indigo-400 ml-2 mr-1" />
+                    <Filter className="w-3.5 h-3.5 text-[#0A84FF] ml-2 mr-1" />
                     {(
                       [
                         { id: "ALL", label: "Todos" },
@@ -4428,10 +4428,10 @@ export default function CoindexApp() {
                         key={f.id}
                         type="button"
                         onClick={() => setQuickFilter(f.id)}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                        className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer ${
                           quickFilter === f.id
-                            ? "bg-indigo-600 text-white shadow"
-                            : "text-slate-400 hover:text-white"
+                            ? "bg-[#0A84FF] text-white shadow-sm"
+                            : "text-slate-400 hover:text-white hover:bg-white/5"
                         }`}
                       >
                         {f.label}
@@ -4442,9 +4442,9 @@ export default function CoindexApp() {
                   <button
                     type="button"
                     onClick={resetDashboardLayout}
-                    className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-[11px] text-slate-300 font-semibold flex items-center gap-1.5 transition"
+                    className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-[11px] text-slate-300 font-semibold flex items-center gap-1.5 transition cursor-pointer"
                   >
-                    <RotateCcw className="w-3.5 h-3.5 text-indigo-400" /> Restaurar Ordem
+                    <RotateCcw className="w-3.5 h-3.5 text-[#0A84FF]" /> Restaurar Ordem
                   </button>
                 </div>
               </div>
@@ -4565,20 +4565,27 @@ export default function CoindexApp() {
                                   </strong>
                                 </span>
                               </div>
-                              <div className="text-right">
+                              <div className="text-right flex items-baseline gap-1 justify-end">
                                 <span
-                                  className={`font-extrabold text-sm font-mono tabular-nums ${moneyBlur} ${
-                                    personalPct >= 100 ? "text-rose-400" : "text-emerald-400"
+                                  className={`font-semibold text-sm font-mono tabular-nums ${moneyBlur} ${
+                                    personalPct >= 100 ? "text-[#FF453A]" : "text-[#30D158]"
                                   }`}
                                 >
-                                  {formatBRL(monthSummary.personalSpent)} / {formatBRL(effectivePersonalBudgetLimit)} ({personalPct}%)
+                                  {formatBRL(monthSummary.personalSpent)}
                                 </span>
-                                {filterMonthsCount > 1 && (
-                                  <span className="block text-[10px] text-slate-400 font-mono tabular-nums">
-                                    ({formatBRL(personalBudgetLimit)} × {filterMonthsCount} meses)
-                                  </span>
-                                )}
+                                <span className="text-slate-400 font-normal">/</span>
+                                <span className={`text-slate-300 font-semibold tabular-nums text-sm font-mono ${moneyBlur}`}>
+                                  {formatBRL(effectivePersonalBudgetLimit)}
+                                </span>
+                                <span className="text-slate-400 text-xs font-mono tabular-nums">
+                                  ({personalPct}%)
+                                </span>
                               </div>
+                              {filterMonthsCount > 1 && (
+                                <span className="block text-[10px] text-slate-400 font-mono tabular-nums">
+                                  ({formatBRL(personalBudgetLimit)} × {filterMonthsCount} meses)
+                                </span>
+                              )}
                             </div>
                             <div className="w-full h-3.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-white/10">
                               <div
@@ -4599,15 +4606,15 @@ export default function CoindexApp() {
                             <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
                               <div className="flex items-center gap-1.5 text-xs text-slate-400">
                                 <span>Regime Contábil:</span>
-                                <div className="relative group/tip inline-flex items-center">
+                                <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                                   <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                  <div className="absolute top-full left-0 mt-1.5 hidden group-hover/tip:flex flex-col z-40 w-64 p-2.5 rounded-xl bg-[#07030f]/95 border border-white/15 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                  <div className="absolute top-full left-0 mt-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-64 p-2.5 rounded-xl bg-slate-900/95 border border-white/15 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                                     <strong className="text-white mb-1">Regimes de Visualização:</strong>
-                                    <p className="text-slate-400">
-                                      <strong className="text-[#00F5D4]">Competência:</strong> despesas alocadas pela data do lançamento/compra.
+                                    <p className="text-slate-300">
+                                      <strong className="text-[#0A84FF]">Competência:</strong> despesas alocadas pela data do lançamento/compra.
                                     </p>
-                                    <p className="text-slate-400 mt-1">
-                                      <strong className="text-[#FF2A85]">Caixa:</strong> compras de cartão alocadas no mês do vencimento/pagamento da fatura.
+                                    <p className="text-slate-300 mt-1">
+                                      <strong className="text-[#FF453A]">Caixa:</strong> compras de cartão alocadas no mês do vencimento/pagamento da fatura.
                                     </p>
                                   </div>
                                 </div>
@@ -4645,9 +4652,9 @@ export default function CoindexApp() {
                                   <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                                     <div className="flex items-center gap-1.5">
                                       <span>{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
-                                      <div className="relative group/tip inline-flex items-center">
+                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                                         <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-56 p-2 rounded-xl bg-slate-900/95 border border-[#30D158]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#30D158]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                                           <strong className="text-[#30D158] mb-0.5">Fórmula de Entradas:</strong>
                                           <span>Soma de créditos e receitas ativas (FlowType = INCOME), excluindo transferências neutras e estornos.</span>
                                         </div>
@@ -4682,9 +4689,9 @@ export default function CoindexApp() {
                                   <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                                     <div className="flex items-center gap-1.5">
                                       <span>{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
-                                      <div className="relative group/tip inline-flex items-center">
+                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                                         <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-56 p-2 rounded-xl bg-slate-900/95 border border-[#FF453A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#FF453A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                                           <strong className="text-[#FF453A] mb-0.5">Fórmula de Saídas:</strong>
                                           <span>Soma de débitos e faturas (FlowType = EXPENSE), respeitando a cota pessoal em despesas divididas (split).</span>
                                         </div>
@@ -4719,9 +4726,9 @@ export default function CoindexApp() {
                                   <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                                     <div className="flex items-center gap-1.5">
                                       <span>{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
-                                      <div className="relative group/tip inline-flex items-center">
+                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                                         <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-56 p-2 rounded-xl bg-slate-900/95 border border-[#0A84FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#0A84FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                                           <strong className="text-[#0A84FF] mb-0.5">Fórmula de Aportes:</strong>
                                           <span>Soma bruta de lançamentos de investimento e caixinhas (Aportes ≥ 0). Resgates não reduzem o aporte bruto.</span>
                                         </div>
@@ -4752,9 +4759,9 @@ export default function CoindexApp() {
                                   <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                                     <div className="flex items-center gap-1.5">
                                       <span>{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
-                                      <div className="relative group/tip inline-flex items-center">
+                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                                         <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-60 p-2 rounded-xl bg-slate-900/95 border border-[#64D2FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-60 p-2 rounded-xl bg-slate-900/95 border border-[#64D2FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                                           <strong className="text-[#64D2FF] mb-0.5">Resultado Operacional:</strong>
                                           <span>Entradas - (Despesas Operacionais + Investimento Líquido do período). Indica a folga de caixa líquida.</span>
                                         </div>
@@ -4791,9 +4798,9 @@ export default function CoindexApp() {
                                     <div className="flex items-center gap-1 text-slate-400 font-sans">
                                       <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
                                       <span>Safe-to-Spend:</span>
-                                      <div className="relative group/tip inline-flex items-center">
+                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                                         <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-64 p-2 rounded-xl bg-slate-900/95 border border-white/15 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-64 p-2 rounded-xl bg-slate-900/95 border border-white/15 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                                           <strong className="text-white mb-0.5">Safe-to-Spend Projetado:</strong>
                                           <span>Saldo em Contas ({formatBRL(safeToSpend.currentCash)}) + Entradas Pendentes ({formatBRL(safeToSpend.pendingIncome)}) - Fixos/Faturas Pendentes ({formatBRL(safeAdd(safeToSpend.pendingDirectExpenses, safeToSpend.pendingInvoices))}).</span>
                                         </div>
@@ -5946,7 +5953,7 @@ export default function CoindexApp() {
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition shadow-lg cursor-pointer ${
                   confirmModal.danger
                     ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30"
-                    : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30"
+                    : "bg-[#0A84FF] hover:bg-[#0070E0] text-white shadow-sm"
                 }`}
               >
                 <Trash2 className="w-3.5 h-3.5" />

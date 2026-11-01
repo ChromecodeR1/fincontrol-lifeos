@@ -497,9 +497,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 category: prev.category === "Transferência entre Contas" ? "Alimentação" : prev.category
               }));
             }}
-            className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center ${
+            className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center cursor-pointer ${
               !isPostoExpress && !formState.isTransfer
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
                 : "text-slate-400 hover:text-white"
             }`}
           >

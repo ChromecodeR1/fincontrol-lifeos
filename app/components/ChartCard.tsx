@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { GripVertical, Settings, Columns2, RectangleHorizontal } from "lucide-react";
 import ChartSettingsPopover, {
   ChartKind,
@@ -53,6 +53,7 @@ export default function ChartCard({
 }: ChartCardProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [canDrag, setCanDrag] = useState(false);
+  const gearButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const spanClass = size === "full" ? "col-span-12" : "col-span-12 lg:col-span-6";
 
@@ -89,7 +90,9 @@ export default function ChartCard({
         isDropTarget
           ? "border-[#0A84FF] ring-2 ring-[#0A84FF]/40 shadow-sm"
           : "border-slate-800/80"
-      } ${isDragging ? " scale-[0.99] opacity-60" : "opacity-100"} bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm ${className}`}
+      } ${isDragging ? " scale-[0.99] opacity-60" : "opacity-100"} ${
+        popoverOpen ? "z-[80] overflow-visible" : "z-10 focus-within:z-[80]"
+      } bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm ${className}`}
     >
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -123,7 +126,7 @@ export default function ChartCard({
               type="button"
               onClick={() => onSizeChange(size === "half" ? "full" : "half")}
               title={size === "half" ? "Expandir para largura total (1/1)" : "Reduzir para meia largura (1/2)"}
-              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
             >
               {size === "half" ? (
                 <>
@@ -141,10 +144,11 @@ export default function ChartCard({
             {/* 3. Engrenagem (Configurações por gráfico) */}
             {chartKind !== "kpi" && (
               <button
+                ref={gearButtonRef}
                 type="button"
                 onClick={() => setPopoverOpen((prev) => !prev)}
                 title="Configurações deste gráfico"
-                className={`rounded p-1 transition ${
+                className={`rounded p-1 transition cursor-pointer ${
                   popoverOpen
                     ? "bg-[#0A84FF] text-white shadow-sm"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
@@ -157,6 +161,7 @@ export default function ChartCard({
             <ChartSettingsPopover
               isOpen={popoverOpen}
               onClose={() => setPopoverOpen(false)}
+              anchorRef={gearButtonRef}
               chartKind={chartKind}
               hasMultipleSeries={hasMultipleSeries}
               settings={settings}
