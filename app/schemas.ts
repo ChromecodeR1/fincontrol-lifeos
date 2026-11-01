@@ -62,7 +62,9 @@ export const TransactionSchema = z
     installmentSeriesId: z.string().optional(),
     cashMonth: z.string().optional(),
     isInvoicePayment: z.boolean().optional(),
-    isReceivableSettlement: z.boolean().optional()
+    isReceivableSettlement: z.boolean().optional(),
+    deletedAt: z.string().optional(),
+    rev: z.number().optional()
   })
   .refine(
     (data) => {
@@ -145,7 +147,10 @@ export const CreditCardSchema = z.object({
     .max(31, "O dia de vencimento deve ser entre 1 e 31."),
   bankId: z.string().optional(),
   bankName: z.string().optional(),
-  logoUrl: z.string().optional()
+  logoUrl: z.string().optional(),
+  updatedAt: z.string().optional(),
+  deletedAt: z.string().optional(),
+  rev: z.number().optional()
 });
 
 export type ValidatedCreditCard = z.infer<typeof CreditCardSchema>;
@@ -166,7 +171,10 @@ export const BankInstitutionSchema = z.object({
     .enum(["Conta Corrente", "Conta Digital", "Investimentos", "Benefícios"] as const)
     .optional(),
   color: z.string().optional(),
-  logoUrl: z.string().optional()
+  logoUrl: z.string().optional(),
+  updatedAt: z.string().optional(),
+  deletedAt: z.string().optional(),
+  rev: z.number().optional()
 });
 
 export type ValidatedBank = z.infer<typeof BankInstitutionSchema>;
@@ -184,7 +192,10 @@ export const StaticStatusSchema = z.object({
     .number({ error: "O valor deve ser numérico." })
     .positive("O valor deve ser estritamente maior que zero.")
     .finite("O valor não pode ser infinito ou NaN."),
-  notes: z.string().optional().default("")
+  notes: z.string().optional().default(""),
+  updatedAt: z.string().optional(),
+  deletedAt: z.string().optional(),
+  rev: z.number().optional()
 });
 
 export type ValidatedStaticStatus = z.infer<typeof StaticStatusSchema>;
@@ -246,5 +257,187 @@ export function validateStaticStatusData(
   return {
     success: false,
     error: firstIssue ? firstIssue.message : "Dados do item fixo inválidos."
+  };
+}
+
+/**
+ * Schema de Backup Completo e Motor de Quarentena (Sprint 22)
+ * Valida a integridade do JSON de backup e isola registros corrompidos em quarentena sem travar a importação.
+ */
+
+export const FullBackupSchema = z.object({
+  schemaVersion: z.number().optional().default(2),
+  version: z.string().optional(),
+  exportDateBR: z.string().optional(),
+  exportDate: z.string().optional(),
+  user: z
+    .object({
+      nickname: z.string().optional(),
+      avatar: z.string().optional()
+    })
+    .optional(),
+  transactions: z.array(z.unknown()).optional().default([]),
+  banks: z.array(z.unknown()).optional().default([]),
+  cards: z.array(z.unknown()).optional().default([]),
+  staticStatus: z.array(z.unknown()).optional().default([]),
+  wishlist: z.array(z.unknown()).optional().default([]),
+  bioLogs: z.array(z.unknown()).optional().default([]),
+  notes: z.array(z.unknown()).optional().default([]),
+  okrs: z.array(z.unknown()).optional().default([]),
+  alertRules: z.array(z.unknown()).optional().default([]),
+  debtorMap: z.record(z.string(), z.any()).optional().default({}),
+  categoriesCatalog: z.array(z.unknown()).optional().default([]),
+  categoryColors: z.record(z.string(), z.string()).optional().default({}),
+  paymentMethods: z.array(z.string()).optional().default([]),
+  settings: z.record(z.string(), z.unknown()).optional().default({})
+});
+
+export type ValidatedFullBackup = z.infer<typeof FullBackupSchema>;
+
+export interface QuarantineReport {
+  totalParsed: number;
+  totalValid: number;
+  totalQuarantined: number;
+  details: Array<{ entity: string; id?: string; error: string; raw: unknown }>;
+}
+
+export interface RestoredBackupData {
+  schemaVersion: number;
+  user?: { nickname?: string; avatar?: string };
+  transactions: ValidatedTransaction[];
+  cards: ValidatedCreditCard[];
+  banks: ValidatedBank[];
+  staticStatus: ValidatedStaticStatus[];
+  wishlist: Array<Record<string, unknown>>;
+  bioLogs: Array<Record<string, unknown>>;
+  notes: Array<Record<string, unknown>>;
+  okrs: Array<Record<string, unknown>>;
+  alertRules: Array<Record<string, unknown>>;
+  debtorMap: Record<string, any>;
+  categoriesCatalog: Array<Record<string, unknown>>;
+  categoryColors: Record<string, string>;
+  paymentMethods: string[];
+  settings: Record<string, unknown>;
+  quarantine: QuarantineReport;
+}
+
+export function validateAndQuarantineBackup(rawInput: unknown): {
+  success: boolean;
+  data?: RestoredBackupData;
+  error?: string;
+} {
+  const rootResult = FullBackupSchema.safeParse(rawInput);
+  if (!rootResult.success) {
+    return {
+      success: false,
+      error: rootResult.error.issues[0]?.message || "Estrutura do arquivo de backup inválida."
+    };
+  }
+
+  const root = rootResult.data;
+  const quarantine: QuarantineReport = {
+    totalParsed: 0,
+    totalValid: 0,
+    totalQuarantined: 0,
+    details: []
+  };
+
+  // 1. Transações
+  const validTransactions: ValidatedTransaction[] = [];
+  root.transactions.forEach((item, idx) => {
+    quarantine.totalParsed++;
+    const res = TransactionSchema.safeParse(item);
+    if (res.success) {
+      validTransactions.push(res.data);
+      quarantine.totalValid++;
+    } else {
+      quarantine.totalQuarantined++;
+      quarantine.details.push({
+        entity: "transaction",
+        id: (item as any)?.id || `idx-${idx}`,
+        error: res.error.issues[0]?.message || "Erro de validação na transação.",
+        raw: item
+      });
+    }
+  });
+
+  // 2. Cartões
+  const validCards: ValidatedCreditCard[] = [];
+  root.cards.forEach((item, idx) => {
+    quarantine.totalParsed++;
+    const res = CreditCardSchema.safeParse(item);
+    if (res.success) {
+      validCards.push(res.data);
+      quarantine.totalValid++;
+    } else {
+      quarantine.totalQuarantined++;
+      quarantine.details.push({
+        entity: "card",
+        id: (item as any)?.id || `idx-${idx}`,
+        error: res.error.issues[0]?.message || "Erro de validação no cartão.",
+        raw: item
+      });
+    }
+  });
+
+  // 3. Bancos
+  const validBanks: ValidatedBank[] = [];
+  root.banks.forEach((item, idx) => {
+    quarantine.totalParsed++;
+    const res = BankInstitutionSchema.safeParse(item);
+    if (res.success) {
+      validBanks.push(res.data);
+      quarantine.totalValid++;
+    } else {
+      quarantine.totalQuarantined++;
+      quarantine.details.push({
+        entity: "bank",
+        id: (item as any)?.id || `idx-${idx}`,
+        error: res.error.issues[0]?.message || "Erro de validação no banco.",
+        raw: item
+      });
+    }
+  });
+
+  // 4. Status Fixos
+  const validStatus: ValidatedStaticStatus[] = [];
+  root.staticStatus.forEach((item, idx) => {
+    quarantine.totalParsed++;
+    const res = StaticStatusSchema.safeParse(item);
+    if (res.success) {
+      validStatus.push(res.data);
+      quarantine.totalValid++;
+    } else {
+      quarantine.totalQuarantined++;
+      quarantine.details.push({
+        entity: "staticStatus",
+        id: (item as any)?.id || `idx-${idx}`,
+        error: res.error.issues[0]?.message || "Erro de validação no item de status.",
+        raw: item
+      });
+    }
+  });
+
+  return {
+    success: true,
+    data: {
+      schemaVersion: root.schemaVersion,
+      user: root.user,
+      transactions: validTransactions,
+      cards: validCards,
+      banks: validBanks,
+      staticStatus: validStatus,
+      wishlist: root.wishlist as Array<Record<string, unknown>>,
+      bioLogs: root.bioLogs as Array<Record<string, unknown>>,
+      notes: root.notes as Array<Record<string, unknown>>,
+      okrs: root.okrs as Array<Record<string, unknown>>,
+      alertRules: root.alertRules as Array<Record<string, unknown>>,
+      debtorMap: root.debtorMap,
+      categoriesCatalog: root.categoriesCatalog as Array<Record<string, unknown>>,
+      categoryColors: root.categoryColors,
+      paymentMethods: root.paymentMethods,
+      settings: root.settings,
+      quarantine
+    }
   };
 }

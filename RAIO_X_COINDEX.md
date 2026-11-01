@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.13.0`  
-> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 21 — Motor Contábil Puro & Padronização Global de Datas DD-MM-YYYY)  
+> **Versão da Aplicação:** `0.14.0`  
+> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 22 — Isolamento por Usuário no Cache Local, Soft Delete contra Ressurreição de Exclusões e Validação Zod com Quarentena)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -40,7 +40,8 @@ fincontrol-lifeos/
 │   ├── lib/
 │   │   ├── domain/
 │   │   │   ├── date-br.ts                 # Motor de Datas Brasileiro Puro (DD-MM-YYYY, anti-UTC shift)
-│   │   │   └── finance.ts                 # Motor Contábil Puro (Centavos inteiros, restos exatos, competência/caixa)
+│   │   │   ├── finance.ts                 # Motor Contábil Puro (Centavos inteiros, restos exatos, competência/caixa)
+│   │   │   └── user-storage.ts            # Isolamento de Cache por Usuário (userId namespace, tombstones & soft delete)
 │   │   ├── services/coindex-supabase.ts   # CRUD completo e persistência no Supabase PostgreSQL
 │   │   ├── services/spotify-supabase.ts   # Persistência de tokens e preferências Spotify
 │   │   └── supabase/                      # Clientes Supabase Client & Server
@@ -374,6 +375,13 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - Agrupamento prioritário de parcelas via `installmentSeriesId` imutável (`generateInstallmentSeriesId`).
     - Competência de fatura (`invoiceCompetence`) vs. Mês de desembolso de caixa (`cashMonth`) via `calculateInvoiceAndCashMonths`: se `dueDay <= closingDay`, o desembolso real é projetado no mês seguinte para o *Safe-to-Spend*.
     - Neutralidade contábil estrita (`flowType: "NEUTRAL"`): quitações de fatura (`handlePayCardInvoice`) e liquidações de recebíveis/split (`handlePartialPaymentReceivable`) atualizam saldos em contas bancárias sem inflar as saídas operacionais ou entradas líquidas do mês.
+- **Sprint 22 — Isolamento por Usuário no Cache Local, Soft Delete contra Ressurreição de Exclusões e Validação Zod com Quarentena:**
+  - **Isolamento de Cache Local por Usuário (`app/lib/domain/user-storage.ts`):** Chaves no `localStorage` prefixadas pelo ID do usuário (`coindex_usr_${userId}_${key}`, fallback `coindex_guest_${key}`). `clearUserSessionStorage` remove dados privados e reseta o estado em memória para os valores iniciais padrão ao encerrar a sessão ("Sair da Conta"), impedindo contaminação entre contas no mesmo dispositivo.
+  - **Remoção de Dados Pessoais do Bundle JS Público (`PATRIMONIO_IMPORT_DATA`):** Os 56 lançamentos históricos pessoais foram removidos de `INITIAL_TRANSACTIONS` e do carregamento automático de login. Contas novas iniciam 100% limpas. A carga do histórico foi movida para uma ação explícita no perfil (`onSeedPatrimonio`) protegida pela flag `patrimonio_seeded_${userId}`.
+  - **Cálculo de Patrimônio com Reserva Inicial & Alerta de Déficit:** Suporte ao parâmetro `initialReserveBalance` / `initialPatrimony` em `calculatePatrimonyEvolution`. Quando os resgates superam o saldo acumulado (+ reserva inicial), a interface emite um banner visual de alerta amigável no padrão Cyberpunk em vez de mascarar com `Math.max(0, ...)`.
+  - **Soft Delete e Lápides Locais (`recordTombstone`):** Inclusão de `deletedAt?: string` e `rev?: number` em `Transaction`, `CreditCardItem`, `BankInstitution`, `StaticStatusItem` e `BrainNote`. Sistema de lápides locais armazena os IDs excluídos no storage namespace do usuário, garantindo que sincronizações futuras com o Supabase ou restaurações parciais de cache nunca ressuscitem itens deletados.
+  - **Indicador de Sincronização em Tempo Real:** Badge com status em tempo real (🟢 Sincronizado, 🟡 Sincronizando..., ⚪ Offline (Salvo Localmente), 🔴 Erro de Sync com timestamp da última operação) adicionado na Topbar ao lado do seletor de mês e no rodapé do perfil na Sidebar.
+  - **Validação de Backup JSON com Zod & Quarentena (`FullBackupSchema`):** Exportação versionada (`schemaVersion: 2`) com data de geração em `DD-MM-YYYY`. Importação validada por Zod (`validateAndQuarantineBackup`), isolando registros corrompidos ou com schema inválido em relatório de quarentena (`quarantine.details`) registrado nos logs do sistema sem quebrar a tela. Modal de Perfil oferece escolha entre "Mesclar com dados atuais (Recomendado)" e "Substituir tudo".
 
 ---
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, UserCheck, Upload, Trash2, Camera, Check, Download, ShieldCheck } from "lucide-react";
+import { X, UserCheck, Upload, Trash2, Camera, Check, Download, ShieldCheck, RefreshCw, AlertCircle, Database } from "lucide-react";
 import { compressImageFileToBase64 } from "../lifeos-data";
 
 interface ProfileModalProps {
@@ -11,7 +11,8 @@ interface ProfileModalProps {
   currentUserAvatar: string;
   onSaveProfile: (newNickname: string, newAvatar: string) => void;
   onExportBackup?: () => void;
-  onImportBackup?: (file: File) => void;
+  onImportBackup?: (file: File, mode: "merge" | "replace") => void;
+  onSeedPatrimonio?: () => void;
 }
 
 export function ProfileModal({
@@ -21,11 +22,14 @@ export function ProfileModal({
   currentUserAvatar,
   onSaveProfile,
   onExportBackup,
-  onImportBackup
+  onImportBackup,
+  onSeedPatrimonio
 }: ProfileModalProps) {
   const [nickname, setNickname] = useState(currentUser || "");
   const [avatar, setAvatar] = useState(currentUserAvatar || "");
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedBackupFile, setSelectedBackupFile] = useState<File | null>(null);
+  const [restoreMode, setRestoreMode] = useState<"merge" | "replace">("merge");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -34,6 +38,8 @@ export function ProfileModal({
       setNickname(currentUser || "");
       setAvatar(currentUserAvatar || "");
       setIsSaving(false);
+      setSelectedBackupFile(null);
+      setRestoreMode("merge");
     }
   }, [isOpen, currentUser, currentUserAvatar]);
 
@@ -162,7 +168,7 @@ export function ProfileModal({
           </div>
         </div>
 
-        {/* Seção de Portabilidade & Segurança de Dados (Backup) - Sprint 15 */}
+        {/* Seção de Portabilidade & Segurança de Dados (Backup) - Sprint 15 & 22 */}
         <div className="rounded-2xl p-4 bg-slate-900/60 border border-white/10 space-y-3">
           <div>
             <span className="font-extrabold text-white text-xs flex items-center gap-1.5">
@@ -199,13 +205,111 @@ export function ProfileModal({
               accept=".json"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f && onImportBackup) {
-                  onImportBackup(f);
+                if (f) {
+                  setSelectedBackupFile(f);
                 }
               }}
               className="hidden"
             />
           </div>
+
+          {/* Diálogo de Escolha de Modo de Restauração - Sprint 22 */}
+          {selectedBackupFile && (
+            <div className="mt-3 p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 space-y-3 animate-in fade-in zoom-in-95">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-white font-bold block text-xs">Confirmar Restauração de Backup</strong>
+                  <p className="text-[11px] text-slate-300 font-mono">
+                    Arquivo: <span className="text-emerald-400">{selectedBackupFile.name}</span> ({(selectedBackupFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 block">Como deseja aplicar os dados?</label>
+                <div className="grid grid-cols-1 gap-2">
+                  <label
+                    className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition ${
+                      restoreMode === "merge"
+                        ? "bg-indigo-600/20 border-indigo-500 text-white"
+                        : "bg-slate-900/60 border-white/5 text-slate-400 hover:border-white/15"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="restoreMode"
+                      value="merge"
+                      checked={restoreMode === "merge"}
+                      onChange={() => setRestoreMode("merge")}
+                      className="accent-[#FF2A85]"
+                    />
+                    <div>
+                      <strong className="text-xs block text-white">Mesclar com dados atuais (Recomendado)</strong>
+                      <span className="text-[10px] text-slate-400">Adiciona lançamentos e configurações preservando o que já existe.</span>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition ${
+                      restoreMode === "replace"
+                        ? "bg-rose-500/20 border-rose-500 text-white"
+                        : "bg-slate-900/60 border-white/5 text-slate-400 hover:border-white/15"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="restoreMode"
+                      value="replace"
+                      checked={restoreMode === "replace"}
+                      onChange={() => setRestoreMode("replace")}
+                      className="accent-[#FF2A85]"
+                    />
+                    <div>
+                      <strong className="text-xs block text-rose-300">Substituir tudo</strong>
+                      <span className="text-[10px] text-slate-400">Limpa a base atual e carrega estritamente os dados do arquivo de backup.</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBackupFile(null)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onImportBackup && selectedBackupFile) {
+                      onImportBackup(selectedBackupFile, restoreMode);
+                      setSelectedBackupFile(null);
+                      onClose();
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#FF2A85] to-[#A855F7] text-white text-xs font-bold shadow-md hover:brightness-110"
+                >
+                  ✓ Confirmar Restauração
+                </button>
+              </div>
+            </div>
+          )}
+
+          {onSeedPatrimonio && (
+            <div className="pt-2 border-t border-white/5">
+              <button
+                type="button"
+                onClick={onSeedPatrimonio}
+                className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 hover:border-violet-500/40 text-violet-300 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <Database className="w-3.5 h-3.5 text-violet-400" />
+                <span>Carregar Histórico Oficial de Aportes (56 registros)</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Botões de Ação */}

@@ -32,6 +32,7 @@ export interface UserSettingsPayload {
   personalBudgetLimit?: number;
   monthlyInvestmentGoal?: number;
   patrimonyTarget?: number;
+  initialPatrimony?: number;
   annualRunGoalKm?: number;
   chartTheme?: ChartThemeColors;
   dashboardLayout?: DashboardWidgetConfig[];
@@ -78,9 +79,10 @@ function toCategorySlug(name: string): string {
   return clean ? `cat-${clean}` : `cat-${Date.now()}`;
 }
 
-export async function fetchAllCoindexData(): Promise<{
+export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
   ok: boolean;
   isEmpty: boolean;
+  userId?: string;
   data?: FullCoindexSnapshot;
   error?: string;
 }> {
@@ -123,89 +125,120 @@ export async function fetchAllCoindexData(): Promise<{
     const cardRows = (cardsRes.data ?? []) as Array<Record<string, unknown>>;
     const catRows = (catsRes.data ?? []) as Array<Record<string, unknown>>;
 
+    const isExcluded = (id: string, deletedAt?: unknown) => {
+      if (deletedAt) return true;
+      if (tombstoneSet && tombstoneSet.has(id)) return true;
+      return false;
+    };
+
     const isEmpty = txRows.length === 0 && cardRows.length === 0 && catRows.length === 0;
 
-    const transactions: Transaction[] = txRows.map((r) => ({
-      id: String(r.id),
-      date: String(r.tx_date),
-      description: String(r.description),
-      amount: Number(r.amount ?? 0),
-      category: String(r.category),
-      costType: (r.cost_type as CostType) ?? "Variável",
-      paymentMethod: String(r.payment_method ?? "PIX"),
-      cardUsed: r.card_used ? String(r.card_used) : undefined,
-      bankAccount: (r as any).bank_account
-        ? String((r as any).bank_account)
-        : (String(r.payment_method) !== "Cartão de Crédito" && r.card_used ? String(r.card_used) : undefined),
-      status: normalizeStatus(String(r.status ?? "Pendente")),
-      km: r.km != null ? Number(r.km) : undefined,
-      liters: r.liters != null ? Number(r.liters) : undefined,
-      debtor: r.debtor ? String(r.debtor) : undefined,
-      paidAmount: r.paid_amount != null ? Number(r.paid_amount) : 0,
-      installmentInfo: r.installment_info ? String(r.installment_info) : undefined,
-      installmentGroupId: r.installment_group_id ? String(r.installment_group_id) : undefined,
-      wishlistId: r.wishlist_id ? String(r.wishlist_id) : undefined,
-      iconUrl: r.icon_url ? String(r.icon_url) : undefined,
-      updatedAt: r.updated_at ? String(r.updated_at) : new Date().toISOString()
-    }));
+    const transactions: Transaction[] = txRows
+      .filter((r) => !isExcluded(String(r.id), r.deleted_at))
+      .map((r) => ({
+        id: String(r.id),
+        date: String(r.tx_date),
+        description: String(r.description),
+        amount: Number(r.amount ?? 0),
+        category: String(r.category),
+        costType: (r.cost_type as CostType) ?? "Variável",
+        paymentMethod: String(r.payment_method ?? "PIX"),
+        cardUsed: r.card_used ? String(r.card_used) : undefined,
+        bankAccount: (r as any).bank_account
+          ? String((r as any).bank_account)
+          : (String(r.payment_method) !== "Cartão de Crédito" && r.card_used ? String(r.card_used) : undefined),
+        status: normalizeStatus(String(r.status ?? "Pendente")),
+        km: r.km != null ? Number(r.km) : undefined,
+        liters: r.liters != null ? Number(r.liters) : undefined,
+        debtor: r.debtor ? String(r.debtor) : undefined,
+        paidAmount: r.paid_amount != null ? Number(r.paid_amount) : 0,
+        installmentInfo: r.installment_info ? String(r.installment_info) : undefined,
+        installmentGroupId: r.installment_group_id ? String(r.installment_group_id) : undefined,
+        wishlistId: r.wishlist_id ? String(r.wishlist_id) : undefined,
+        iconUrl: r.icon_url ? String(r.icon_url) : undefined,
+        updatedAt: r.updated_at ? String(r.updated_at) : new Date().toISOString(),
+        deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
+        rev: r.rev != null ? Number(r.rev) : undefined
+      }));
 
-    const cards: CreditCardItem[] = cardRows.map((r) => ({
-      id: String(r.id),
-      name: String(r.name),
-      brand: String(r.brand ?? "Mastercard"),
-      limit: Number(r.limit_amount ?? 0),
-      closingDay: Number(r.closing_day ?? 25),
-      dueDay: Number(r.due_day ?? 5),
-      logoUrl: r.logo_url ? String(r.logo_url) : undefined
-    }));
+    const cards: CreditCardItem[] = cardRows
+      .filter((r) => !isExcluded(String(r.id), r.deleted_at))
+      .map((r) => ({
+        id: String(r.id),
+        name: String(r.name),
+        brand: String(r.brand ?? "Mastercard"),
+        limit: Number(r.limit_amount ?? 0),
+        closingDay: Number(r.closing_day ?? 25),
+        dueDay: Number(r.due_day ?? 5),
+        logoUrl: r.logo_url ? String(r.logo_url) : undefined,
+        updatedAt: r.updated_at ? String(r.updated_at) : undefined,
+        deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
+        rev: r.rev != null ? Number(r.rev) : undefined
+      }));
 
-    const staticStatus: StaticStatusItem[] = ((statusRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      id: String(r.id),
-      title: String(r.title),
-      type: r.item_type as StaticStatusItem["type"],
-      amount: Number(r.amount ?? 0),
-      notes: String(r.notes ?? "")
-    }));
+    const staticStatus: StaticStatusItem[] = ((statusRes.data ?? []) as Array<Record<string, unknown>>)
+      .filter((r) => !isExcluded(String(r.id), r.deleted_at))
+      .map((r) => ({
+        id: String(r.id),
+        title: String(r.title),
+        type: r.item_type as StaticStatusItem["type"],
+        amount: Number(r.amount ?? 0),
+        notes: String(r.notes ?? ""),
+        updatedAt: r.updated_at ? String(r.updated_at) : undefined,
+        deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
+        rev: r.rev != null ? Number(r.rev) : undefined
+      }));
 
-    const wishlist: WishlistItem[] = ((wishRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      id: String(r.id),
-      title: String(r.title),
-      institution: String(r.institution ?? "Nubank"),
-      targetAmount: Number(r.target_amount ?? 0),
-      savedAmount: Number(r.saved_amount ?? 0),
-      priority: (r.priority as WishlistItem["priority"]) ?? "Média"
-    }));
+    const wishlist: WishlistItem[] = ((wishRes.data ?? []) as Array<Record<string, unknown>>)
+      .filter((r) => !isExcluded(String(r.id), r.deleted_at))
+      .map((r) => ({
+        id: String(r.id),
+        title: String(r.title),
+        institution: String(r.institution ?? "Nubank"),
+        targetAmount: Number(r.target_amount ?? 0),
+        savedAmount: Number(r.saved_amount ?? 0),
+        priority: (r.priority as WishlistItem["priority"]) ?? "Média"
+      }));
 
-    const bioLogs: BioLog[] = ((bioRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      id: String(r.id),
-      date: String(r.log_date),
-      weight: Number(r.weight ?? 0),
-      bf: r.bf != null ? Number(r.bf) : undefined
-    }));
+    const bioLogs: BioLog[] = ((bioRes.data ?? []) as Array<Record<string, unknown>>)
+      .filter((r) => !isExcluded(String(r.id), r.deleted_at))
+      .map((r) => ({
+        id: String(r.id),
+        date: String(r.log_date),
+        weight: Number(r.weight ?? 0),
+        bf: r.bf != null ? Number(r.bf) : undefined
+      }));
 
-    const okrs: PersonalOKR[] = ((okrsRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      id: String(r.id),
-      title: String(r.title),
-      category: String(r.category ?? "Finanças"),
-      current: Number(r.current_val ?? 0),
-      target: Number(r.target_val ?? 100),
-      unit: String(r.unit ?? "R$")
-    }));
+    const okrs: PersonalOKR[] = ((okrsRes.data ?? []) as Array<Record<string, unknown>>)
+      .filter((r) => !isExcluded(String(r.id), r.deleted_at))
+      .map((r) => ({
+        id: String(r.id),
+        title: String(r.title),
+        category: String(r.category ?? "Finanças"),
+        current: Number(r.current_val ?? 0),
+        target: Number(r.target_val ?? 100),
+        unit: String(r.unit ?? "R$")
+      }));
 
-    const notes: BrainNote[] = ((notesRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      id: String(r.id),
-      date: String(r.note_date),
-      title: String(r.title),
-      content: String(r.content ?? ""),
-      tag: (r.tag as BrainNote["tag"]) ?? "#Ideias",
-      completed: Boolean(r.completed),
-      itemType: (r.item_type as "note" | "wish") ?? (r.price != null ? "wish" : "note"),
-      price: r.price != null ? Number(r.price) : undefined,
-      description: r.description ? String(r.description) : String(r.content || ""),
-      priority: (r.priority as "Essencial" | "Planejado" | "Desejo") ?? undefined,
-      storeUrl: r.store_url ? String(r.store_url) : undefined,
-      completedAt: r.completed_at ? String(r.completed_at) : undefined
-    }));
+    const notes: BrainNote[] = ((notesRes.data ?? []) as Array<Record<string, unknown>>)
+      .filter((r) => !isExcluded(String(r.id), r.deleted_at))
+      .map((r) => ({
+        id: String(r.id),
+        date: String(r.note_date),
+        title: String(r.title),
+        content: String(r.content ?? ""),
+        tag: (r.tag as BrainNote["tag"]) ?? "#Ideias",
+        completed: Boolean(r.completed),
+        itemType: (r.item_type as "note" | "wish") ?? (r.price != null ? "wish" : "note"),
+        price: r.price != null ? Number(r.price) : undefined,
+        description: r.description ? String(r.description) : String(r.content || ""),
+        priority: (r.priority as "Essencial" | "Planejado" | "Desejo") ?? undefined,
+        storeUrl: r.store_url ? String(r.store_url) : undefined,
+        completedAt: r.completed_at ? String(r.completed_at) : undefined,
+        updatedAt: r.updated_at ? String(r.updated_at) : undefined,
+        deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
+        rev: r.rev != null ? Number(r.rev) : undefined
+      }));
 
     const alertRules: CustomAlertRule[] = ((alertsRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
       id: String(r.id),

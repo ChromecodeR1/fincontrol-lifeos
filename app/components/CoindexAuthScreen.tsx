@@ -14,7 +14,7 @@ interface CoindexAuthScreenProps {
   sheetsConfigured: boolean;
   cloudError: string | null;
   initialSheetUrl?: string;
-  onAuthenticated: (user: { username: string; avatarUrl?: string }, customSheetUrl?: string) => void;
+  onAuthenticated: (user: { id?: string; username: string; avatarUrl?: string }, customSheetUrl?: string) => void;
 }
 
 export default function CoindexAuthScreen({
@@ -78,6 +78,7 @@ export default function CoindexAuthScreen({
       }
 
       onAuthenticated({
+        id: data.user.id,
         username: data.user.username,
         avatarUrl: data.user.avatarUrl || ""
       });

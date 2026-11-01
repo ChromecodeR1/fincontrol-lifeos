@@ -143,13 +143,22 @@ import {
   calculateBankBalance,
   calculatePatrimonyEvolution,
   calculateStaticStatusSummary,
-  migrateLegacyCategory
+  migrateLegacyCategory,
+  getUserItem,
+  setUserItem,
+  removeUserItem,
+  recordTombstone,
+  recordTombstones,
+  getTombstones,
+  isTombstoned,
+  clearUserSessionStorage
 } from "./lifeos-data";
 import {
   validateTransactionData,
   validateCreditCardData,
   validateBankData,
-  validateStaticStatusData
+  validateStaticStatusData,
+  validateAndQuarantineBackup
 } from "./schemas";
 import {
   fetchAllCoindexData,
@@ -260,6 +269,7 @@ export default function CoindexApp() {
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Autenticação e Estado no Supabase
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [currentUserAvatar, setCurrentUserAvatar] = useState<string>("");
   const [hasOwner, setHasOwner] = useState<boolean>(false);
@@ -526,6 +536,7 @@ export default function CoindexApp() {
   const [personalBudgetLimit, setPersonalBudgetLimit] = useState(350);
   const [monthlyInvestmentGoal, setMonthlyInvestmentGoal] = useState(1450);
   const [patrimonyTarget, setPatrimonyTarget] = useState(25000);
+  const [initialPatrimony, setInitialPatrimony] = useState<number>(0);
   const [annualRunGoalKm, setAnnualRunGoalKm] = useState(600);
 
   // Integrações (Supabase Cloud Sync & Strava)
@@ -768,7 +779,7 @@ export default function CoindexApp() {
         const savedReadNotifs = localStorage.getItem("lifeos_read_notifications_v1");
         if (savedReadNotifs) setReadNotificationIds(JSON.parse(savedReadNotifs));
 
-        const sTxs = localStorage.getItem("lifeos_txs_v8");
+        const sTxs = getUserItem("lifeos_txs_v8");
         if (sTxs) {
           const parsedTxs: Transaction[] = JSON.parse(sTxs);
           // Migração de categorias legadas (Sprint 19)
@@ -776,11 +787,8 @@ export default function CoindexApp() {
             ...t,
             category: migrateLegacyCategory(t.category, t.description)
           }));
-          const existingIds = new Set(migratedTxs.map((t) => t.id));
-          const missingOfficial = PATRIMONIO_IMPORT_TRANSACTIONS.filter((t) => !existingIds.has(t.id));
-          const finalMerged = missingOfficial.length > 0 ? [...migratedTxs, ...missingOfficial] : migratedTxs;
-          setTransactions(finalMerged);
-          localStorage.setItem("lifeos_txs_v8", JSON.stringify(finalMerged));
+          setTransactions(migratedTxs);
+          setUserItem("lifeos_txs_v8", JSON.stringify(migratedTxs));
         }
         const sDebtors = localStorage.getItem("lifeos_debtors_v8");
         if (sDebtors) setDebtorMap(JSON.parse(sDebtors));
@@ -861,8 +869,9 @@ export default function CoindexApp() {
         setCloudAuthError(authData.cloudError || null);
 
         if (authData.authenticated && authData.user?.username) {
+          if (authData.user.id) setCurrentUserId(authData.user.id);
           setCurrentUser(authData.user.username);
-          setCurrentUserAvatar(authData.user.avatarUrl || localStorage.getItem("coindex_avatar") || "");
+          setCurrentUserAvatar(authData.user.avatarUrl || getUserItem("coindex_avatar", authData.user.id) || "");
         }
       } catch {
         // Continua com cache local se offline
@@ -881,7 +890,9 @@ export default function CoindexApp() {
     async function syncInitialSupabaseData() {
       setIsSyncing(true);
       try {
-        const res = await fetchAllCoindexData();
+        const tombstones = getTombstones(currentUserId);
+        const res = await fetchAllCoindexData(tombstones);
+        if (res.userId) setCurrentUserId(res.userId);
         if (!res.ok) {
           setSheetsSyncStatus({
             state: "error",
@@ -941,19 +952,10 @@ export default function CoindexApp() {
             ...t,
             category: migrateLegacyCategory(t.category, t.description)
           }));
-          const existingIds = new Set(migratedTxs.map((t) => t.id));
-          const missingOfficial = PATRIMONIO_IMPORT_TRANSACTIONS.filter((t) => !existingIds.has(t.id));
-
-          let finalTxs = migratedTxs;
-          if (missingOfficial.length > 0) {
-            finalTxs = [...migratedTxs, ...missingOfficial];
-            upsertTransactionsInDb(missingOfficial, debtorMap).catch((err) =>
-              console.error("Erro ao sincronizar aportes oficiais no Supabase:", err)
-            );
-          }
+          const finalTxs = migratedTxs;
 
           setTransactions(finalTxs);
-          localStorage.setItem("lifeos_txs_v8", JSON.stringify(finalTxs));
+          setUserItem("lifeos_txs_v8", JSON.stringify(finalTxs), res.userId || currentUserId);
 
           if (d.cards.length > 0) {
             setCards(d.cards);
@@ -999,6 +1001,7 @@ export default function CoindexApp() {
           if (d.settings.personalBudgetLimit != null) setPersonalBudgetLimit(d.settings.personalBudgetLimit);
           if (d.settings.monthlyInvestmentGoal != null) setMonthlyInvestmentGoal(d.settings.monthlyInvestmentGoal);
           if (d.settings.patrimonyTarget != null) setPatrimonyTarget(d.settings.patrimonyTarget);
+          if (d.settings.initialPatrimony != null) setInitialPatrimony(d.settings.initialPatrimony);
           if (d.settings.annualRunGoalKm != null) setAnnualRunGoalKm(d.settings.annualRunGoalKm);
           if (d.settings.chartTheme) setChartTheme(d.settings.chartTheme);
           if (d.settings.dashboardLayout) {
@@ -1197,6 +1200,7 @@ export default function CoindexApp() {
 
       // 4. Salva no banco de dados Supabase PostgreSQL
       await upsertTransactionsInDb(PATRIMONIO_IMPORT_TRANSACTIONS, debtorMap);
+      setUserItem("patrimonio_seeded_" + (currentUserId || "default"), "true", currentUserId);
       notify(
         "Patrimônio Histórico Sincronizado!",
         "Os 56 lançamentos oficiais de Aporte e Resgate foram salvos no Supabase com sucesso.",
@@ -1261,10 +1265,28 @@ export default function CoindexApp() {
     } catch {
       // Continua limpeza local
     }
+    clearUserSessionStorage(currentUserId);
     localStorage.removeItem("lifeos_active_session");
     sessionStorage.removeItem("lifeos_active_session");
-    setCloudLoadedForUser(null);
+    setTransactions(INITIAL_TRANSACTIONS);
+    setCards(INITIAL_CARDS);
+    setBanks(INITIAL_BANKS);
+    setStaticStatus(INITIAL_STATIC_STATUS);
+    setWishlist(INITIAL_WISHLIST);
+    setBioLogs(INITIAL_BIO_LOGS);
+    setNotes(INITIAL_NOTES);
+    setOkrs(INITIAL_OKRS);
+    setAlertRules(INITIAL_ALERT_RULES);
+    setDebtorMap(INITIAL_DEBTOR_MAP);
+    setCurrentUserId(null);
     setCurrentUser(null);
+    setCurrentUserAvatar("");
+    setCloudLoadedForUser(null);
+    setSheetsSyncStatus({
+      state: "idle",
+      message: "Sessão encerrada com sucesso.",
+      timestamp: new Date().toLocaleTimeString("pt-BR")
+    });
   };
 
   const getFlowType = useCallback(
@@ -1408,9 +1430,10 @@ export default function CoindexApp() {
     };
   }, [transactions, getFlowType]);
 
-  const patrimonyChartData = useMemo(() => {
-    return calculatePatrimonyEvolution(transactions, HISTORICAL_INVESTMENTS);
-  }, [transactions]);
+  const patrimonyEvolution = useMemo(() => {
+    return calculatePatrimonyEvolution(transactions, HISTORICAL_INVESTMENTS, initialPatrimony);
+  }, [transactions, initialPatrimony]);
+  const patrimonyChartData = patrimonyEvolution.data;
 
   // UPDATE 2: Meses distintos no período e limite acumulado proporcional
   const filterMonthsCount = useMemo(() => {
@@ -2292,8 +2315,12 @@ export default function CoindexApp() {
             return t;
           });
 
+        recordTombstone(id, currentUserId);
+        if (childId) {
+          recordTombstone(childId, currentUserId);
+        }
         setTransactions(updated);
-        localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
+        setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
         await deleteTransactionInDb(id);
         if (childId) {
           await deleteTransactionInDb(childId);
@@ -2310,9 +2337,10 @@ export default function CoindexApp() {
       if (deleteAll) {
         const seriesList = deleteSeriesModal.seriesData.series;
         const idsToDelete = new Set(seriesList.map((t) => t.id));
+        recordTombstones(Array.from(idsToDelete), currentUserId);
         const updated = transactions.filter((t) => !idsToDelete.has(t.id));
         setTransactions(updated);
-        localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
+        setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
         await deleteTransactionsInDb(Array.from(idsToDelete));
         notify(
           "Série Parcelada Removida",
@@ -2322,9 +2350,10 @@ export default function CoindexApp() {
         );
       } else {
         const targetId = deleteSeriesModal.targetTx.id;
+        recordTombstone(targetId, currentUserId);
         const updated = transactions.filter((t) => t.id !== targetId);
         setTransactions(updated);
-        localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
+        setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
         await deleteTransactionInDb(targetId);
         notify(
           "Parcela Removida",
@@ -2688,9 +2717,10 @@ export default function CoindexApp() {
       confirmLabel: "Excluir Cartão",
       danger: true,
       onConfirm: () => {
+        recordTombstone(id, currentUserId);
         const updated = cards.filter((c) => c.id !== id);
         setCards(updated);
-        localStorage.setItem("lifeos_cards_v8", JSON.stringify(updated));
+        setUserItem("lifeos_cards_v8", JSON.stringify(updated), currentUserId);
         deleteCardInDb(id);
         notify("Cartão Removido", `"${card?.name || "Cartão"}" excluído com sucesso.`, "warning", "CONFIG");
       }
@@ -3022,9 +3052,10 @@ export default function CoindexApp() {
       confirmLabel: "Excluir",
       danger: true,
       onConfirm: () => {
+        recordTombstone(id, currentUserId);
         const updated = notes.filter((n) => n.id !== id);
         setNotes(updated);
-        localStorage.setItem("lifeos_notes_v8", JSON.stringify(updated));
+        setUserItem("lifeos_notes_v8", JSON.stringify(updated), currentUserId);
         deleteNoteInDb(id);
         notify("Anotação Removida", `"${item?.title || "Anotação"}" excluída.`, "info", "CONFIG");
       }
@@ -3211,7 +3242,9 @@ export default function CoindexApp() {
 
   const handleExportFullBackupJSON = () => {
     const dump = {
+      schemaVersion: 2,
       version: APP_VERSION,
+      exportDateBR: todayBR(),
       exportDate: new Date().toISOString(),
       user: {
         nickname: currentUser || "Usuário",
@@ -3234,6 +3267,7 @@ export default function CoindexApp() {
         personalBudgetLimit,
         monthlyInvestmentGoal,
         patrimonyTarget,
+        initialPatrimony,
         annualRunGoalKm,
         chartTheme,
         dashboardLayout,
@@ -3248,136 +3282,233 @@ export default function CoindexApp() {
     a.download = `coindex-backup-${todayBR()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    notify("Backup Exportado com Sucesso!", "Arquivo JSON gerado e salvo.", "success", "CONFIG");
+    notify("Backup Exportado com Sucesso!", "Arquivo JSON versionado (v2) gerado e salvo.", "success", "CONFIG");
   };
 
-  const handleImportFullBackupJSON = async (file: File) => {
+  const handleImportFullBackupJSON = async (file: File, mode: "merge" | "replace" = "merge") => {
     const reader = new FileReader();
     reader.onload = async (ev) => {
       try {
         const raw = String(ev.target?.result);
-        const d = JSON.parse(raw);
-        if (!d || typeof d !== "object") {
-          throw new Error("Formato inválido");
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") {
+          throw new Error("Formato JSON inválido");
         }
 
-        if (d.transactions && Array.isArray(d.transactions)) {
-          setTransactions(d.transactions);
-          localStorage.setItem("lifeos_txs_v8", JSON.stringify(d.transactions));
+        const backupResult = validateAndQuarantineBackup(parsed);
+        if (!backupResult.success || !backupResult.data) {
+          throw new Error(backupResult.error || "Estrutura do arquivo de backup inválida.");
         }
-        if (d.banks && Array.isArray(d.banks)) {
-          setBanks(d.banks);
-          localStorage.setItem("lifeos_banks_v1", JSON.stringify(d.banks));
+        const valid = backupResult.data;
+        const quarantine = valid.quarantine;
+
+        // Se houver quarentena, registrar no log do sistema
+        if (quarantine.totalQuarantined > 0) {
+          const logText = `Registros inconsistentes isolados: ${quarantine.details.map((i: any) => `[${i.entity}] ${i.error}`).join("; ")}`;
+          const entry: SystemLogEntry = {
+            id: `log-quarantine-${Date.now()}`,
+            timestamp: new Date().toLocaleString("pt-BR"),
+            user: currentUser || "Sistema",
+            category: "CONFIG",
+            action: "Quarentena de Backup",
+            details: logText
+          };
+          setSystemLogsState((prev) => [entry, ...prev].slice(0, 200));
+          insertSystemLogInDb(entry);
         }
-        if (d.cards && Array.isArray(d.cards)) {
-          setCards(d.cards);
-          localStorage.setItem("lifeos_cards_v8", JSON.stringify(d.cards));
-        }
-        if (d.staticStatus && Array.isArray(d.staticStatus)) {
-          setStaticStatus(d.staticStatus);
-          localStorage.setItem("lifeos_static_status_v8", JSON.stringify(d.staticStatus));
-        }
-        if (d.wishlist && Array.isArray(d.wishlist)) {
-          setWishlist(d.wishlist);
-          localStorage.setItem("lifeos_wish_v8", JSON.stringify(d.wishlist));
-        }
-        if (d.bioLogs && Array.isArray(d.bioLogs)) {
-          setBioLogs(d.bioLogs);
-          localStorage.setItem("lifeos_biologs_v8", JSON.stringify(d.bioLogs));
-        }
-        if (d.notes && Array.isArray(d.notes)) {
-          setNotes(d.notes);
-          localStorage.setItem("lifeos_notes_v8", JSON.stringify(d.notes));
-        }
-        if (d.okrs && Array.isArray(d.okrs)) {
-          setOkrs(d.okrs);
-          localStorage.setItem("lifeos_okrs_v8", JSON.stringify(d.okrs));
-        }
-        if (d.alertRules && Array.isArray(d.alertRules)) {
-          setAlertRules(d.alertRules);
-          localStorage.setItem("lifeos_alerts_v8", JSON.stringify(d.alertRules));
-        }
-        if (d.debtorMap && typeof d.debtorMap === "object") {
-          setDebtorMap(d.debtorMap);
-          localStorage.setItem("lifeos_debtors_v8", JSON.stringify(d.debtorMap));
-        }
-        if (d.categoriesCatalog && Array.isArray(d.categoriesCatalog)) {
-          setCategoriesCatalog(d.categoriesCatalog);
-        }
-        if (d.categoryColors && typeof d.categoryColors === "object") {
-          setCategoryColors(d.categoryColors);
-        }
-        if (d.paymentMethods && Array.isArray(d.paymentMethods)) {
-          setPaymentMethods(d.paymentMethods);
-        }
-        if (d.user) {
-          if (d.user.nickname) {
-            setCurrentUser(d.user.nickname);
-            localStorage.setItem("lifeos_nickname_v8", d.user.nickname);
+
+        let nextTransactions: Transaction[] = transactions;
+        let nextCards: CreditCardItem[] = cards;
+        let nextBanks: BankItem[] = banks;
+        let nextStatus: StaticStatusItem[] = staticStatus;
+        let nextWishlist: WishlistItem[] = wishlist;
+        let nextBioLogs: BioLog[] = bioLogs;
+        let nextNotes: BrainNote[] = notes;
+        let nextOkrs: PersonalOKR[] = okrs;
+        let nextAlerts: CustomAlertRule[] = alertRules;
+        let nextDebtors: Record<string, any> = debtorMap;
+
+        if (mode === "replace") {
+          nextTransactions = valid.transactions as unknown as Transaction[];
+          if (valid.cards && valid.cards.length > 0) nextCards = valid.cards as unknown as CreditCardItem[];
+          if (valid.banks && valid.banks.length > 0) nextBanks = valid.banks as unknown as BankItem[];
+          if (valid.staticStatus && valid.staticStatus.length > 0) nextStatus = valid.staticStatus as unknown as StaticStatusItem[];
+          if (valid.wishlist) nextWishlist = valid.wishlist as unknown as WishlistItem[];
+          if (valid.bioLogs) nextBioLogs = valid.bioLogs as unknown as BioLog[];
+          if (valid.notes) nextNotes = valid.notes as unknown as BrainNote[];
+          if (valid.okrs) nextOkrs = valid.okrs as unknown as PersonalOKR[];
+          if (valid.alertRules) nextAlerts = valid.alertRules as unknown as CustomAlertRule[];
+          if (valid.debtorMap) nextDebtors = valid.debtorMap;
+        } else {
+          // Mesclar sem duplicatas por ID
+          const txMap = new Map<string, Transaction>(transactions.map((t: Transaction) => [t.id, t]));
+          (valid.transactions as unknown as Transaction[]).forEach((t: Transaction) => txMap.set(t.id, t));
+          nextTransactions = Array.from(txMap.values());
+
+          if (valid.cards && valid.cards.length > 0) {
+            const cardMap = new Map<string, CreditCardItem>(cards.map((c: CreditCardItem) => [c.id, c]));
+            (valid.cards as unknown as CreditCardItem[]).forEach((c: CreditCardItem) => cardMap.set(c.id, c));
+            nextCards = Array.from(cardMap.values());
           }
-          if (d.user.avatar) {
-            setCurrentUserAvatar(d.user.avatar);
-            localStorage.setItem("lifeos_avatar_v8", d.user.avatar);
+          if (valid.banks && valid.banks.length > 0) {
+            const bankMap = new Map<string, BankItem>(banks.map((b: BankItem) => [b.id, b]));
+            (valid.banks as unknown as BankItem[]).forEach((b: BankItem) => bankMap.set(b.id, b));
+            nextBanks = Array.from(bankMap.values());
+          }
+          if (valid.staticStatus && valid.staticStatus.length > 0) {
+            const statusMap = new Map<string, StaticStatusItem>(staticStatus.map((s: StaticStatusItem) => [s.id, s]));
+            (valid.staticStatus as unknown as StaticStatusItem[]).forEach((s: StaticStatusItem) => statusMap.set(s.id, s));
+            nextStatus = Array.from(statusMap.values());
+          }
+          if (valid.wishlist && valid.wishlist.length > 0) {
+            const wishMap = new Map<string, WishlistItem>(wishlist.map((w: WishlistItem) => [w.id, w]));
+            (valid.wishlist as unknown as WishlistItem[]).forEach((w: WishlistItem) => wishMap.set(w.id, w));
+            nextWishlist = Array.from(wishMap.values());
+          }
+          if (valid.bioLogs && valid.bioLogs.length > 0) {
+            const bioMap = new Map<string, BioLog>(bioLogs.map((b: BioLog) => [b.id, b]));
+            (valid.bioLogs as unknown as BioLog[]).forEach((b: BioLog) => bioMap.set(b.id, b));
+            nextBioLogs = Array.from(bioMap.values());
+          }
+          if (valid.notes && valid.notes.length > 0) {
+            const noteMap = new Map<string, BrainNote>(notes.map((n: BrainNote) => [n.id, n]));
+            (valid.notes as unknown as BrainNote[]).forEach((n: BrainNote) => noteMap.set(n.id, n));
+            nextNotes = Array.from(noteMap.values());
+          }
+          if (valid.okrs && valid.okrs.length > 0) {
+            const okrMap = new Map<string, PersonalOKR>(okrs.map((o: PersonalOKR) => [o.id, o]));
+            (valid.okrs as unknown as PersonalOKR[]).forEach((o: PersonalOKR) => okrMap.set(o.id, o));
+            nextOkrs = Array.from(okrMap.values());
+          }
+          if (valid.alertRules && valid.alertRules.length > 0) {
+            const alertMap = new Map<string, CustomAlertRule>(alertRules.map((a: CustomAlertRule) => [a.id, a]));
+            (valid.alertRules as unknown as CustomAlertRule[]).forEach((a: CustomAlertRule) => alertMap.set(a.id, a));
+            nextAlerts = Array.from(alertMap.values());
+          }
+          if (valid.debtorMap) {
+            nextDebtors = { ...debtorMap, ...valid.debtorMap };
           }
         }
-        if (d.settings) {
-          if (d.settings.personalBudgetLimit != null) setPersonalBudgetLimit(d.settings.personalBudgetLimit);
-          if (d.settings.monthlyInvestmentGoal != null) setMonthlyInvestmentGoal(d.settings.monthlyInvestmentGoal);
-          if (d.settings.patrimonyTarget != null) setPatrimonyTarget(d.settings.patrimonyTarget);
-          if (d.settings.annualRunGoalKm != null) setAnnualRunGoalKm(d.settings.annualRunGoalKm);
-          if (d.settings.chartTheme) setChartTheme(d.settings.chartTheme);
-          if (d.settings.themeMode) setThemeMode(d.settings.themeMode);
-          if (d.settings.dashboardLayout) {
-            setDashboardLayout(d.settings.dashboardLayout);
-            localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(d.settings.dashboardLayout));
+
+        setTransactions(nextTransactions);
+        setUserItem("lifeos_txs_v8", JSON.stringify(nextTransactions), currentUserId);
+
+        setCards(nextCards);
+        setUserItem("lifeos_cards_v8", JSON.stringify(nextCards), currentUserId);
+
+        setBanks(nextBanks);
+        setUserItem("lifeos_banks_v1", JSON.stringify(nextBanks), currentUserId);
+
+        setStaticStatus(nextStatus);
+        setUserItem("lifeos_status_v8", JSON.stringify(nextStatus), currentUserId);
+
+        setWishlist(nextWishlist);
+        setUserItem("lifeos_wish_v8", JSON.stringify(nextWishlist), currentUserId);
+
+        setBioLogs(nextBioLogs);
+        setUserItem("lifeos_bio_v8", JSON.stringify(nextBioLogs), currentUserId);
+
+        setNotes(nextNotes);
+        setUserItem("lifeos_notes_v8", JSON.stringify(nextNotes), currentUserId);
+
+        setOkrs(nextOkrs);
+        setUserItem("lifeos_okrs_v8", JSON.stringify(nextOkrs), currentUserId);
+
+        setAlertRules(nextAlerts);
+        setUserItem("lifeos_alerts_v8", JSON.stringify(nextAlerts), currentUserId);
+
+        setDebtorMap(nextDebtors);
+        setUserItem("lifeos_debtors_v8", JSON.stringify(nextDebtors), currentUserId);
+
+        if (valid.categoriesCatalog && valid.categoriesCatalog.length > 0) {
+          setCategoriesCatalog(valid.categoriesCatalog as unknown as CategoryCatalogItem[]);
+        }
+        if (valid.categoryColors && typeof valid.categoryColors === "object") {
+          setCategoryColors(valid.categoryColors);
+        }
+        if (valid.paymentMethods && valid.paymentMethods.length > 0) {
+          setPaymentMethods(valid.paymentMethods);
+        }
+
+        if (valid.user) {
+          if (valid.user.nickname) {
+            setCurrentUser(valid.user.nickname);
+            setUserItem("coindex_username", valid.user.nickname, currentUserId);
           }
-          if (d.settings.chartConfigs) {
-            setChartConfigs(d.settings.chartConfigs);
-            localStorage.setItem("lifeos_chart_configs_v1", JSON.stringify(d.settings.chartConfigs));
+          if (valid.user.avatar) {
+            setCurrentUserAvatar(valid.user.avatar);
+            setUserItem("coindex_avatar", valid.user.avatar, currentUserId);
           }
+        }
+
+        const s = (valid.settings || {}) as Record<string, any>;
+        if (s.personalBudgetLimit != null) setPersonalBudgetLimit(Number(s.personalBudgetLimit));
+        if (s.monthlyInvestmentGoal != null) setMonthlyInvestmentGoal(Number(s.monthlyInvestmentGoal));
+        if (s.patrimonyTarget != null) setPatrimonyTarget(Number(s.patrimonyTarget));
+        if (s.initialPatrimony != null) setInitialPatrimony(Number(s.initialPatrimony));
+        if (s.annualRunGoalKm != null) setAnnualRunGoalKm(Number(s.annualRunGoalKm));
+        if (s.chartTheme) setChartTheme(s.chartTheme as ChartThemeColors);
+        if (s.themeMode) setThemeMode(s.themeMode as ThemeMode);
+        if (s.dashboardLayout) {
+          setDashboardLayout(s.dashboardLayout as DashboardWidgetConfig[]);
+          setUserItem("lifeos_dash_layout_v1", JSON.stringify(s.dashboardLayout), currentUserId);
+        }
+        if (s.chartConfigs) {
+          setChartConfigs(s.chartConfigs as Record<string, ChartWidgetSettings>);
+          setUserItem("lifeos_chart_configs_v1", JSON.stringify(s.chartConfigs), currentUserId);
         }
 
         await migrateAllStateToSupabase(
           {
-            transactions: d.transactions || transactions,
-            cards: d.cards || cards,
-            staticStatus: d.staticStatus || staticStatus,
-            wishlist: d.wishlist || wishlist,
-            bioLogs: d.bioLogs || bioLogs,
-            notes: d.notes || notes,
-            okrs: d.okrs || okrs,
-            alertRules: d.alertRules || alertRules,
-            categoriesCatalog: d.categoriesCatalog || categoriesCatalog,
-            categoryColors: d.categoryColors || categoryColors,
-            paymentMethods: d.paymentMethods || paymentMethods,
+            transactions: nextTransactions,
+            cards: nextCards,
+            staticStatus: nextStatus,
+            wishlist: nextWishlist,
+            bioLogs: nextBioLogs,
+            notes: nextNotes,
+            okrs: nextOkrs,
+            alertRules: nextAlerts,
+            categoriesCatalog: (valid.categoriesCatalog as unknown as CategoryCatalogItem[]) || categoriesCatalog,
+            categoryColors: valid.categoryColors || categoryColors,
+            paymentMethods: valid.paymentMethods || paymentMethods,
             systemLogs,
             settings: {
-              username: d.user?.nickname || currentUser || undefined,
-              avatarUrl: d.user?.avatar || currentUserAvatar,
-              themeMode: d.settings?.themeMode || themeMode,
-              personalBudgetLimit: d.settings?.personalBudgetLimit || personalBudgetLimit,
-              monthlyInvestmentGoal: d.settings?.monthlyInvestmentGoal || monthlyInvestmentGoal,
-              patrimonyTarget: d.settings?.patrimonyTarget || patrimonyTarget,
-              annualRunGoalKm: d.settings?.annualRunGoalKm || annualRunGoalKm,
-              chartTheme: d.settings?.chartTheme || chartTheme,
-              dashboardLayout: d.settings?.dashboardLayout || dashboardLayout,
-              chartConfigs: d.settings?.chartConfigs || chartConfigs,
+              username: valid.user?.nickname || currentUser || undefined,
+              avatarUrl: valid.user?.avatar || currentUserAvatar,
+              themeMode: (s.themeMode as ThemeMode) || themeMode,
+              personalBudgetLimit: Number(s.personalBudgetLimit) || personalBudgetLimit,
+              monthlyInvestmentGoal: Number(s.monthlyInvestmentGoal) || monthlyInvestmentGoal,
+              patrimonyTarget: Number(s.patrimonyTarget) || patrimonyTarget,
+              initialPatrimony: s.initialPatrimony != null ? Number(s.initialPatrimony) : initialPatrimony,
+              annualRunGoalKm: Number(s.annualRunGoalKm) || annualRunGoalKm,
+              chartTheme: (s.chartTheme as ChartThemeColors) || chartTheme,
+              dashboardLayout: (s.dashboardLayout as DashboardWidgetConfig[]) || dashboardLayout,
+              chartConfigs: (s.chartConfigs as Record<string, ChartWidgetSettings>) || chartConfigs,
               readNotificationIds,
               stravaConfig,
               stravaStats
             }
           },
-          d.debtorMap || debtorMap
+          nextDebtors
         );
 
-        notify(
-          "Backup Restaurado com Sucesso!",
-          "Todos os dados locais e na nuvem foram sincronizados.",
-          "success",
-          "CONFIG"
-        );
-      } catch {
-        notify("Erro ao Restaurar Backup", "Arquivo JSON inválido ou corrompido.", "error", "CONFIG");
+        if (quarantine.totalQuarantined > 0) {
+          notify(
+            "Backup Restaurado com Quarentena",
+            `${valid.transactions.length} transações restauradas (${mode === "replace" ? "substituição" : "mesclagem"}). ${quarantine.totalQuarantined} registros inconsistentes foram isolados.`,
+            "warning",
+            "CONFIG"
+          );
+        } else {
+          notify(
+            "Backup Restaurado com Sucesso!",
+            `${valid.transactions.length} transações e configurações validadas via Zod (${mode === "replace" ? "substituição" : "mesclagem"}).`,
+            "success",
+            "CONFIG"
+          );
+        }
+      } catch (err: any) {
+        notify("Erro ao Restaurar Backup", err?.message || "Arquivo JSON inválido ou corrompido.", "error", "CONFIG");
       }
     };
     reader.readAsText(file);
@@ -3402,6 +3533,45 @@ export default function CoindexApp() {
 
   const moneyBlur = privacyMode ? "blur-md select-none" : "";
 
+  const syncIndicator = useMemo(() => {
+    if (isSyncing) {
+      return {
+        color: "text-amber-400 bg-amber-400/10 border-amber-400/30",
+        dot: "bg-amber-400 animate-pulse shadow-[0_0_8px_#f59e0b]",
+        label: "Sincronizando...",
+        status: "syncing",
+        timestamp: sheetsSyncStatus.timestamp || new Date().toLocaleTimeString("pt-BR")
+      };
+    }
+    if (sheetsSyncStatus.state === "error") {
+      return {
+        color: "text-rose-400 bg-rose-400/10 border-rose-400/30",
+        dot: "bg-rose-500 shadow-[0_0_8px_#f43f5e]",
+        label: "Erro de Sync",
+        status: "error",
+        timestamp: sheetsSyncStatus.timestamp || ""
+      };
+    }
+    if (currentUser && sheetsSyncStatus.state === "success") {
+      return {
+        color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30",
+        dot: "bg-emerald-400 shadow-[0_0_8px_#10b981]",
+        label: "Sincronizado",
+        status: "synced",
+        timestamp: sheetsSyncStatus.timestamp || ""
+      };
+    }
+    return {
+      color: "text-slate-400 bg-slate-400/10 border-slate-400/20",
+      dot: "bg-slate-400",
+      label: "Offline (Local)",
+      status: "offline",
+      timestamp: sheetsSyncStatus.timestamp || ""
+    };
+  }, [isSyncing, sheetsSyncStatus, currentUser]);
+
+  const handleSeedPatrimonioHistory = handleSyncOfficialPatrimonioData;
+
   if (!isHydrated) {
     return (
       <div className="min-h-screen bg-[#060913] flex flex-col items-center justify-center gap-3 text-slate-400 text-xs">
@@ -3423,6 +3593,7 @@ export default function CoindexApp() {
         cloudError={cloudAuthError}
         initialSheetUrl={sheetApiUrl}
         onAuthenticated={(user) => {
+          if (user.id) setCurrentUserId(user.id);
           setCurrentUser(user.username);
           if (user.avatarUrl) setCurrentUserAvatar(user.avatarUrl);
           setHasOwner(true);
@@ -3594,8 +3765,9 @@ export default function CoindexApp() {
                 <strong className="text-xs text-white block truncate group-hover:text-indigo-300 transition">
                   {currentUser}
                 </strong>
-                <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                  <Database className="w-2.5 h-2.5" /> Supabase Ativo
+                <span className={`text-[10px] flex items-center gap-1.5 font-medium ${syncIndicator.color.split(" ")[0]}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${syncIndicator.dot}`} />
+                  <span>{syncIndicator.label}</span>
                 </span>
               </div>
             </div>
@@ -3655,6 +3827,22 @@ export default function CoindexApp() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
+              {/* Indicador de Sincronização em Tempo Real (Sprint 22) */}
+              <div
+                className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono font-medium backdrop-blur-md transition ${syncIndicator.color}`}
+                title={
+                  syncIndicator.timestamp
+                    ? `${syncIndicator.label} — Última sync: ${syncIndicator.timestamp}`
+                    : syncIndicator.label
+                }
+              >
+                <span className={`w-2 h-2 rounded-full ${syncIndicator.dot}`} />
+                <span>{syncIndicator.label}</span>
+                {syncIndicator.timestamp && (
+                  <span className="text-[10px] opacity-70">({syncIndicator.timestamp})</span>
+                )}
+              </div>
+
               {/* SININHO DE NOTIFICAÇÕES */}
               <div className="relative">
                 <button
@@ -4104,6 +4292,18 @@ export default function CoindexApp() {
 
                         {widget.id === "patrimony_chart" && (
                           <div className="space-y-2.5">
+                            {patrimonyEvolution.hasDeficit && (
+                              <div className="px-3.5 py-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between gap-2 shadow-[0_0_15px_rgba(244,63,94,0.15)] animate-pulse">
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                                  <span>
+                                    <strong className="text-rose-200">Aviso de Déficit:</strong> Os resgates registrados superam o total acumulado de aportes (+ reserva inicial) em{" "}
+                                    <span className="font-mono font-bold text-white">{formatBRL(patrimonyEvolution.deficitAmount)}</span>.
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Pílulas Minimalistas de Legenda no Cabeçalho do Gráfico (Sprint 16 & 19) */}
                             <div className="flex items-center justify-end gap-2 text-xs">
                               <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
@@ -4961,6 +5161,7 @@ export default function CoindexApp() {
         onSaveProfile={handleSaveUserProfile}
         onExportBackup={handleExportFullBackupJSON}
         onImportBackup={handleImportFullBackupJSON}
+        onSeedPatrimonio={handleSyncOfficialPatrimonioData}
       />
 
       {/* MODAL DE CONFIRMAÇÃO CUSTOMIZADO (Sprint 15 - Clara Vance) */}

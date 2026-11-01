@@ -130,6 +130,8 @@ export interface Transaction {
   isSplitChild?: boolean;
   linkedSplitParentId?: string;
   notes?: string;
+  deletedAt?: string;
+  rev?: number;
 }
 
 export type BankAccountType = "Conta Corrente" | "Conta Digital" | "Investimentos" | "Benefícios";
@@ -142,6 +144,9 @@ export interface BankInstitution {
   logoUrl?: string;
   limit?: number;
   limitType?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+  rev?: number;
 }
 
 export interface BankItem {
@@ -152,6 +157,9 @@ export interface BankItem {
   limitType?: string;
   accountType?: "Conta Corrente" | "Conta Digital" | "Investimentos" | "Benefícios";
   color?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+  rev?: number;
 }
 
 export interface AutoInmetroConfig {
@@ -180,6 +188,9 @@ export interface CreditCardItem {
   logoUrl?: string;
   bankId?: string;
   bankName?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+  rev?: number;
 }
 
 export type CreditCard = CreditCardItem;
@@ -190,6 +201,9 @@ export interface StaticStatusItem {
   type: "Renda Base" | "Benefício" | "Custo Fixo" | "Meta Aporte";
   amount: number;
   notes: string;
+  updatedAt?: string;
+  deletedAt?: string;
+  rev?: number;
 }
 
 export interface WishlistItem {
@@ -238,6 +252,9 @@ export interface BrainNote {
   priority?: "Essencial" | "Planejado" | "Desejo";
   storeUrl?: string;
   completedAt?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+  rev?: number;
 }
 
 export interface PersonalOKR {
@@ -402,6 +419,19 @@ export {
   getCardInvoiceCompetence,
   isNeutralFlow
 };
+
+// Gerenciamento de Armazenamento por Usuário & Tombstones (Sprint 22)
+export {
+  getUserStorageKey,
+  getUserItem,
+  setUserItem,
+  removeUserItem,
+  recordTombstone,
+  recordTombstones,
+  getTombstones,
+  isTombstoned,
+  clearUserSessionStorage
+} from "./lib/domain/user-storage";
 
 export function addMonthsToDate(dateStr: string, monthsToAdd: number): string {
   if (!dateStr) return "";
@@ -1008,20 +1038,19 @@ export const PATRIMONIO_IMPORT_TRANSACTIONS: Transaction[] = PATRIMONIO_IMPORT_D
 );
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [
-  ...PATRIMONIO_IMPORT_TRANSACTIONS,
-  { id: "tx-0", date: "2026-09-05", description: "Salário Líquido ACS (Setembro)", amount: 2071.81, category: "Salário", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-09-05T08:00:00Z" },
-  { id: "tx-0c", date: "2026-09-12", description: "Despesas Gerais Setembro", amount: 1620.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-09-12T08:00:00Z" },
-  { id: "tx-1", date: "2026-10-05", description: "Salário Líquido ACS Sistemas", amount: 2071.81, category: "Salário", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
-  { id: "tx-2", date: "2026-10-05", description: "Auxílio Combustível + VA ACS", amount: 1365.0, category: "Benefícios (VA/Combustível)", costType: "Fixo", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
-  { id: "tx-4", date: "2026-10-07", description: "Mensalidade Academia", amount: 82.4, category: "Academia", costType: "Fixo", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-07T08:00:00Z" },
-  { id: "tx-5", date: "2026-10-08", description: "Internet Fibra Residencial", amount: 68.17, category: "Internet", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-08T08:00:00Z" },
-  { id: "tx-6", date: "2026-10-09", description: "Supermercado (Dieta da Semana)", amount: 618.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-09T08:00:00Z" },
-  { id: "tx-7", date: "2026-10-10", description: "Abastecimento Gasolina Comum", amount: 260.0, category: "Gasolina", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48200, liters: 44.1, updatedAt: "2026-10-10T08:00:00Z" },
-  { id: "tx-8", date: "2026-10-11", description: "Troca de Óleo Sintético + Filtro", amount: 310.0, category: "Troca de Óleo", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Inter Black", status: "Pendente / Na Fatura", km: 48520, updatedAt: "2026-10-11T08:00:00Z" },
-  { id: "tx-9", date: "2026-10-12", description: "Camisa Minimalista + Corte de Cabelo", amount: 185.0, category: "Gastos Pessoais", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-12T08:00:00Z" },
-  { id: "tx-10", date: "2026-10-15", description: "Abastecimento Rotina ACS", amount: 245.0, category: "Gasolina", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48890, liters: 41.5, updatedAt: "2026-10-15T08:00:00Z" },
-  { id: "tx-11", date: "2026-10-16", description: "Compra Passada no Cartão (Fone Bluetooth)", amount: 220.0, category: "A Receber", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", debtor: "Lucas (Primo)", paidAmount: 70, updatedAt: "2026-10-16T08:00:00Z" },
-  { id: "tx-12", date: "2026-10-17", description: "Empréstimo PIX Combustível", amount: 150.0, category: "A Receber", costType: "Variável", paymentMethod: "PIX", status: "Pago", debtor: "Matheus (ACS)", paidAmount: 150, updatedAt: "2026-10-17T08:00:00Z" }
+  { id: "tx-0", date: "05-09-2026", description: "Salário Líquido ACS (Setembro)", amount: 2071.81, category: "Salário", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-09-05T08:00:00Z" },
+  { id: "tx-0c", date: "12-09-2026", description: "Despesas Gerais Setembro", amount: 1620.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-09-12T08:00:00Z" },
+  { id: "tx-1", date: "05-10-2026", description: "Salário Líquido ACS Sistemas", amount: 2071.81, category: "Salário", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
+  { id: "tx-2", date: "05-10-2026", description: "Auxílio Combustível + VA ACS", amount: 1365.0, category: "Benefícios (VA/Combustível)", costType: "Fixo", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-05T08:00:00Z" },
+  { id: "tx-4", date: "07-10-2026", description: "Mensalidade Academia", amount: 82.4, category: "Academia", costType: "Fixo", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-07T08:00:00Z" },
+  { id: "tx-5", date: "08-10-2026", description: "Internet Fibra Residencial", amount: 68.17, category: "Internet", costType: "Fixo", paymentMethod: "PIX", status: "Pago", updatedAt: "2026-10-08T08:00:00Z" },
+  { id: "tx-6", date: "09-10-2026", description: "Supermercado (Dieta da Semana)", amount: 618.0, category: "Alimentação", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", updatedAt: "2026-10-09T08:00:00Z" },
+  { id: "tx-7", date: "10-10-2026", description: "Abastecimento Gasolina Comum", amount: 260.0, category: "Gasolina", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48200, liters: 44.1, updatedAt: "2026-10-10T08:00:00Z" },
+  { id: "tx-8", date: "11-10-2026", description: "Troca de Óleo Sintético + Filtro", amount: 310.0, category: "Troca de Óleo", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Inter Black", status: "Pendente / Na Fatura", km: 48520, updatedAt: "2026-10-11T08:00:00Z" },
+  { id: "tx-9", date: "12-10-2026", description: "Camisa Minimalista + Corte de Cabelo", amount: 185.0, category: "Gastos Pessoais", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", updatedAt: "2026-10-12T08:00:00Z" },
+  { id: "tx-10", date: "15-10-2026", description: "Abastecimento Rotina ACS", amount: 245.0, category: "Gasolina", costType: "Variável", paymentMethod: "Cartão ECX", status: "Pago", km: 48890, liters: 41.5, updatedAt: "2026-10-15T08:00:00Z" },
+  { id: "tx-11", date: "16-10-2026", description: "Compra Passada no Cartão (Fone Bluetooth)", amount: 220.0, category: "A Receber", costType: "Variável", paymentMethod: "Cartão de Crédito", cardUsed: "Nubank Ultravioleta", status: "Pendente / Na Fatura", debtor: "Lucas (Primo)", paidAmount: 70, updatedAt: "2026-10-16T08:00:00Z" },
+  { id: "tx-12", date: "17-10-2026", description: "Empréstimo PIX Combustível", amount: 150.0, category: "A Receber", costType: "Variável", paymentMethod: "PIX", status: "Pago", debtor: "Matheus (ACS)", paidAmount: 150, updatedAt: "2026-10-17T08:00:00Z" }
 ];
 
 export const INITIAL_DEBTOR_MAP: Record<string, string> = {
@@ -1407,12 +1436,22 @@ export function formatMonthShortLabel(ym: string): string {
   return `${shortMonth}/${shortYear}`;
 }
 
+export interface PatrimonyEvolutionResult {
+  data: PatrimonyDataPoint[];
+  hasDeficit: boolean;
+  deficitAmount: number;
+  totalAportes: number;
+  totalResgates: number;
+  saldoFinal: number;
+}
+
 export function calculatePatrimonyEvolution(
   transactions: Transaction[],
-  baseHistorical = HISTORICAL_INVESTMENTS
-): PatrimonyDataPoint[] {
+  baseHistorical = HISTORICAL_INVESTMENTS,
+  initialReserveBalance: number = 0
+): PatrimonyEvolutionResult {
   const investTxs = transactions.filter((t) => {
-    if (t.isSplitChild) return false;
+    if (t.isSplitChild || t.deletedAt) return false;
     const c = t.category.toLowerCase();
     return (
       c.includes("aporte") ||
@@ -1422,9 +1461,36 @@ export function calculatePatrimonyEvolution(
     );
   });
 
+  const totAportes = safeAdd(
+    ...investTxs.filter((t) => !isResgateCategory(t.category)).map((t) => t.amount)
+  );
+  const totResgates = safeAdd(
+    ...investTxs.filter((t) => isResgateCategory(t.category)).map((t) => t.amount)
+  );
+
+  let hasOverallDeficit = false;
+  let maxDeficit = 0;
+  const totalCapacity = safeAdd(totAportes, initialReserveBalance);
+  if (totResgates > totalCapacity) {
+    hasOverallDeficit = true;
+    maxDeficit = safeSub(totResgates, totalCapacity);
+  }
+
   const hasEarlyHistory = investTxs.some((t) => getYearMonthKey(t.date) < "2026-05");
 
-  if (!hasEarlyHistory) {
+  if (!hasEarlyHistory && investTxs.length === 0 && initialReserveBalance <= 0) {
+    // Conta limpa sem investimentos
+    return {
+      data: [],
+      hasDeficit: false,
+      deficitAmount: 0,
+      totalAportes: 0,
+      totalResgates: 0,
+      saldoFinal: 0
+    };
+  }
+
+  if (!hasEarlyHistory && baseHistorical.length > 0 && initialReserveBalance <= 0) {
     const base: PatrimonyDataPoint[] = [...baseHistorical];
     let runningTotal = base[base.length - 1]?.acumulado || 8200;
 
@@ -1447,7 +1513,14 @@ export function calculatePatrimonyEvolution(
       .forEach((m) => {
         const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
         const liquidAporte = safeSub(entry.aportes, entry.resgates);
-        runningTotal = Math.max(0, safeAdd(runningTotal, liquidAporte));
+        const nextRunning = safeAdd(runningTotal, liquidAporte);
+        if (nextRunning < 0) {
+          hasOverallDeficit = true;
+          maxDeficit = Math.max(maxDeficit, Math.abs(nextRunning));
+          runningTotal = 0;
+        } else {
+          runningTotal = nextRunning;
+        }
         base.push({
           month: m,
           label: formatMonthShortLabel(m),
@@ -1457,7 +1530,14 @@ export function calculatePatrimonyEvolution(
         });
       });
 
-    return base;
+    return {
+      data: base,
+      hasDeficit: hasOverallDeficit,
+      deficitAmount: maxDeficit,
+      totalAportes: totAportes,
+      totalResgates: totResgates,
+      saldoFinal: runningTotal
+    };
   }
 
   // Agrupa todas as transações de investimento por mês
@@ -1474,19 +1554,54 @@ export function calculatePatrimonyEvolution(
   });
 
   const allMonths = Array.from(monthsMap.keys()).sort();
-  if (allMonths.length === 0) return [];
+  if (allMonths.length === 0) {
+    if (initialReserveBalance > 0) {
+      const todayKey = getYearMonthKey(todayBR());
+      return {
+        data: [
+          {
+            month: todayKey,
+            label: formatMonthShortLabel(todayKey),
+            aportado: 0,
+            acumulado: initialReserveBalance,
+            resgatado: 0
+          }
+        ],
+        hasDeficit: false,
+        deficitAmount: 0,
+        totalAportes: 0,
+        totalResgates: 0,
+        saldoFinal: initialReserveBalance
+      };
+    }
+    return {
+      data: [],
+      hasDeficit: false,
+      deficitAmount: 0,
+      totalAportes: 0,
+      totalResgates: 0,
+      saldoFinal: 0
+    };
+  }
 
   const minMonth = allMonths[0]; // e.g. "2025-12"
   const maxMonth = allMonths[allMonths.length - 1]; // e.g. "2026-10"
 
   const result: PatrimonyDataPoint[] = [];
-  let running = 0;
+  let running = initialReserveBalance;
 
   let cur = minMonth;
   while (cur <= maxMonth) {
     const entry = monthsMap.get(cur) || { aportes: 0, resgates: 0 };
     const liquid = safeSub(entry.aportes, entry.resgates);
-    running = Math.max(0, safeAdd(running, liquid));
+    const nextRunning = safeAdd(running, liquid);
+    if (nextRunning < 0) {
+      hasOverallDeficit = true;
+      maxDeficit = Math.max(maxDeficit, Math.abs(nextRunning));
+      running = 0;
+    } else {
+      running = nextRunning;
+    }
 
     result.push({
       month: cur,
@@ -1506,7 +1621,14 @@ export function calculatePatrimonyEvolution(
     cur = `${y}-${String(m).padStart(2, "0")}`;
   }
 
-  return result;
+  return {
+    data: result,
+    hasDeficit: hasOverallDeficit,
+    deficitAmount: maxDeficit,
+    totalAportes: totAportes,
+    totalResgates: totResgates,
+    saldoFinal: running
+  };
 }
 
 export interface StaticStatusSummary {
