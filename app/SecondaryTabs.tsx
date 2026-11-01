@@ -1346,7 +1346,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                             {n.completed ? (
                               <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                             ) : (
-                              <Circle className="w-5 h-5 text-slate-500 hover:text-emerald-400 transition" />
+                              <Circle className="w-5 h-5 text-slate-400 hover:text-emerald-400 transition" />
                             )}
                           </button>
 

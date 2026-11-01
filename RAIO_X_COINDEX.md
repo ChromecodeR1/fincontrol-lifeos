@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.15.0`  
-> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 23 — Fonte Única de Tipos Zod, Catálogo 100% Limpo, Vínculo em Cascata Bancos/Cartões e Telemetria Automotiva Flex & TCO Real)  
+> **Versão da Aplicação:** `0.16.0`  
+> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 24 — Refinamento Óptico WCAG no Cyberpunk Neon, Paleta Donut de Alto Contraste, ComposedChart Duplo no Patrimônio e Glossário nos KPIs)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -409,6 +409,24 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - Suporte nativo ao tipo de combustível (`fuelType: "Gasolina" | "Etanol"`) e flag de tanque cheio (`fullTank: boolean`) no Posto Express e modo padrão, com validação inteligente emitindo aviso inline caso o odômetro digitado seja menor que o registro anterior.
     - **Calculadora Rápida Etanol vs. Gasolina:** Comparativo em tempo real entre a Regra dos 70% e a Paridade Real do Ford Fiesta 1.0 Flex (`ethanolKmPerLiter / gasolineKmPerLiter` = 70,8%), exibindo veredito dinâmico em Cyberpunk Neon, custo por km de cada combustível e projeção de economia por tanque cheio de 50L.
     - **Indicador de TCO (Custo Total de Propriedade por KM):** Consolidação contábil completa somando Combustível + Manutenção & Óleo + IPVA + Licenciamento + Seguro Auto + Estacionamento/Pedágio, exibindo o valor total acumulado e o custo real por km (`formatBRL(tcoPerKm)}/km`) com breakdown visual detalhado por categoria.
+- **Sprint 24 — Refinamento Óptico WCAG no Cyberpunk Neon, Paleta Donut de Alto Contraste, ComposedChart Duplo no Patrimônio e Glossário nos KPIs:**
+  - **Acessibilidade & Contraste WCAG AA/AAA no Cyberpunk Neon:**
+    - Elevação sistemática de textos secundários de `text-slate-500` e `text-slate-600` para `text-slate-300` / `text-slate-400` (garantindo taxa de contraste `>= 7.4:1` sobre o fundo void `#07030f` e superfícies escuras).
+    - Remoção do `drop-shadow` exagerado sobre os dígitos numéricos principais (`R$`), mantendo os números 100% nítidos e legíveis, concentrando o efeito laser neon nas bordas dos cards e nos badges de ícones.
+    - Sinais matemáticos explícitos nos 4 KPIs (`+` para Entradas, `-` para Saídas, `+` para Aportes e `+`/`-` para Balanço Operacional).
+    - Reset refinado de foco em gráficos Recharts em `app/globals.css`: supressão de contorno apenas para cliques de mouse (`:focus:not(:focus-visible)`), preservação de anel neon fino (`outline: 2px solid #00F5D4`) em `:focus-visible` para acessibilidade de navegação por teclado e conformidade com `@media (prefers-reduced-motion: reduce)`.
+  - **Paleta de Alto Contraste Cromático no Gráfico Donut ("Para Onde Vai o Meu Dinheiro"):**
+    - Substituição da paleta de tons próximos de roxo/rosa pela paleta Cyberpunk de 8 matizes cromáticos altamente distintos: Laser Pink (`#FF2A85`), Neon Mint (`#00F5D4`), Cyber Amber (`#FFB800`), Electric Sky (`#38BDF8`), Neon Purple (`#A855F7`), Synth Coral (`#FF6B4A`), Acid Lime (`#A3E635`) e Slate Outros (`#64748B`).
+    - Exibição das Top 7 categorias de maior desembolso com agrupamento automático de `"Outros"` com cor fixa cinza-ardósia (`#64748B`), impedindo saturação visual.
+  - **Gráfico de Evolução Patrimonial em Escala Dupla (`ComposedChart`):**
+    - Substituição de `<AreaChart>` simples por `<ComposedChart>` com escala dupla equilibrada:
+      * **Patrimônio Acumulado** como Área suave (`#FF2A85`, `yAxisId="left"`).
+      * **Aportes Brutos Mensais** como Barras (`Bar`, `#A855F7`, `yAxisId="right"`).
+      * **Resgates Mensais** como Barras (`Bar`, `#FF6B4A`, `yAxisId="right"`).
+    - Seletor rápido de período do patrimônio (`6M`, `1A`, `Tudo`) com slicing cronológico preciso.
+  - **Glossário de Fórmulas e Seletor de Regime Contábil nos 4 KPIs:**
+    - Seletor rápido de visualização contábil: **Regime de Competência** (despesas na data da compra) vs. **Regime de Caixa** (despesas de cartão alocadas no mês do vencimento/pagamento da fatura via `cashMonth || invoiceMonth`).
+    - Ícones informativos `"ⓘ"` (`Info`) com tooltips cyberpunk detalhando a fórmula exata e regra contábil de cada métrica: Entradas, Saídas, Aportes Brutos, Resultado Operacional e Safe-to-Spend Projetado.
 
 ---
 

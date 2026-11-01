@@ -136,7 +136,7 @@ export default function CoindexAuthScreen({
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-xs text-slate-500 border-t border-white/[0.06] pt-6">
+        <div className="flex items-center justify-between text-xs text-slate-400 border-t border-white/[0.06] pt-6">
           <span>Coindex Financial OS • Uso Pessoal Exclusivo</span>
           <span className="font-mono text-slate-400">Vercel + Supabase Cloud</span>
         </div>
@@ -253,13 +253,13 @@ export default function CoindexAuthScreen({
               <div className="p-3 rounded-xl bg-slate-950/80 border border-white/[0.07] space-y-1.5 text-[11px]">
                 <span className="text-slate-400 font-semibold block">Requisitos de segurança:</span>
                 <div className="flex flex-wrap gap-3">
-                  <span className={pwdRules.minLength ? "text-emerald-400 font-semibold" : "text-slate-500"}>
+                  <span className={pwdRules.minLength ? "text-emerald-400 font-semibold" : "text-slate-400"}>
                     {pwdRules.minLength ? "✓" : "○"} Mín. 8 caracteres
                   </span>
-                  <span className={hasLetters ? "text-emerald-400 font-semibold" : "text-slate-500"}>
+                  <span className={hasLetters ? "text-emerald-400 font-semibold" : "text-slate-400"}>
                     {hasLetters ? "✓" : "○"} Letras
                   </span>
-                  <span className={pwdRules.hasNumber ? "text-emerald-400 font-semibold" : "text-slate-500"}>
+                  <span className={pwdRules.hasNumber ? "text-emerald-400 font-semibold" : "text-slate-400"}>
                     {pwdRules.hasNumber ? "✓" : "○"} Números
                   </span>
                 </div>

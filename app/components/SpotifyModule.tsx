@@ -791,7 +791,7 @@ export default function SpotifyModule({ ownerDisplayName = "Sabrino" }: SpotifyM
           <p className="mt-1 text-xl font-bold text-emerald-400">
             {formatBRL(yearSummary.totalPago)}
           </p>
-          <span className="mt-1 block text-[11px] text-slate-500">
+          <span className="mt-1 block text-[11px] text-slate-400">
             Pagamentos confirmados no ano
           </span>
         </div>
@@ -801,7 +801,7 @@ export default function SpotifyModule({ ownerDisplayName = "Sabrino" }: SpotifyM
           <p className="mt-1 text-xl font-bold text-slate-100">
             {formatBRL(yearSummary.totalEsperado)}
           </p>
-          <span className="mt-1 block text-[11px] text-slate-500">
+          <span className="mt-1 block text-[11px] text-slate-400">
             Soma anual das cotas ativas
           </span>
         </div>
@@ -839,7 +839,7 @@ export default function SpotifyModule({ ownerDisplayName = "Sabrino" }: SpotifyM
               style={{ width: `${yearSummary.percentual}%` }}
             />
           </div>
-          <span className="mt-2 block text-[11px] text-slate-500">
+          <span className="mt-2 block text-[11px] text-slate-400">
             Faltam {formatBRL(Math.max(0, yearSummary.totalEsperado - yearSummary.totalPago))} no ano
           </span>
         </div>
@@ -1037,10 +1037,10 @@ export default function SpotifyModule({ ownerDisplayName = "Sabrino" }: SpotifyM
                             title={`Mês anterior ao início (${pessoa.inicio})`}
                             className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800/60 bg-slate-950/30 px-2 py-2.5 text-center opacity-45"
                           >
-                            <span className="text-[11px] font-medium text-slate-500">
+                            <span className="text-[11px] font-medium text-slate-400">
                               {m.short}
                             </span>
-                            <span className="mt-1 text-[10px] text-slate-600">—</span>
+                            <span className="mt-1 text-[10px] text-slate-400">—</span>
                           </div>
                         );
                       }

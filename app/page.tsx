@@ -42,10 +42,12 @@ import {
   Fuel,
   Gauge,
   Layers,
-  Trash2
+  Trash2,
+  Info
 } from "lucide-react";
 import {
   ResponsiveContainer,
+  ComposedChart,
   AreaChart,
   Area,
   BarChart,
@@ -285,6 +287,8 @@ export default function CoindexApp() {
   const [privacyMode, setPrivacyMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState("2026-10");
+  const [accountingRegime, setAccountingRegime] = useState<"competencia" | "caixa">("competencia");
+  const [patrimonyTimeRange, setPatrimonyTimeRange] = useState<"6M" | "1A" | "ALL">("ALL");
   const [quickFilter, setQuickFilter] = useState<QuickFilterType>("ALL");
   const [curveType] = useState<ChartLineCurve>("monotone");
   const [showChangelogModal, setShowChangelogModal] = useState(false);
@@ -1357,6 +1361,40 @@ export default function CoindexApp() {
       .sort((a, b) => compareDatesBR(b.date, a.date));
   }, [transactions, selectedMonth, quickFilter, searchQuery]);
 
+  const getTxMonthForRegime = useCallback((t: Transaction, regime: "competencia" | "caixa") => {
+    if (regime === "caixa") {
+      if (t.paymentMethod === "Cartão de Crédito") {
+        return t.cashMonth || t.invoiceMonth || getYearMonthKey(t.date);
+      }
+      return t.cashMonth || getYearMonthKey(t.date);
+    }
+    return getYearMonthKey(t.date);
+  }, []);
+
+  const regimeTransactions = useMemo(() => {
+    if (accountingRegime === "competencia" || selectedMonth === "ALL") {
+      return filteredTransactions;
+    }
+    return transactions.filter((t) => {
+      const txMonth = getTxMonthForRegime(t, "caixa");
+      if (txMonth !== selectedMonth) return false;
+      if (quickFilter === "FIXO" && t.costType !== "Fixo") return false;
+      if (quickFilter === "VARIAVEL" && t.costType !== "Variável") return false;
+      if (quickFilter === "CARTAO" && t.paymentMethod !== "Cartão de Crédito") return false;
+      if (quickFilter === "PIX" && t.paymentMethod !== "PIX") return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return (
+          t.description.toLowerCase().includes(q) ||
+          t.category.toLowerCase().includes(q) ||
+          t.paymentMethod.toLowerCase().includes(q) ||
+          (t.debtor && t.debtor.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    });
+  }, [transactions, filteredTransactions, selectedMonth, accountingRegime, quickFilter, searchQuery, getTxMonthForRegime]);
+
   const monthSummary = useMemo(() => {
     const calcFor = (list: Transaction[]) => {
       const nonTransferList = list.filter(
@@ -1400,9 +1438,9 @@ export default function CoindexApp() {
       };
     };
 
-    const current = calcFor(filteredTransactions);
+    const current = calcFor(regimeTransactions);
     const prevPrefix = getPreviousMonthPrefix(selectedMonth);
-    const prevList = prevPrefix ? transactions.filter((t) => getYearMonthKey(t.date) === prevPrefix) : [];
+    const prevList = prevPrefix ? transactions.filter((t) => getTxMonthForRegime(t, accountingRegime) === prevPrefix) : [];
     const prev = calcFor(prevList);
 
     const pctDiff = (currVal: number, prevVal: number) => {
@@ -1416,7 +1454,7 @@ export default function CoindexApp() {
       expenseDiff: pctDiff(current.expense, prev.expense),
       investedDiff: pctDiff(current.invested, prev.invested)
     };
-  }, [filteredTransactions, transactions, selectedMonth, getFlowType]);
+  }, [regimeTransactions, transactions, selectedMonth, accountingRegime, getFlowType, getTxMonthForRegime]);
 
   const allTimeReserva = useMemo(() => {
     const investTxs = transactions.filter(
@@ -1440,6 +1478,14 @@ export default function CoindexApp() {
   }, [transactions, initialPatrimony]);
   const patrimonyChartData = patrimonyEvolution.data;
 
+  const filteredPatrimonyChartData = useMemo(() => {
+    const allData = patrimonyEvolution.data;
+    if (!allData || allData.length === 0) return [];
+    if (patrimonyTimeRange === "6M") return allData.slice(-6);
+    if (patrimonyTimeRange === "1A") return allData.slice(-12);
+    return allData;
+  }, [patrimonyEvolution.data, patrimonyTimeRange]);
+
   // UPDATE 2: Meses distintos no período e limite acumulado proporcional
   const filterMonthsCount = useMemo(() => {
     if (selectedMonth !== "ALL") return 1;
@@ -1451,7 +1497,7 @@ export default function CoindexApp() {
 
   const effectivePersonalBudgetLimit = personalBudgetLimit * filterMonthsCount;
 
-  // UPDATE 1 & SPRINT 16: Top 5 categorias estritamente de despesas reais (Donut)
+  // SPRINT 24: Top 7 categorias estritamente de despesas reais com paleta Cyberpunk de alto contraste cromático
   const categoryChartData = useMemo(() => {
     const map = new Map<string, number>();
     filteredTransactions
@@ -1471,26 +1517,35 @@ export default function CoindexApp() {
         const val = t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount;
         map.set(t.category, safeAdd(map.get(t.category) || 0, val));
       });
-    const SYNTHWAVE_DONUT_COLORS = ['#FF2A85', '#FF6B4A', '#A855F7', '#6366F1', '#00F5D4', '#F43F5E', '#D946EF', '#8B5CF6'];
+    const HIGH_CONTRAST_DONUT_COLORS = [
+      '#FF2A85', // Laser Pink
+      '#00F5D4', // Neon Mint
+      '#FFB800', // Cyber Amber
+      '#38BDF8', // Electric Sky
+      '#A855F7', // Neon Purple
+      '#FF6B4A', // Synth Coral
+      '#A3E635', // Acid Lime
+      '#64748B'  // Slate Outros
+    ];
     const sorted = Array.from(map.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([name, value], idx) => ({
         name,
         value,
-        color: categoryColors[name] || SYNTHWAVE_DONUT_COLORS[idx % SYNTHWAVE_DONUT_COLORS.length]
+        color: categoryColors[name] || HIGH_CONTRAST_DONUT_COLORS[idx % (HIGH_CONTRAST_DONUT_COLORS.length - 1)]
       }));
 
-    if (sorted.length <= 5) return sorted;
-    const top5 = sorted.slice(0, 5);
-    const othersValue = sorted.slice(5).reduce((acc, curr) => safeAdd(acc, curr.value), 0);
+    if (sorted.length <= 7) return sorted;
+    const top7 = sorted.slice(0, 7);
+    const othersValue = sorted.slice(7).reduce((acc, curr) => safeAdd(acc, curr.value), 0);
     if (othersValue > 0) {
-      top5.push({
+      top7.push({
         name: "Outros",
         value: othersValue,
-        color: "#8B5CF6"
+        color: "#64748B"
       });
     }
-    return top5;
+    return top7;
   }, [filteredTransactions, getFlowType, categoryColors]);
 
   const creditChartData = useMemo(() => {
@@ -4217,8 +4272,8 @@ export default function CoindexApp() {
                     const totalExpenses = Math.max(1, categoryChartData.reduce((a, b) => a + b.value, 0));
 
                     const processedPatrimonyData = applyZeroHandling(
-                      patrimonyChartData as unknown as Array<Record<string, unknown>>,
-                      ["acumulado", "aportado"],
+                      filteredPatrimonyChartData as unknown as Array<Record<string, unknown>>,
+                      ["acumulado", "aportado", "resgatado"],
                       cfg.zeroHandling
                     );
 
@@ -4314,138 +4369,225 @@ export default function CoindexApp() {
                         )}
 
                         {widget.id === "kpis" && (
-                          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 ${moneyBlur}`}>
-                            {/* Card 1: Entradas */}
-                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#00F5D4]/10 via-[#0d061c]/90 to-[#07030f] border border-[#00F5D4]/25 flex flex-col justify-between shadow-lg shadow-[#00F5D4]/5">
-                              <div>
-                                <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                  <span>{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
-                                  <div className="p-1 rounded-lg bg-[#00F5D4]/15 text-[#00F5D4]">
-                                    <TrendingUp className="w-3.5 h-3.5" />
+                          <div className="space-y-3 mb-4">
+                            {/* Barra de controle: Seletor de Regime Contábil */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
+                              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                                <span>Regime Contábil:</span>
+                                <div className="relative group/tip inline-flex items-center">
+                                  <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                                  <div className="absolute top-full left-0 mt-1.5 hidden group-hover/tip:flex flex-col z-40 w-64 p-2.5 rounded-xl bg-[#07030f]/95 border border-white/15 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                    <strong className="text-white mb-1">Regimes de Visualização:</strong>
+                                    <p className="text-slate-400">
+                                      <strong className="text-[#00F5D4]">Competência:</strong> despesas alocadas pela data do lançamento/compra.
+                                    </p>
+                                    <p className="text-slate-400 mt-1">
+                                      <strong className="text-[#FF2A85]">Caixa:</strong> compras de cartão alocadas no mês do vencimento/pagamento da fatura.
+                                    </p>
                                   </div>
                                 </div>
-                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#00F5D4] drop-shadow-[0_0_10px_rgba(0,245,212,0.22)] leading-tight mt-0.5">
-                                  {formatBRL(monthSummary.income)}
-                                </p>
                               </div>
-                              <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
-                                {selectedMonth === "ALL" ? (
-                                  <span>Média mensal: {formatBRL(monthSummary.income / filterMonthsCount)}</span>
-                                ) : (
-                                  <span className="flex items-center gap-1">
-                                    <ArrowUpRight className="w-3.5 h-3.5 text-[#00F5D4]" />
-                                    {monthSummary.incomeDiff >= 0
-                                      ? `+${monthSummary.incomeDiff}%`
-                                      : `${monthSummary.incomeDiff}%`}{" "}
-                                    vs. mês anterior
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Card 2: Saídas & Despesas */}
-                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF2A85]/10 via-[#0d061c]/90 to-[#07030f] border border-[#FF2A85]/30 flex flex-col justify-between shadow-lg shadow-[#FF2A85]/5">
-                              <div>
-                                <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                  <span>{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
-                                  <div className="p-1 rounded-lg bg-[#FF2A85]/15 text-[#FF2A85]">
-                                    <TrendingDown className="w-3.5 h-3.5" />
-                                  </div>
-                                </div>
-                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#FF2A85] drop-shadow-[0_0_10px_rgba(255,42,133,0.25)] leading-tight mt-0.5">
-                                  {formatBRL(monthSummary.expense)}
-                                </p>
-                              </div>
-                              <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
-                                {selectedMonth === "ALL" ? (
-                                  <span>Média mensal: {formatBRL(monthSummary.expense / filterMonthsCount)}</span>
-                                ) : (
-                                  <span className="flex items-center gap-1">
-                                    <ArrowDownRight className="w-3.5 h-3.5 text-[#FF2A85]" />
-                                    {monthSummary.expenseDiff >= 0
-                                      ? `+${monthSummary.expenseDiff}%`
-                                      : `${monthSummary.expenseDiff}%`}{" "}
-                                    vs. mês anterior
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Card 3: Aportes Brutos */}
-                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#A855F7]/10 via-[#0d061c]/90 to-[#07030f] border border-[#A855F7]/30 flex flex-col justify-between shadow-lg shadow-[#A855F7]/5">
-                              <div>
-                                <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                  <span>{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
-                                  <div className="p-1 rounded-lg bg-[#A855F7]/15 text-[#C084FC]">
-                                    <PiggyBank className="w-3.5 h-3.5" />
-                                  </div>
-                                </div>
-                                <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#C084FC] drop-shadow-[0_0_10px_rgba(192,132,252,0.25)] leading-tight mt-0.5">
-                                  {formatBRL(monthSummary.aportes)}
-                                </p>
-                              </div>
-                              <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
-                                {selectedMonth === "ALL" ? (
-                                  <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)} • Resgatado: ${formatBRL(allTimeReserva.resgates)}`}>
-                                    Em Reserva (Líquido): <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong> • Resgatado: {formatBRL(allTimeReserva.resgates)}
-                                  </span>
-                                ) : (
-                                  <span>Meta: {formatBRL(monthlyInvestmentGoal)}</span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Card 4: Saldo Livre / Balanço Operacional Líquido */}
-                            <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF6B4A]/10 via-[#0d061c]/90 to-[#07030f] border border-[#FF6B4A]/25 flex flex-col justify-between shadow-lg shadow-[#FF6B4A]/5">
-                              <div>
-                                <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                  <span>{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
-                                  <div className="p-1 rounded-lg bg-[#FF6B4A]/15 text-[#FF6B4A]">
-                                    <Wallet className="w-3.5 h-3.5" />
-                                  </div>
-                                </div>
-                                <p
-                                  className={`text-lg sm:text-xl font-bold font-mono tabular-nums leading-tight mt-0.5 ${
-                                    monthSummary.balance >= 0 ? "text-[#00F5D4] drop-shadow-[0_0_10px_rgba(0,245,212,0.22)]" : "text-[#FF2A85] drop-shadow-[0_0_10px_rgba(255,42,133,0.25)]"
+                              <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setAccountingRegime("competencia")}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                                    accountingRegime === "competencia"
+                                      ? "bg-[#00F5D4] text-[#07030f] shadow-[0_0_10px_rgba(0,245,212,0.35)]"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
                                   }`}
                                 >
-                                  {formatBRL(monthSummary.balance)}
-                                </p>
+                                  Competência
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAccountingRegime("caixa")}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                                    accountingRegime === "caixa"
+                                      ? "bg-[#00F5D4] text-[#07030f] shadow-[0_0_10px_rgba(0,245,212,0.35)]"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  Caixa
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${moneyBlur}`}>
+                              {/* Card 1: Entradas */}
+                              <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#00F5D4]/10 via-[#0d061c]/90 to-[#07030f] border border-[#00F5D4]/25 flex flex-col justify-between shadow-lg shadow-[#00F5D4]/5">
+                                <div>
+                                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <span>{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
+                                      <div className="relative group/tip inline-flex items-center">
+                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-56 p-2 rounded-xl bg-[#07030f]/95 border border-[#00F5D4]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                          <strong className="text-[#00F5D4] mb-0.5">Fórmula de Entradas:</strong>
+                                          <span>Soma de créditos e receitas ativas (FlowType = INCOME), excluindo transferências neutras e estornos.</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="p-1 rounded-lg bg-[#00F5D4]/15 text-[#00F5D4] border border-[#00F5D4]/30 shadow-[0_0_8px_rgba(0,245,212,0.25)]">
+                                      <TrendingUp className="w-3.5 h-3.5" />
+                                    </div>
+                                  </div>
+                                  <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#00F5D4] leading-tight mt-0.5">
+                                    +{formatBRL(monthSummary.income)}
+                                  </p>
+                                </div>
+                                <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
+                                  {selectedMonth === "ALL" ? (
+                                    <span>Média mensal: {formatBRL(monthSummary.income / filterMonthsCount)}</span>
+                                  ) : (
+                                    <span className="flex items-center gap-1">
+                                      <ArrowUpRight className="w-3.5 h-3.5 text-[#00F5D4]" />
+                                      {monthSummary.incomeDiff >= 0
+                                        ? `+${monthSummary.incomeDiff}%`
+                                        : `${monthSummary.incomeDiff}%`}{" "}
+                                      vs. mês anterior
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
-                              {/* Rodapé Adaptativo */}
-                              {selectedMonth === "ALL" ? (
-                                <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] font-mono tabular-nums">
-                                  <span className="text-slate-400 flex items-center gap-1 font-sans">
-                                    <Sparkles className="w-3 h-3 text-[#A855F7] shrink-0" />
-                                    <span>Patrimônio em Caixinhas:</span>
-                                  </span>
-                                  <span className="font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums bg-[#00F5D4]/15 text-[#00F5D4] border-[#00F5D4]/30 shadow-[0_0_8px_rgba(0,245,212,0.2)]">
-                                    {formatBRL(allTimeReserva.liquido)}
-                                  </span>
+                              {/* Card 2: Saídas & Despesas */}
+                              <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF2A85]/10 via-[#0d061c]/90 to-[#07030f] border border-[#FF2A85]/30 flex flex-col justify-between shadow-lg shadow-[#FF2A85]/5">
+                                <div>
+                                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <span>{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
+                                      <div className="relative group/tip inline-flex items-center">
+                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-56 p-2 rounded-xl bg-[#07030f]/95 border border-[#FF2A85]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                          <strong className="text-[#FF2A85] mb-0.5">Fórmula de Saídas:</strong>
+                                          <span>Soma de débitos e faturas (FlowType = EXPENSE), respeitando a cota pessoal em despesas divididas (split).</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="p-1 rounded-lg bg-[#FF2A85]/15 text-[#FF2A85] border border-[#FF2A85]/30 shadow-[0_0_8px_rgba(255,42,133,0.25)]">
+                                      <TrendingDown className="w-3.5 h-3.5" />
+                                    </div>
+                                  </div>
+                                  <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#FF2A85] leading-tight mt-0.5">
+                                    -{formatBRL(monthSummary.expense)}
+                                  </p>
                                 </div>
-                              ) : (
-                                <div
-                                  className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] font-mono tabular-nums cursor-help"
-                                  title={`Safe-to-Spend: Contas (${formatBRL(safeToSpend.currentCash)}) + Entradas Pendentes (${formatBRL(safeToSpend.pendingIncome)}) - Fixos/Faturas Pendentes (${formatBRL(safeAdd(safeToSpend.pendingDirectExpenses, safeToSpend.pendingInvoices))}) | A Receber Aberto: ${formatBRL(receivablesAnalytics.totalOpen)}`}
-                                >
-                                  <span className="text-slate-400 flex items-center gap-1 font-sans">
-                                    <Sparkles className="w-3 h-3 text-[#A855F7] shrink-0" />
-                                    <span>Safe-to-Spend:</span>
-                                  </span>
-                                  <span
-                                    className={`font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums ${
-                                      safeToSpend.projected > 200
-                                        ? "bg-[#00F5D4]/15 text-[#00F5D4] border-[#00F5D4]/30 shadow-[0_0_8px_rgba(0,245,212,0.2)]"
-                                        : safeToSpend.projected >= 0
-                                        ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                                        : "bg-[#FF2A85]/15 text-[#FF2A85] border-[#FF2A85]/30 shadow-[0_0_8px_rgba(255,42,133,0.2)]"
+                                <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
+                                  {selectedMonth === "ALL" ? (
+                                    <span>Média mensal: {formatBRL(monthSummary.expense / filterMonthsCount)}</span>
+                                  ) : (
+                                    <span className="flex items-center gap-1">
+                                      <ArrowDownRight className="w-3.5 h-3.5 text-[#FF2A85]" />
+                                      {monthSummary.expenseDiff >= 0
+                                        ? `+${monthSummary.expenseDiff}%`
+                                        : `${monthSummary.expenseDiff}%`}{" "}
+                                      vs. mês anterior
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Card 3: Aportes Brutos */}
+                              <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#A855F7]/10 via-[#0d061c]/90 to-[#07030f] border border-[#A855F7]/30 flex flex-col justify-between shadow-lg shadow-[#A855F7]/5">
+                                <div>
+                                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <span>{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
+                                      <div className="relative group/tip inline-flex items-center">
+                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-56 p-2 rounded-xl bg-[#07030f]/95 border border-[#A855F7]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                          <strong className="text-[#C084FC] mb-0.5">Fórmula de Aportes:</strong>
+                                          <span>Soma bruta de lançamentos de investimento e caixinhas (Aportes ≥ 0). Resgates não reduzem o aporte bruto.</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="p-1 rounded-lg bg-[#A855F7]/15 text-[#C084FC] border border-[#A855F7]/30 shadow-[0_0_8px_rgba(168,85,247,0.25)]">
+                                      <PiggyBank className="w-3.5 h-3.5" />
+                                    </div>
+                                  </div>
+                                  <p className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#C084FC] leading-tight mt-0.5">
+                                    +{formatBRL(monthSummary.aportes)}
+                                  </p>
+                                </div>
+                                <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono tabular-nums">
+                                  {selectedMonth === "ALL" ? (
+                                    <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)} • Resgatado: ${formatBRL(allTimeReserva.resgates)}`}>
+                                      Em Reserva (Líquido): <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong> • Resgatado: {formatBRL(allTimeReserva.resgates)}
+                                    </span>
+                                  ) : (
+                                    <span>Meta: {formatBRL(monthlyInvestmentGoal)}</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Card 4: Saldo Livre / Balanço Operacional Líquido */}
+                              <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF6B4A]/10 via-[#0d061c]/90 to-[#07030f] border border-[#FF6B4A]/25 flex flex-col justify-between shadow-lg shadow-[#FF6B4A]/5">
+                                <div>
+                                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <span>{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
+                                      <div className="relative group/tip inline-flex items-center">
+                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-60 p-2 rounded-xl bg-[#07030f]/95 border border-[#FF6B4A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                          <strong className="text-[#FF6B4A] mb-0.5">Resultado Operacional:</strong>
+                                          <span>Entradas - (Despesas Operacionais + Investimento Líquido do período). Indica a folga de caixa líquida.</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="p-1 rounded-lg bg-[#FF6B4A]/15 text-[#FF6B4A] border border-[#FF6B4A]/30 shadow-[0_0_8px_rgba(255,107,74,0.25)]">
+                                      <Wallet className="w-3.5 h-3.5" />
+                                    </div>
+                                  </div>
+                                  <p
+                                    className={`text-lg sm:text-xl font-bold font-mono tabular-nums leading-tight mt-0.5 ${
+                                      monthSummary.balance >= 0 ? "text-[#00F5D4]" : "text-[#FF2A85]"
                                     }`}
                                   >
-                                    {formatBRL(safeToSpend.projected)}
-                                  </span>
+                                    {monthSummary.balance >= 0 ? "+" : ""}{formatBRL(monthSummary.balance)}
+                                  </p>
                                 </div>
-                              )}
+
+                                {/* Rodapé Adaptativo */}
+                                {selectedMonth === "ALL" ? (
+                                  <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] font-mono tabular-nums">
+                                    <span className="text-slate-400 flex items-center gap-1 font-sans">
+                                      <Sparkles className="w-3 h-3 text-[#A855F7] shrink-0" />
+                                      <span>Patrimônio em Caixinhas:</span>
+                                    </span>
+                                    <span className="font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums bg-[#00F5D4]/15 text-[#00F5D4] border-[#00F5D4]/30 shadow-[0_0_8px_rgba(0,245,212,0.2)]">
+                                      {formatBRL(allTimeReserva.liquido)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] font-mono tabular-nums"
+                                  >
+                                    <div className="flex items-center gap-1 text-slate-400 font-sans">
+                                      <Sparkles className="w-3 h-3 text-[#A855F7] shrink-0" />
+                                      <span>Safe-to-Spend:</span>
+                                      <div className="relative group/tip inline-flex items-center">
+                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-40 w-64 p-2 rounded-xl bg-[#07030f]/95 border border-white/15 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                          <strong className="text-white mb-0.5">Safe-to-Spend Projetado:</strong>
+                                          <span>Saldo em Contas ({formatBRL(safeToSpend.currentCash)}) + Entradas Pendentes ({formatBRL(safeToSpend.pendingIncome)}) - Fixos/Faturas Pendentes ({formatBRL(safeAdd(safeToSpend.pendingDirectExpenses, safeToSpend.pendingInvoices))}).</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <span
+                                      className={`font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border font-mono tabular-nums ${
+                                        safeToSpend.projected > 200
+                                          ? "bg-[#00F5D4]/15 text-[#00F5D4] border-[#00F5D4]/30 shadow-[0_0_8px_rgba(0,245,212,0.2)]"
+                                          : safeToSpend.projected >= 0
+                                          ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                          : "bg-[#FF2A85]/15 text-[#FF2A85] border-[#FF2A85]/30 shadow-[0_0_8px_rgba(255,42,133,0.2)]"
+                                      }`}
+                                    >
+                                      {formatBRL(safeToSpend.projected)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -4464,21 +4606,43 @@ export default function CoindexApp() {
                               </div>
                             )}
 
-                            {/* Pílulas Minimalistas de Legenda no Cabeçalho do Gráfico (Sprint 16 & 19) */}
-                            <div className="flex items-center justify-end gap-2 text-xs">
-                              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
-                                <span className="w-2 h-2 rounded-full shrink-0 bg-[#FF2A85] shadow-[0_0_8px_#FF2A85]" />
-                                <span>Patrimônio Acumulado</span>
+                            {/* Seletor de Período e Legenda Minimalista */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                              <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
+                                {(["6M", "1A", "ALL"] as const).map((range) => (
+                                  <button
+                                    key={range}
+                                    type="button"
+                                    onClick={() => setPatrimonyTimeRange(range)}
+                                    className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
+                                      patrimonyTimeRange === range
+                                        ? "bg-[#FF2A85] text-white shadow-[0_0_8px_rgba(255,42,133,0.4)]"
+                                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                                    }`}
+                                  >
+                                    {range === "ALL" ? "Tudo" : range}
+                                  </button>
+                                ))}
                               </div>
-                              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
-                                <span className="w-2 h-2 rounded-full shrink-0 bg-[#A855F7] shadow-[0_0_8px_#A855F7]" />
-                                <span>Aportes Brutos</span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
+                                  <span className="w-2 h-2 rounded-full shrink-0 bg-[#FF2A85] shadow-[0_0_8px_#FF2A85]" />
+                                  <span>Patrimônio Acumulado (Eixo Esq.)</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
+                                  <span className="w-2 h-2 rounded-full shrink-0 bg-[#A855F7] shadow-[0_0_8px_#A855F7]" />
+                                  <span>Aportes Brutos (Eixo Dir.)</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
+                                  <span className="w-2 h-2 rounded-full shrink-0 bg-[#FF6B4A] shadow-[0_0_8px_#FF6B4A]" />
+                                  <span>Resgates (Eixo Dir.)</span>
+                                </div>
                               </div>
                             </div>
 
                             <div className="h-72 select-none">
                               <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart
+                                <ComposedChart
                                   data={processedPatrimonyData}
                                   accessibilityLayer={false}
                                   margin={{ top: 10, right: 12, left: 4, bottom: 0 }}
@@ -4487,10 +4651,6 @@ export default function CoindexApp() {
                                     <linearGradient id="gradPatrimony" x1="0" y1="0" x2="0" y2="1">
                                       <stop offset="0%" stopColor="#FF2A85" stopOpacity={0.45} />
                                       <stop offset="100%" stopColor="#A855F7" stopOpacity={0.02} />
-                                    </linearGradient>
-                                    <linearGradient id="gradAporte" x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="0%" stopColor="#A855F7" stopOpacity={0.35} />
-                                      <stop offset="100%" stopColor="#A855F7" stopOpacity={0.0} />
                                     </linearGradient>
                                   </defs>
 
@@ -4510,7 +4670,9 @@ export default function CoindexApp() {
                                     tickLine={false}
                                     tickMargin={10}
                                   />
+                                  {/* Eixo Esquerdo: Patrimônio Acumulado */}
                                   <YAxis
+                                    yAxisId="left"
                                     stroke="#64748b"
                                     fontSize={11}
                                     width={56}
@@ -4527,11 +4689,32 @@ export default function CoindexApp() {
                                       return `R$ ${num}`;
                                     }}
                                   />
+                                  {/* Eixo Direito: Aportes e Resgates Mensais */}
+                                  <YAxis
+                                    yAxisId="right"
+                                    orientation="right"
+                                    stroke="#64748b"
+                                    fontSize={11}
+                                    width={48}
+                                    domain={[0, "auto"]}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={(v) => {
+                                      const num = Number(v) || 0;
+                                      if (num <= 0) return "0";
+                                      if (num >= 1000) {
+                                        const k = num / 1000;
+                                        return `${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
+                                      }
+                                      return `${num}`;
+                                    }}
+                                  />
                                   <Tooltip content={<PatrimonyCyberTooltip />} cursor={false} />
                                   {milestones.map((m) => (
-                                    <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
+                                    <ReferenceLine key={m.id} yAxisId="left" y={m.value} stroke={m.color} strokeDasharray="3 3" />
                                   ))}
                                   <Area
+                                    yAxisId="left"
                                     type="monotone"
                                     dataKey="acumulado"
                                     name="Patrimônio Acumulado"
@@ -4543,19 +4726,23 @@ export default function CoindexApp() {
                                     fillOpacity={1}
                                     connectNulls={true}
                                   />
-                                  <Area
-                                    type="monotone"
+                                  <Bar
+                                    yAxisId="right"
                                     dataKey="aportado"
                                     name="Aportes Brutos"
-                                    stroke="#A855F7"
-                                    strokeWidth={2.5}
-                                    dot={false}
-                                    activeDot={{ r: 5, strokeWidth: 2, stroke: "#A855F7", fill: "#0d061c" }}
-                                    fill="url(#gradAporte)"
-                                    fillOpacity={1}
-                                    connectNulls={true}
+                                    fill="#A855F7"
+                                    radius={[4, 4, 0, 0]}
+                                    maxBarSize={28}
                                   />
-                                </AreaChart>
+                                  <Bar
+                                    yAxisId="right"
+                                    dataKey="resgatado"
+                                    name="Resgates"
+                                    fill="#FF6B4A"
+                                    radius={[4, 4, 0, 0]}
+                                    maxBarSize={28}
+                                  />
+                                </ComposedChart>
                               </ResponsiveContainer>
                             </div>
                           </div>

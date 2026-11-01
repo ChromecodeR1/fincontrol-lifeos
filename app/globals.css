@@ -111,15 +111,35 @@ select option {
   background: linear-gradient(180deg, #ff2a85, #a855f7);
 }
 
-/* Recharts Outline, Selection & Hover Focus Remover */
+/* Recharts Outline, Selection & Hover Focus com Acessibilidade WCAG */
 .recharts-wrapper,
 .recharts-surface,
 .recharts-sector,
 .recharts-layer,
-.recharts-wrapper *:focus,
-.recharts-wrapper *:focus-visible,
-.recharts-surface:focus {
+.recharts-surface:focus:not(:focus-visible),
+.recharts-wrapper *:focus:not(:focus-visible) {
   outline: none !important;
   box-shadow: none !important;
   -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Anel Neon Fino Acessível para Navegação por Teclado (:focus-visible) */
+.recharts-wrapper *:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid #00f5d4 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 12px rgba(0, 245, 212, 0.45) !important;
+}
+
+/* Acessibilidade WCAG: Preferência do Usuário por Redução de Movimento */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
