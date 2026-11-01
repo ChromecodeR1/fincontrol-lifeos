@@ -50,6 +50,8 @@ import {
   ComposedChart,
   AreaChart,
   Area,
+  LineChart,
+  Line,
   BarChart,
   Bar,
   PieChart,
@@ -379,6 +381,7 @@ export default function CoindexApp() {
   const [alertRules, setAlertRules] = useState<CustomAlertRule[]>(INITIAL_ALERT_RULES);
   const [milestones] = useState<ChartMilestone[]>(INITIAL_MILESTONES);
   const [dashboardLayout, setDashboardLayout] = useState<DashboardWidgetConfig[]>(DEFAULT_DASHBOARD_LAYOUT);
+  const [showPatrimonyAportesCurve, setShowPatrimonyAportesCurve] = useState<boolean>(false);
 
   // Layout e Configurações dos Gráficos da Aba Meus Veículos (Requisitos 1 e 3)
   const [autoInmetroConfig, setAutoInmetroConfig] = useState<AutoInmetroConfig>(DEFAULT_AUTO_INMETRO_CONFIG);
@@ -473,6 +476,9 @@ export default function CoindexApp() {
       const updated = { ...prev, [widgetId]: next };
       try {
         localStorage.setItem("lifeos_chart_configs_v1", JSON.stringify(updated));
+        if (currentUser) {
+          setUserItem("lifeos_chart_configs_v1", JSON.stringify(updated), currentUser);
+        }
       } catch {
         // Ignora erro de quota local
       }
@@ -488,6 +494,9 @@ export default function CoindexApp() {
       const updated = prev.map((w) => (w.id === widgetId ? { ...w, size: nextSize } : w));
       try {
         localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(updated));
+        if (currentUser) {
+          setUserItem("lifeos_dash_layout_v1", JSON.stringify(updated), currentUser);
+        }
       } catch {
         // Ignora erro de quota local
       }
@@ -1509,6 +1518,33 @@ export default function CoindexApp() {
     if (patrimonyTimeRange === "1A") return allData.slice(-12);
     return allData;
   }, [patrimonyEvolution.data, patrimonyTimeRange]);
+
+  const patrimonyStats = useMemo(() => {
+    const data = filteredPatrimonyChartData || [];
+    if (data.length === 0) {
+      return {
+        currentValue: patrimonyEvolution.saldoFinal || 0,
+        startValue: 0,
+        diffAmount: 0,
+        diffPercent: 0,
+        isPositive: true
+      };
+    }
+    const first = data[0] as unknown as { acumulado: number };
+    const last = data[data.length - 1] as unknown as { acumulado: number };
+    const currentValue = last?.acumulado ?? patrimonyEvolution.saldoFinal ?? 0;
+    const startValue = first?.acumulado ?? 0;
+    const diffAmount = safeSub(currentValue, startValue);
+    const diffPercent = startValue > 0 ? (diffAmount / startValue) * 100 : (currentValue > 0 ? 100 : 0);
+    const isPositive = diffAmount >= 0;
+    return {
+      currentValue,
+      startValue,
+      diffAmount,
+      diffPercent,
+      isPositive
+    };
+  }, [filteredPatrimonyChartData, patrimonyEvolution.saldoFinal]);
 
   // UPDATE 2: Meses distintos no período e limite acumulado proporcional
   const filterMonthsCount = useMemo(() => {
@@ -4370,6 +4406,26 @@ export default function CoindexApp() {
                     const primarySeriesColor = (fallbackHex: string) =>
                       cfg.color && cfg.color !== "auto" ? cfg.color : fallbackHex;
 
+                    const chartHeightClass =
+                      cfg.height === "compact"
+                        ? "h-60"
+                        : cfg.height === "tall"
+                        ? "h-96"
+                        : "h-72";
+
+                    const effectiveChartType =
+                      cfg.chartType ||
+                      (widget.id === "patrimony_chart" ? "area" : widget.id === "category_chart" ? "pie" : "bar");
+
+                    const primaryColor =
+                      cfg.color && cfg.color !== "auto"
+                        ? cfg.color
+                        : widget.id === "patrimony_chart"
+                        ? "#FF2A85"
+                        : widget.id === "credit_chart"
+                        ? "#A855F7"
+                        : "#00F5D4";
+
                     const personalPct = Math.min(
                       100,
                       Math.round((monthSummary.personalSpent / Math.max(1, effectivePersonalBudgetLimit)) * 100)
@@ -4698,7 +4754,7 @@ export default function CoindexApp() {
                         )}
 
                         {widget.id === "patrimony_chart" && (
-                          <div className="space-y-2.5">
+                          <div className="space-y-4">
                             {patrimonyEvolution.hasDeficit && (
                               <div className="px-3.5 py-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between gap-2 shadow-[0_0_15px_rgba(244,63,94,0.15)] animate-pulse">
                                 <div className="flex items-center gap-2">
@@ -4711,152 +4767,320 @@ export default function CoindexApp() {
                               </div>
                             )}
 
-                            {/* Seletor de Período e Legenda Minimalista */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                              <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
-                                {(["6M", "1A", "ALL"] as const).map((range) => (
-                                  <button
-                                    key={range}
-                                    type="button"
-                                    onClick={() => setPatrimonyTimeRange(range)}
-                                    className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
-                                      patrimonyTimeRange === range
-                                        ? "bg-[#FF2A85] text-white shadow-[0_0_8px_rgba(255,42,133,0.4)]"
-                                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                            {/* Cabeçalho Interno Estilo Copilot Money: KPI Destaque + Filtro + Legenda Interativa */}
+                            <div className="flex flex-wrap items-end justify-between gap-3 pb-1 border-b border-white/5">
+                              {/* KPI Destaque Copilot Money */}
+                              <div>
+                                <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-0.5">
+                                  Patrimônio Acumulado {patrimonyTimeRange === "ALL" ? "(Total)" : `(${patrimonyTimeRange})`}
+                                </span>
+                                <div className="flex flex-wrap items-baseline gap-2.5">
+                                  <span className={`text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums tracking-tight ${moneyBlur}`}>
+                                    {formatBRL(patrimonyStats.currentValue)}
+                                  </span>
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-mono font-bold tabular-nums border shadow-sm ${
+                                      patrimonyStats.isPositive
+                                        ? "bg-[#00F5D4]/15 text-[#00F5D4] border-[#00F5D4]/30 shadow-[0_0_8px_rgba(0,245,212,0.2)]"
+                                        : "bg-rose-500/15 text-rose-300 border-rose-500/30 shadow-[0_0_8px_rgba(244,63,94,0.2)]"
                                     }`}
+                                    title="Variação líquida de patrimônio acumulado no período filtrado"
                                   >
-                                    {range === "ALL" ? "Tudo" : range}
-                                  </button>
-                                ))}
+                                    {patrimonyStats.isPositive ? (
+                                      <ArrowUpRight className="w-3.5 h-3.5 text-[#00F5D4]" />
+                                    ) : (
+                                      <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
+                                    )}
+                                    <span>
+                                      {patrimonyStats.isPositive ? "+" : ""}
+                                      {formatBRL(patrimonyStats.diffAmount)} ({patrimonyStats.diffPercent >= 0 ? "+" : ""}
+                                      {patrimonyStats.diffPercent.toFixed(1).replace(".", ",")}%)
+                                    </span>
+                                  </span>
+                                </div>
                               </div>
+
+                              {/* Controles: Seletor de Período & Toggles Clicáveis de Legenda */}
                               <div className="flex flex-wrap items-center gap-2">
-                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
-                                  <span className="w-2 h-2 rounded-full shrink-0 bg-[#FF2A85] shadow-[0_0_8px_#FF2A85]" />
-                                  <span>Patrimônio Acumulado (Eixo Esq.)</span>
+                                {/* Seletor de Período */}
+                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
+                                  {(["6M", "1A", "ALL"] as const).map((range) => (
+                                    <button
+                                      key={range}
+                                      type="button"
+                                      onClick={() => setPatrimonyTimeRange(range)}
+                                      className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
+                                        patrimonyTimeRange === range
+                                          ? "bg-[#FF2A85] text-white shadow-[0_0_8px_rgba(255,42,133,0.4)] font-bold"
+                                          : "text-slate-400 hover:text-white hover:bg-white/5"
+                                      }`}
+                                    >
+                                      {range === "ALL" ? "Tudo" : range}
+                                    </button>
+                                  ))}
                                 </div>
-                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
-                                  <span className="w-2 h-2 rounded-full shrink-0 bg-[#A855F7] shadow-[0_0_8px_#A855F7]" />
-                                  <span>Aportes Brutos (Eixo Dir.)</span>
+
+                                {/* Pílula 1: Patrimônio Acumulado (Fixa em Destaque) */}
+                                <div
+                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/90 border border-white/10 text-slate-200 text-[11px] font-semibold shadow-xs"
+                                  title="Série principal do patrimônio guardado"
+                                >
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+                                    style={{
+                                      backgroundColor: primaryColor,
+                                      boxShadow: `0 0 8px ${primaryColor}`
+                                    }}
+                                  />
+                                  <span>Patrimônio Acumulado</span>
                                 </div>
-                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/80 border border-white/5 font-medium text-slate-300 text-[11px]">
-                                  <span className="w-2 h-2 rounded-full shrink-0 bg-[#FF6B4A] shadow-[0_0_8px_#FF6B4A]" />
-                                  <span>Resgates (Eixo Dir.)</span>
-                                </div>
+
+                                {/* Pílula 2: Toggle Clicável de Aportes Brutos */}
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPatrimonyAportesCurve((prev) => !prev)}
+                                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer border ${
+                                    showPatrimonyAportesCurve
+                                      ? "bg-[#A855F7]/20 text-[#D8B4FE] border-[#A855F7]/50 shadow-[0_0_10px_rgba(168,85,247,0.3)]"
+                                      : "bg-slate-900/60 text-slate-400 border-white/5 opacity-70 hover:opacity-100"
+                                  }`}
+                                  title="Clique para ligar ou desligar a curva suave de Aportes Brutos"
+                                >
+                                  <span
+                                    className={`w-2.5 h-2.5 rounded-full shrink-0 transition ${
+                                      showPatrimonyAportesCurve
+                                        ? "bg-[#A855F7] shadow-[0_0_8px_#A855F7]"
+                                        : "bg-slate-600"
+                                    }`}
+                                  />
+                                  <span>
+                                    Aportes Brutos {showPatrimonyAportesCurve ? "" : "(oculto)"}
+                                  </span>
+                                </button>
                               </div>
                             </div>
 
-                            <div className="h-72 select-none">
+                            {/* Gráfico Estilo Copilot Money com Eixo Único e Sem Torres/Barras */}
+                            <div className={`${chartHeightClass} select-none transition-all duration-300`}>
                               <ResponsiveContainer width="100%" height="100%">
-                                <ComposedChart
-                                  data={processedPatrimonyData}
-                                  accessibilityLayer={false}
-                                  margin={{ top: 10, right: 12, left: 4, bottom: 0 }}
-                                >
-                                  <defs>
-                                    <linearGradient id="gradPatrimony" x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="0%" stopColor="#FF2A85" stopOpacity={0.45} />
-                                      <stop offset="100%" stopColor="#A855F7" stopOpacity={0.02} />
-                                    </linearGradient>
-                                  </defs>
-
-                                  {cfg.showGrid && (
-                                    <CartesianGrid
-                                      vertical={false}
-                                      strokeDasharray="3 3"
-                                      stroke="rgba(168, 85, 247, 0.12)"
+                                {effectiveChartType === "line" ? (
+                                  <LineChart
+                                    data={processedPatrimonyData}
+                                    accessibilityLayer={false}
+                                    margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
+                                  >
+                                    {cfg.showGrid && (
+                                      <CartesianGrid
+                                        vertical={false}
+                                        strokeDasharray="3 3"
+                                        stroke="rgba(168, 85, 247, 0.12)"
+                                      />
+                                    )}
+                                    <XAxis
+                                      dataKey="label"
+                                      stroke="#64748b"
+                                      fontSize={11}
+                                      axisLine={false}
+                                      tickLine={false}
+                                      tickMargin={10}
                                     />
-                                  )}
+                                    <YAxis
+                                      stroke="#64748b"
+                                      fontSize={11}
+                                      width={60}
+                                      domain={[0, "auto"]}
+                                      axisLine={false}
+                                      tickLine={false}
+                                      tickFormatter={(v) => {
+                                        const num = Number(v) || 0;
+                                        if (num <= 0) return "R$ 0";
+                                        if (num >= 1000) {
+                                          const k = num / 1000;
+                                          return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
+                                        }
+                                        return `R$ ${num}`;
+                                      }}
+                                    />
+                                    <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
+                                    {milestones.map((m) => (
+                                      <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
+                                    ))}
+                                    <Line
+                                      type={cfg.curveType || "monotone"}
+                                      dataKey="acumulado"
+                                      name="Patrimônio Acumulado"
+                                      stroke={primaryColor}
+                                      strokeWidth={cfg.strokeWidth || 2.5}
+                                      dot={cfg.showDots ? { r: 3.5, fill: primaryColor, stroke: "#07030f", strokeWidth: 1.5 } : false}
+                                      activeDot={{ r: 5, strokeWidth: 2, stroke: primaryColor, fill: "#0d061c" }}
+                                      connectNulls={true}
+                                    />
+                                    {showPatrimonyAportesCurve && (
+                                      <Line
+                                        type={cfg.curveType || "monotone"}
+                                        dataKey="aportado"
+                                        name="Aportes Brutos"
+                                        stroke="#A855F7"
+                                        strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
+                                        strokeDasharray="4 4"
+                                        dot={cfg.showDots ? { r: 3, fill: "#A855F7", stroke: "#07030f", strokeWidth: 1.5 } : false}
+                                        activeDot={{ r: 4, stroke: "#A855F7", fill: "#0d061c" }}
+                                        connectNulls={true}
+                                      />
+                                    )}
+                                  </LineChart>
+                                ) : effectiveChartType === "bar" ? (
+                                  <BarChart
+                                    data={processedPatrimonyData}
+                                    accessibilityLayer={false}
+                                    margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
+                                  >
+                                    {cfg.showGrid && (
+                                      <CartesianGrid
+                                        vertical={false}
+                                        strokeDasharray="3 3"
+                                        stroke="rgba(168, 85, 247, 0.12)"
+                                      />
+                                    )}
+                                    <XAxis
+                                      dataKey="label"
+                                      stroke="#64748b"
+                                      fontSize={11}
+                                      axisLine={false}
+                                      tickLine={false}
+                                      tickMargin={10}
+                                    />
+                                    <YAxis
+                                      stroke="#64748b"
+                                      fontSize={11}
+                                      width={60}
+                                      domain={[0, "auto"]}
+                                      axisLine={false}
+                                      tickLine={false}
+                                      tickFormatter={(v) => {
+                                        const num = Number(v) || 0;
+                                        if (num <= 0) return "R$ 0";
+                                        if (num >= 1000) {
+                                          const k = num / 1000;
+                                          return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
+                                        }
+                                        return `R$ ${num}`;
+                                      }}
+                                    />
+                                    <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
+                                    {milestones.map((m) => (
+                                      <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
+                                    ))}
+                                    <Bar
+                                      dataKey="acumulado"
+                                      name="Patrimônio Acumulado"
+                                      fill={primaryColor}
+                                      radius={[4, 4, 0, 0]}
+                                      maxBarSize={36}
+                                    />
+                                    {showPatrimonyAportesCurve && (
+                                      <Bar
+                                        dataKey="aportado"
+                                        name="Aportes Brutos"
+                                        fill="#A855F7"
+                                        radius={[4, 4, 0, 0]}
+                                        maxBarSize={28}
+                                      />
+                                    )}
+                                  </BarChart>
+                                ) : (
+                                  /* Modo Padrão: AreaChart Estilo Copilot Money com Gradiente Translúcido */
+                                  <AreaChart
+                                    data={processedPatrimonyData}
+                                    accessibilityLayer={false}
+                                    margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
+                                  >
+                                    <defs>
+                                      <linearGradient id={`gradPatrimony_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor={primaryColor} stopOpacity={cfg.fillArea !== false ? 0.28 : 0} />
+                                        <stop offset="100%" stopColor={primaryColor} stopOpacity={0.00} />
+                                      </linearGradient>
+                                      <linearGradient id={`gradAporte_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#A855F7" stopOpacity={cfg.fillArea !== false ? 0.18 : 0} />
+                                        <stop offset="100%" stopColor="#A855F7" stopOpacity={0.00} />
+                                      </linearGradient>
+                                    </defs>
 
-                                  <XAxis
-                                    dataKey="label"
-                                    stroke="#64748b"
-                                    fontSize={11}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tickMargin={10}
-                                  />
-                                  {/* Eixo Esquerdo: Patrimônio Acumulado */}
-                                  <YAxis
-                                    yAxisId="left"
-                                    stroke="#64748b"
-                                    fontSize={11}
-                                    width={56}
-                                    domain={[0, "auto"]}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tickFormatter={(v) => {
-                                      const num = Number(v) || 0;
-                                      if (num <= 0) return "R$ 0";
-                                      if (num >= 1000) {
-                                        const k = num / 1000;
-                                        return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
-                                      }
-                                      return `R$ ${num}`;
-                                    }}
-                                  />
-                                  {/* Eixo Direito: Aportes e Resgates Mensais */}
-                                  <YAxis
-                                    yAxisId="right"
-                                    orientation="right"
-                                    stroke="#64748b"
-                                    fontSize={11}
-                                    width={48}
-                                    domain={[0, "auto"]}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tickFormatter={(v) => {
-                                      const num = Number(v) || 0;
-                                      if (num <= 0) return "0";
-                                      if (num >= 1000) {
-                                        const k = num / 1000;
-                                        return `${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
-                                      }
-                                      return `${num}`;
-                                    }}
-                                  />
-                                  <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
-                                  {milestones.map((m) => (
-                                    <ReferenceLine key={m.id} yAxisId="left" y={m.value} stroke={m.color} strokeDasharray="3 3" />
-                                  ))}
-                                  <Area
-                                    yAxisId="left"
-                                    type="monotone"
-                                    dataKey="acumulado"
-                                    name="Patrimônio Acumulado"
-                                    stroke="#FF2A85"
-                                    strokeWidth={3}
-                                    dot={false}
-                                    activeDot={{ r: 5, strokeWidth: 2, stroke: "#FF2A85", fill: "#0d061c" }}
-                                    fill="url(#gradPatrimony)"
-                                    fillOpacity={1}
-                                    connectNulls={true}
-                                  />
-                                  <Bar
-                                    yAxisId="right"
-                                    dataKey="aportado"
-                                    name="Aportes Brutos"
-                                    fill="#A855F7"
-                                    radius={[4, 4, 0, 0]}
-                                    maxBarSize={28}
-                                  />
-                                  <Bar
-                                    yAxisId="right"
-                                    dataKey="resgatado"
-                                    name="Resgates"
-                                    fill="#FF6B4A"
-                                    radius={[4, 4, 0, 0]}
-                                    maxBarSize={28}
-                                  />
-                                </ComposedChart>
+                                    {cfg.showGrid && (
+                                      <CartesianGrid
+                                        vertical={false}
+                                        strokeDasharray="3 3"
+                                        stroke="rgba(168, 85, 247, 0.12)"
+                                      />
+                                    )}
+
+                                    <XAxis
+                                      dataKey="label"
+                                      stroke="#64748b"
+                                      fontSize={11}
+                                      axisLine={false}
+                                      tickLine={false}
+                                      tickMargin={10}
+                                    />
+                                    {/* Eixo Esquerdo Único: Patrimônio Formatado */}
+                                    <YAxis
+                                      stroke="#64748b"
+                                      fontSize={11}
+                                      width={60}
+                                      domain={[0, "auto"]}
+                                      axisLine={false}
+                                      tickLine={false}
+                                      tickFormatter={(v) => {
+                                        const num = Number(v) || 0;
+                                        if (num <= 0) return "R$ 0";
+                                        if (num >= 1000) {
+                                          const k = num / 1000;
+                                          return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
+                                        }
+                                        return `R$ ${num}`;
+                                      }}
+                                    />
+                                    <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
+                                    {milestones.map((m) => (
+                                      <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
+                                    ))}
+                                    <Area
+                                      type={cfg.curveType || "monotone"}
+                                      dataKey="acumulado"
+                                      name="Patrimônio Acumulado"
+                                      stroke={primaryColor}
+                                      strokeWidth={cfg.strokeWidth || 2.5}
+                                      dot={cfg.showDots ? { r: 3.5, fill: primaryColor, stroke: "#07030f", strokeWidth: 1.5 } : false}
+                                      activeDot={{ r: 5, strokeWidth: 2, stroke: primaryColor, fill: "#0d061c" }}
+                                      fill={cfg.fillArea !== false ? `url(#gradPatrimony_${widget.id})` : "none"}
+                                      fillOpacity={1}
+                                      connectNulls={true}
+                                    />
+                                    {showPatrimonyAportesCurve && (
+                                      <Area
+                                        type={cfg.curveType || "monotone"}
+                                        dataKey="aportado"
+                                        name="Aportes Brutos"
+                                        stroke="#A855F7"
+                                        strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
+                                        dot={cfg.showDots ? { r: 3, fill: "#A855F7", stroke: "#07030f", strokeWidth: 1.5 } : false}
+                                        activeDot={{ r: 4, stroke: "#A855F7", fill: "#0d061c" }}
+                                        fill={cfg.fillArea !== false ? `url(#gradAporte_${widget.id})` : "none"}
+                                        fillOpacity={1}
+                                        connectNulls={true}
+                                      />
+                                    )}
+                                  </AreaChart>
+                                )}
                               </ResponsiveContainer>
                             </div>
                           </div>
                         )}
 
                         {widget.id === "category_chart" && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                          <div className={`grid ${cfg.showLegend !== false ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} gap-4 items-center`}>
                             {/* Donut Moderno com Rótulo Centralizado Total Gasto (Sprint 16) */}
-                            <div className="relative h-64 select-none flex items-center justify-center">
+                            <div className={`relative ${chartHeightClass} select-none flex items-center justify-center`}>
                               <ResponsiveContainer width="100%" height="100%">
                                 <PieChart accessibilityLayer={false}>
                                   <Pie
@@ -4870,7 +5094,14 @@ export default function CoindexApp() {
                                     paddingAngle={4}
                                     cornerRadius={6}
                                     stroke="none"
-                                    label={false}
+                                    label={
+                                      cfg.showDataLabels
+                                        ? ({ percent }: { percent?: number }) =>
+                                            percent && percent > 0.05
+                                              ? `${Math.round((percent || 0) * 100)}%`
+                                              : ""
+                                        : false
+                                    }
                                     labelLine={false}
                                   >
                                     {categoryChartData.map((entry, idx) => (
@@ -4896,43 +5127,45 @@ export default function CoindexApp() {
                             </div>
 
                             {/* Lista de Categorias com Bolinha Colorida Correspondente */}
-                            <div className="space-y-2 max-h-64 overflow-y-auto pr-1 text-xs">
-                              {categoryChartData.map((cat) => {
-                                const pct = Math.round((cat.value / totalExpenses) * 100);
-                                return (
-                                  <div
-                                    key={cat.name}
-                                    className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-1.5"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-semibold text-slate-200 flex items-center gap-2">
-                                        <span
-                                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
-                                          style={{ backgroundColor: cat.color }}
+                            {cfg.showLegend !== false && (
+                              <div className={`space-y-2 max-h-64 overflow-y-auto pr-1 text-xs`}>
+                                {categoryChartData.map((cat) => {
+                                  const pct = Math.round((cat.value / totalExpenses) * 100);
+                                  return (
+                                    <div
+                                      key={cat.name}
+                                      className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-1.5"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-semibold text-slate-200 flex items-center gap-2">
+                                          <span
+                                            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
+                                            style={{ backgroundColor: cat.color }}
+                                          />
+                                          {renderCategorySemanticIcon(cat.name, cat.color)}
+                                          <span className="truncate max-w-[130px]">{cat.name}</span>
+                                        </span>
+                                        <span className={`font-bold text-white tabular-nums font-mono ${moneyBlur}`}>
+                                          {formatBRL(cat.value)}{" "}
+                                          <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
+                                        </span>
+                                      </div>
+                                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                        <div
+                                          className="h-full rounded-full transition-all duration-300"
+                                          style={{ width: `${pct}%`, backgroundColor: cat.color }}
                                         />
-                                        {renderCategorySemanticIcon(cat.name, cat.color)}
-                                        <span className="truncate max-w-[130px]">{cat.name}</span>
-                                      </span>
-                                      <span className={`font-bold text-white tabular-nums font-mono ${moneyBlur}`}>
-                                        {formatBRL(cat.value)}{" "}
-                                        <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
-                                      </span>
+                                      </div>
                                     </div>
-                                    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                                      <div
-                                        className="h-full rounded-full transition-all duration-300"
-                                        style={{ width: `${pct}%`, backgroundColor: cat.color }}
-                                      />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
 
                         {widget.id === "credit_chart" && (
-                          <div className="h-64 select-none">
+                          <div className={`${chartHeightClass} select-none transition-all duration-300`}>
                             <ResponsiveContainer width="100%" height="100%">
                               <BarChart data={creditChartData} barSize={28} accessibilityLayer={false}>
                                 {cfg.showGrid && (
@@ -4989,7 +5222,7 @@ export default function CoindexApp() {
                             </div>
 
                             {/* Gráfico Recharts de Exposição por Banco */}
-                            <div className="h-60 select-none">
+                            <div className={`${chartHeightClass} select-none transition-all duration-300`}>
                               <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={bankLimitsAnalytics.chartData} barSize={26} accessibilityLayer={false}>
                                   {cfg.showGrid && (

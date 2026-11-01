@@ -7,17 +7,21 @@ export type ChartLineCurve = "monotone" | "linear" | "step";
 export type ChartKind = "line" | "area" | "bar" | "pie" | "composed" | "kpi";
 export type ChartZeroHandling = "include" | "omit";
 export type ChartWidgetSize = "half" | "full";
+export type ChartDisplayType = "area" | "line" | "bar";
+export type ChartHeightSetting = "compact" | "normal" | "tall";
 
 export interface ChartWidgetSettings {
   color: string;
   curveType: ChartLineCurve;
   strokeWidth: number;
   showDots: boolean;
-  fillArea: boolean;
+  fillArea: boolean; // Preenchimento Degradê
   zeroHandling: ChartZeroHandling;
   showDataLabels: boolean;
   showGrid: boolean;
   showLegend: boolean;
+  chartType?: ChartDisplayType;
+  height?: ChartHeightSetting;
 }
 
 export const DEFAULT_CHART_WIDGET_SETTINGS: ChartWidgetSettings = {
@@ -29,17 +33,22 @@ export const DEFAULT_CHART_WIDGET_SETTINGS: ChartWidgetSettings = {
   zeroHandling: "include",
   showDataLabels: false,
   showGrid: true,
-  showLegend: true
+  showLegend: true,
+  chartType: "area",
+  height: "normal"
 };
 
 export const CHART_COLOR_PALETTE: ReadonlyArray<{ id: string; label: string; hex: string }> = [
-  { id: "auto", label: "Automática", hex: "linear-gradient(135deg,#6366f1,#10b981)" },
+  { id: "auto", label: "Automática (Cyberpunk Pink)", hex: "linear-gradient(135deg,#FF2A85,#A855F7)" },
+  { id: "#FF2A85", label: "Laser Pink", hex: "#FF2A85" },
+  { id: "#00F5D4", label: "Neon Mint", hex: "#00F5D4" },
+  { id: "#A855F7", label: "Electric Violet", hex: "#A855F7" },
+  { id: "#38BDF8", label: "Electric Sky", hex: "#38BDF8" },
+  { id: "#FFB800", label: "Cyber Amber", hex: "#FFB800" },
+  { id: "#FF6B4A", label: "Synth Coral", hex: "#FF6B4A" },
+  { id: "#A3E635", label: "Acid Lime", hex: "#A3E635" },
   { id: "#6366f1", label: "Índigo", hex: "#6366f1" },
   { id: "#10b981", label: "Esmeralda", hex: "#10b981" },
-  { id: "#06b6d4", label: "Ciano", hex: "#06b6d4" },
-  { id: "#f59e0b", label: "Âmbar", hex: "#f59e0b" },
-  { id: "#ec4899", label: "Rosa", hex: "#ec4899" },
-  { id: "#8b5cf6", label: "Violeta", hex: "#8b5cf6" },
   { id: "#ef4444", label: "Vermelho", hex: "#ef4444" }
 ];
 
@@ -51,6 +60,8 @@ interface ChartSettingsPopoverProps {
   settings: ChartWidgetSettings;
   defaultSettings?: Partial<ChartWidgetSettings>;
   onChange: (next: ChartWidgetSettings) => void;
+  size?: ChartWidgetSize;
+  onSizeChange?: (nextSize: ChartWidgetSize) => void;
 }
 
 export default function ChartSettingsPopover({
@@ -60,7 +71,9 @@ export default function ChartSettingsPopover({
   hasMultipleSeries = false,
   settings,
   defaultSettings,
-  onChange
+  onChange,
+  size,
+  onSizeChange
 }: ChartSettingsPopoverProps) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
@@ -89,9 +102,13 @@ export default function ChartSettingsPopover({
 
   if (!isOpen) return null;
 
-  const isLineOrArea = chartKind === "line" || chartKind === "area" || chartKind === "composed";
+  const currentDisplayType: ChartDisplayType =
+    settings.chartType || (chartKind === "bar" ? "bar" : chartKind === "line" ? "line" : "area");
+
+  const supportsDisplayType = chartKind === "line" || chartKind === "area" || chartKind === "bar" || chartKind === "composed";
+  const isLineOrArea = currentDisplayType === "line" || currentDisplayType === "area" || chartKind === "line" || chartKind === "area";
   const supportsColor = chartKind !== "pie" && chartKind !== "kpi";
-  const supportsGrid = chartKind === "line" || chartKind === "area" || chartKind === "bar" || chartKind === "composed";
+  const supportsGrid = chartKind !== "pie" && chartKind !== "kpi";
   const supportsLabels = chartKind !== "kpi";
   const supportsLegend = hasMultipleSeries || chartKind === "pie";
 
@@ -112,29 +129,60 @@ export default function ChartSettingsPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute right-0 top-10 z-50 w-72 rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] p-3.5 text-xs text-slate-200"
+      className="absolute right-0 top-10 z-50 w-80 max-h-[85vh] overflow-y-auto rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] p-4 text-xs text-slate-200"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="mb-2.5 flex items-center justify-between border-b border-slate-800 pb-2">
-        <span className="font-semibold text-slate-100">Opções do gráfico</span>
+      <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-2.5">
+        <span className="font-semibold text-slate-100 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#FF2A85] shadow-[0_0_8px_#FF2A85]" />
+          Personalizar Gráfico
+        </span>
         <button
           type="button"
           onClick={handleRestoreDefault}
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 transition hover:bg-white/10 hover:text-white"
           title="Restaurar padrão deste gráfico"
         >
           <RotateCcw className="h-3 w-3" />
-          Restaurar padrão
+          Restaurar
         </button>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3.5">
+        {/* 1. Tipo de Visualização (Modo) */}
+        {supportsDisplayType && (
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Tipo de visualização</label>
+            <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950/80 p-1 border border-white/5">
+              {[
+                { id: "area" as const, label: "Área (Copilot)" },
+                { id: "line" as const, label: "Linha" },
+                { id: "bar" as const, label: "Barras" }
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => updateField("chartType", opt.id)}
+                  className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition ${
+                    currentDisplayType === opt.id
+                      ? "bg-[#FF2A85] text-white shadow-[0_0_10px_rgba(255,42,133,0.4)]"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 2. Cores Personalizadas */}
         {supportsColor && (
           <div>
-            <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Cor da série</label>
+            <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Cor da série principal</label>
             <div className="flex flex-wrap items-center gap-1.5">
               {CHART_COLOR_PALETTE.map((swatch) => {
-                const selected = settings.color === swatch.id;
+                const selected = (settings.color || "auto") === swatch.id;
                 return (
                   <button
                     key={swatch.id}
@@ -143,8 +191,8 @@ export default function ChartSettingsPopover({
                     title={swatch.label}
                     className={`relative flex h-6 w-6 items-center justify-center rounded-full border transition ${
                       selected
-                        ? "scale-110 border-white ring-2 ring-indigo-500/50"
-                        : "border-slate-700 opacity-80 hover:opacity-100"
+                        ? "scale-110 border-white ring-2 ring-[#FF2A85]/70 shadow-[0_0_8px_rgba(255,42,133,0.5)]"
+                        : "border-slate-700 opacity-80 hover:opacity-100 hover:scale-105"
                     }`}
                     style={{ background: swatch.hex }}
                   >
@@ -156,26 +204,27 @@ export default function ChartSettingsPopover({
           </div>
         )}
 
-        {isLineOrArea && (
+        {/* 3. Estilo e Espessura da Curva (quando não for barra) */}
+        {isLineOrArea && currentDisplayType !== "bar" && (
           <>
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-slate-400">Estilo da linha</label>
-              <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950/80 p-1">
+              <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Estilo da curva</label>
+              <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950/80 p-1 border border-white/5">
                 {(
                   [
-                    { id: "monotone", label: "Suave" },
-                    { id: "linear", label: "Linear" },
-                    { id: "step", label: "Degrau" }
-                  ] as const
+                    { id: "monotone" as const, label: "Suave" },
+                    { id: "linear" as const, label: "Linear" },
+                    { id: "step" as const, label: "Degrau" }
+                  ]
                 ).map((opt) => (
                   <button
                     key={opt.id}
                     type="button"
                     onClick={() => updateField("curveType", opt.id)}
-                    className={`rounded-md py-1 text-center text-[11px] font-medium transition ${
+                    className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
                       settings.curveType === opt.id
-                        ? "bg-indigo-600 text-white shadow"
-                        : "text-slate-400 hover:text-slate-200"
+                        ? "bg-[#A855F7] text-white shadow-[0_0_8px_rgba(168,85,247,0.4)]"
+                        : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                     }`}
                   >
                     {opt.label}
@@ -185,23 +234,23 @@ export default function ChartSettingsPopover({
             </div>
 
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-slate-400">Espessura</label>
-              <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950/80 p-1">
+              <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Espessura da linha</label>
+              <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950/80 p-1 border border-white/5">
                 {(
                   [
                     { width: 1.5, label: "Fina" },
                     { width: 2.5, label: "Média" },
                     { width: 3.5, label: "Espessa" }
-                  ] as const
+                  ]
                 ).map((opt) => (
                   <button
                     key={opt.label}
                     type="button"
                     onClick={() => updateField("strokeWidth", opt.width)}
-                    className={`rounded-md py-1 text-center text-[11px] font-medium transition ${
+                    className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
                       settings.strokeWidth === opt.width
-                        ? "bg-slate-800 text-white"
-                        : "text-slate-400 hover:text-slate-200"
+                        ? "bg-slate-800 text-white font-bold border border-white/10"
+                        : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                     }`}
                   >
                     {opt.label}
@@ -209,95 +258,154 @@ export default function ChartSettingsPopover({
                 ))}
               </div>
             </div>
+          </>
+        )}
 
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-slate-400">Valores zero</label>
-              <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-950/80 p-1">
-                <button
-                  type="button"
-                  onClick={() => updateField("zeroHandling", "include")}
-                  className={`rounded-md py-1 text-center text-[11px] font-medium transition ${
-                    settings.zeroHandling === "include"
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  Considerar 0
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateField("zeroHandling", "omit")}
-                  className={`rounded-md py-1 text-center text-[11px] font-medium transition ${
-                    settings.zeroHandling === "omit"
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  Omitir 0
-                </button>
-              </div>
+        {/* 4. Altura do Gráfico */}
+        <div>
+          <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Altura do gráfico</label>
+          <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950/80 p-1 border border-white/5">
+            {[
+              { id: "compact" as const, label: "Compacto" },
+              { id: "normal" as const, label: "Padrão" },
+              { id: "tall" as const, label: "Expandido" }
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => updateField("height", opt.id)}
+                className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
+                  (settings.height || "normal") === opt.id
+                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 5. Largura no Dashboard (1/2 vs 1/1) */}
+        {size && onSizeChange && (
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Largura no Dashboard</label>
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-950/80 p-1 border border-white/5">
+              <button
+                type="button"
+                onClick={() => onSizeChange("half")}
+                className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
+                  size === "half"
+                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                }`}
+              >
+                Meia tela (1/2)
+              </button>
+              <button
+                type="button"
+                onClick={() => onSizeChange("full")}
+                className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
+                  size === "full"
+                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                }`}
+              >
+                Tela cheia (1/1)
+              </button>
             </div>
+          </div>
+        )}
 
-            <div className="space-y-1.5 pt-0.5">
-              <label className="flex cursor-pointer items-center justify-between rounded-md px-1 py-1 hover:bg-slate-800/50">
-                <span className="text-slate-300">Pontos visíveis</span>
-                <input
-                  type="checkbox"
-                  checked={settings.showDots}
-                  onChange={(e) => updateField("showDots", e.target.checked)}
-                  className="h-3.5 w-3.5 accent-indigo-500"
-                />
-              </label>
-
-              <label className="flex cursor-pointer items-center justify-between rounded-md px-1 py-1 hover:bg-slate-800/50">
-                <span className="text-slate-300">Área preenchida (gradiente)</span>
+        {/* 6. Opções Visuais & Switches */}
+        <div className="space-y-1.5 border-t border-white/10 pt-2.5">
+          {isLineOrArea && currentDisplayType !== "bar" && (
+            <>
+              <label className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5 transition">
+                <span className="text-slate-300">Degradê suave (Copilot)</span>
                 <input
                   type="checkbox"
                   checked={settings.fillArea}
                   onChange={(e) => updateField("fillArea", e.target.checked)}
-                  className="h-3.5 w-3.5 accent-indigo-500"
+                  className="h-4 w-4 rounded accent-[#FF2A85]"
                 />
               </label>
-            </div>
-          </>
-        )}
 
-        <div className="space-y-1.5 border-t border-slate-800/80 pt-2">
-          {supportsLabels && (
-            <label className="flex cursor-pointer items-center justify-between rounded-md px-1 py-1 hover:bg-slate-800/50">
-              <span className="text-slate-300">Rótulos de dados</span>
-              <input
-                type="checkbox"
-                checked={settings.showDataLabels}
-                onChange={(e) => updateField("showDataLabels", e.target.checked)}
-                className="h-3.5 w-3.5 accent-indigo-500"
-              />
-            </label>
+              <label className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5 transition">
+                <span className="text-slate-300">Pontos visíveis na linha</span>
+                <input
+                  type="checkbox"
+                  checked={settings.showDots}
+                  onChange={(e) => updateField("showDots", e.target.checked)}
+                  className="h-4 w-4 rounded accent-[#FF2A85]"
+                />
+              </label>
+            </>
           )}
 
           {supportsGrid && (
-            <label className="flex cursor-pointer items-center justify-between rounded-md px-1 py-1 hover:bg-slate-800/50">
+            <label className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5 transition">
               <span className="text-slate-300">Linhas de grade</span>
               <input
                 type="checkbox"
                 checked={settings.showGrid}
                 onChange={(e) => updateField("showGrid", e.target.checked)}
-                className="h-3.5 w-3.5 accent-indigo-500"
+                className="h-4 w-4 rounded accent-[#FF2A85]"
               />
             </label>
           )}
 
           {supportsLegend && (
-            <label className="flex cursor-pointer items-center justify-between rounded-md px-1 py-1 hover:bg-slate-800/50">
+            <label className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5 transition">
               <span className="text-slate-300">Exibir legenda</span>
               <input
                 type="checkbox"
                 checked={settings.showLegend}
                 onChange={(e) => updateField("showLegend", e.target.checked)}
-                className="h-3.5 w-3.5 accent-indigo-500"
+                className="h-4 w-4 rounded accent-[#FF2A85]"
               />
             </label>
           )}
+
+          {supportsLabels && (
+            <label className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5 transition">
+              <span className="text-slate-300">Rótulos de dados</span>
+              <input
+                type="checkbox"
+                checked={settings.showDataLabels}
+                onChange={(e) => updateField("showDataLabels", e.target.checked)}
+                className="h-4 w-4 rounded accent-[#FF2A85]"
+              />
+            </label>
+          )}
+
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-slate-400">Tratamento de valores zero</label>
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-950/80 p-1 border border-white/5">
+              <button
+                type="button"
+                onClick={() => updateField("zeroHandling", "include")}
+                className={`rounded-md py-1 text-center text-[11px] font-medium transition ${
+                  settings.zeroHandling === "include"
+                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                }`}
+              >
+                Considerar 0
+              </button>
+              <button
+                type="button"
+                onClick={() => updateField("zeroHandling", "omit")}
+                className={`rounded-md py-1 text-center text-[11px] font-medium transition ${
+                  settings.zeroHandling === "omit"
+                    ? "bg-slate-800 text-white font-bold border border-white/10"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                }`}
+              >
+                Omitir 0
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

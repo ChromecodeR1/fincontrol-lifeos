@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.17.0`  
-> **Última Atualização:** 31 de Outubro de 2026 (Pós-Sprint 25 — UX Avançada: Desfazer nos Toasts, Exportação CSV pt-BR com BOM UTF-8, Mini-Calculadora no Campo de Valor e Modo Privacidade Completo)  
+> **Versão da Aplicação:** `0.18.0`  
+> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 26 — Redesign do Gráfico "Evolução do Meu Patrimônio" para Linha/Área Limpa Estilo Copilot Money, Remoção das Torres e Reconexão Total do Menu de Personalização ChartSettingsPopover)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -448,6 +448,20 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - Máscara visual de desfoque (`moneyBlur`) aplicada universalmente ao valor central do Donut, tooltips de gráficos Recharts (`PatrimonyCyberTooltip` e `CustomCyberTooltip`), cards de KPIs, limites de cartões e saldos bancários.
     - Normalização Unicode NFD (`normalizeSearchText`) na busca da tabela avançada e na Command Palette (`Ctrl+K`), permitindo encontrar registros ignorando acentos gráficos e caixa alta/baixa (ex: "agua" encontra "Água & Gás", "uber" encontra "Transporte / Uber").
     - Interceptação de atalho global `Ctrl+K` e `Cmd+K` com `e.preventDefault()` e `e.stopPropagation()`.
+- **Sprint 26 — Redesign do Gráfico "Evolução do Meu Patrimônio" Estilo Copilot Money & Reconexão Total do Menu de Personalização (`ChartSettingsPopover`):**
+  - **Remoção das Torres (Barras) e Redesign Copilot Money:**
+    - Removido completamente o `<ComposedChart>`, os componentes `<Bar>` de Aportes/Resgates e o eixo Y secundário (`yAxisId="right"`).
+    - Gráfico reconstruído com `<AreaChart>` limpo, moderno e minimalista, dotado de um único eixo Y à esquerda (`axisLine={false}`, `tickLine={false}`, formatação limpa `R$ 0`, `R$ 1k`, `R$ 2k`, `R$ 3k`).
+    - Cabeçalho interno do card estilo Copilot Money com valor de Patrimônio Acumulado em fonte `tabular-nums` destacada + badge inteligente com variação percentual e monetária líquida no período selecionado (`6M`, `1A`, `Tudo`).
+    - Curva de Patrimônio Acumulado renderizada como linha fluida contínua com preenchimento em degradê suave translúcido (`fillOpacity` de `0.28` no topo até `0.00` na base).
+    - Pílulas de legenda no canto superior transformadas em toggles interativos clicáveis: curva de Patrimônio Acumulado ativa por padrão em destaque, e toggle clicável para ligar/desligar a 2ª curva suave de Aportes Brutos (também como linha/área suave, nunca como barra).
+    - Resgates e Aportes mensais preservados com riqueza de detalhes no `PatrimonyCyberTooltip` ao passar o mouse.
+  - **Reconexão Total da Engrenagem (`ChartSettingsPopover`):**
+    - **Tipo de Visualização (`chartType`):** Suporte funcional dinâmico a `"area"` (Área Copilot), `"line"` (Linha pura) e `"bar"` (Barras) tanto no menu quanto na renderização em tempo real.
+    - **Estilo da Curva (`curveType`):** Conectado diretamente a `monotone` (Suave), `linear` (Reta) e `step` (Degrau).
+    - **Paleta de Cores Cibernética:** Seletores de cor atualizados para a paleta Synthwave Spark / Cyberpunk Neon (Laser Pink `#FF2A85`, Neon Mint `#00F5D4`, Electric Violet `#A855F7`, etc.), eliminando cores fixas hardcoded.
+    - **Opções Visuais e Toggles:** Switches conectados funcionalmente para Mostrar Grade (`showGrid`), Pontos na Linha (`showDots`), Preenchimento Degradê (`fillArea`), Altura do Gráfico (`height`: Compacto 240px, Padrão 288px, Expandido 384px) e Tamanho do Card (`1/1` tela cheia vs `1/2` meia tela).
+    - **Persistência Global:** Salva no `localStorage` sob `lifeos_chart_configs_v1` e sincroniza no perfil do usuário (`setUserItem` e Supabase DB).
 
 ---
 

@@ -122,8 +122,8 @@ export default function ChartCard({
             <button
               type="button"
               onClick={() => onSizeChange(size === "half" ? "full" : "half")}
-              title={size === "half" ? "Expandir para largura total" : "Reduzir para meia largura"}
-              className="hidden items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 lg:inline-flex"
+              title={size === "half" ? "Expandir para largura total (1/1)" : "Reduzir para meia largura (1/2)"}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
             >
               {size === "half" ? (
                 <>
@@ -146,7 +146,7 @@ export default function ChartCard({
                 title="Configurações deste gráfico"
                 className={`rounded p-1 transition ${
                   popoverOpen
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-[#FF2A85] text-white shadow-[0_0_8px_rgba(255,42,133,0.5)]"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                 }`}
               >
@@ -162,6 +162,8 @@ export default function ChartCard({
               settings={settings}
               defaultSettings={defaultSettings}
               onChange={onSettingsChange}
+              size={size}
+              onSizeChange={onSizeChange}
             />
           </div>
         </div>
