@@ -67,6 +67,8 @@ export const TransactionSchema = z
     cashMonth: z.string().optional(),
     isInvoicePayment: z.boolean().optional(),
     isReceivableSettlement: z.boolean().optional(),
+    indexer: z.string().trim().optional(),
+    cdiPercentage: z.number().min(0).optional(),
     deletedAt: z.string().optional(),
     rev: z.number().optional()
   })

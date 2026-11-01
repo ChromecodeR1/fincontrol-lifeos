@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import { Fuel, Wallet, X, Layers, Gauge, CreditCard, Loader2, ArrowLeftRight, Users, Sparkles, Plus } from "lucide-react";
+import { Fuel, Wallet, X, Layers, Gauge, CreditCard, Loader2, ArrowLeftRight, Users, Sparkles, Plus, TrendingUp } from "lucide-react";
 import {
   BankItem,
   CategoryCatalogItem,
@@ -46,6 +46,8 @@ export interface TransactionFormState {
   linkedReceivableId?: string;
   fuelType?: "Gasolina" | "Etanol";
   fullTank?: boolean;
+  indexer?: string;
+  cdiPercentage?: string;
 }
 
 export interface TransactionModalProps {
@@ -1239,6 +1241,86 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   onChange={(e) => setFormState((prev) => ({ ...prev, debtor: e.target.value }))}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-amber-500/40 text-white"
                 />
+              </div>
+            )}
+
+            {/* SPRINT 30: Indexador / Rendimento Automático CDI para Aportes */}
+            {(formState.category === "Aporte" || formState.category.includes("Aporte") || formState.category.includes("Investimento")) && (
+              <div className="rounded-2xl p-4 bg-emerald-950/20 border border-emerald-500/30 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <label className="text-emerald-300 font-bold text-xs flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    <span>Indexador / Rendimento do Aporte</span>
+                  </label>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono font-bold">
+                    BCB SGS Ao Vivo
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { label: "115% CDI (Turbo)", val: "115% CDI (Caixinha Turbo)", pct: "115" },
+                    { label: "100% CDI", val: "100% CDI", pct: "100" },
+                    { label: "120% CDI", val: "120% CDI", pct: "120" },
+                    { label: "Personalizado", val: "Personalizado", pct: "" }
+                  ].map((preset) => {
+                    const isSelected =
+                      preset.val === "Personalizado"
+                        ? formState.indexer &&
+                          !["115% CDI (Caixinha Turbo)", "100% CDI", "120% CDI"].includes(formState.indexer)
+                        : formState.indexer === preset.val || (!formState.indexer && preset.pct === "115");
+
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          if (preset.val === "Personalizado") {
+                            setFormState((prev) => ({
+                              ...prev,
+                              indexer: prev.indexer && !["115% CDI (Caixinha Turbo)", "100% CDI", "120% CDI"].includes(prev.indexer) ? prev.indexer : "Personalizado",
+                              cdiPercentage: prev.cdiPercentage || "100"
+                            }));
+                          } else {
+                            setFormState((prev) => ({
+                              ...prev,
+                              indexer: preset.val,
+                              cdiPercentage: preset.pct
+                            }));
+                          }
+                        }}
+                        className={`px-2.5 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer text-center ${
+                          isSelected
+                            ? "bg-emerald-500/25 border-emerald-400 text-emerald-200 shadow-sm"
+                            : "bg-slate-950/80 border-white/10 text-slate-400 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Campo customizado se selecionado personalizado */}
+                {formState.indexer &&
+                  !["115% CDI (Caixinha Turbo)", "100% CDI", "120% CDI"].includes(formState.indexer) && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder="Ex: 110% CDI ou LCI 95% CDI"
+                        value={formState.indexer === "Personalizado" ? "" : formState.indexer}
+                        onChange={(e) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            indexer: e.target.value,
+                            cdiPercentage: e.target.value.replace(/\D/g, "") || "100"
+                          }))
+                        }
+                        className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-emerald-500/40 text-white text-xs outline-none focus:border-emerald-400 font-mono"
+                      />
+                      <span className="text-[11px] text-slate-400 shrink-0">% do CDI</span>
+                    </div>
+                  )}
               </div>
             )}
             {/* SPRINT 13: Divisão de Gasto (Rachar Conta / Split Transaction) */}

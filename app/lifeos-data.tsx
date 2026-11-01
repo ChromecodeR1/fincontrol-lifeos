@@ -29,6 +29,10 @@ import {
   isNeutralFlow
 } from "./lib/domain/finance";
 import {
+  InvestmentYieldConfig,
+  calculatePortfolioCdiYield
+} from "./lib/domain/investment-yield";
+import {
   Banknote,
   CreditCard,
   PiggyBank,
@@ -139,6 +143,8 @@ export interface Transaction {
   isSplitChild?: boolean;
   linkedSplitParentId?: string;
   notes?: string;
+  indexer?: string;
+  cdiPercentage?: number;
   deletedAt?: string;
   rev?: number;
 }
@@ -1147,6 +1153,8 @@ export function convertPatrimonioItemToTransaction(item: PatrimonioImportItem): 
     paymentMethod: "PIX",
     bankAccount: item.institution,
     status: "Pago",
+    indexer: item.modality,
+    cdiPercentage: 115,
     notes: item.notes || undefined,
     updatedAt: `${item.date}T12:00:00Z`
   };
@@ -1579,6 +1587,10 @@ export interface PatrimonyDataPoint {
   aportado: number;
   acumulado: number;
   resgatado?: number;
+  capitalAportadoPuro?: number;
+  rendimentoBruto?: number;
+  rendimentoLiquido?: number;
+  acumuladoComRendimento?: number;
   [key: string]: unknown;
 }
 
@@ -1601,12 +1613,21 @@ export interface PatrimonyEvolutionResult {
   totalAportes: number;
   totalResgates: number;
   saldoFinal: number;
+  currentCapitalAportado?: number;
+  grossYieldAccumulated?: number;
+  netYieldEstimated?: number;
+  saldoComRendimentoBruto?: number;
+  saldoComRendimentoLiquido?: number;
+  cdiAnnualRateUsed?: number;
+  appliedCdiPercentage?: number;
+  manualAdjustmentApplied?: number;
 }
 
 export function calculatePatrimonyEvolution(
   transactions: Transaction[],
   baseHistorical = HISTORICAL_INVESTMENTS,
-  initialReserveBalance: number = 0
+  initialReserveBalance: number = 0,
+  yieldConfig?: InvestmentYieldConfig
 ): PatrimonyEvolutionResult {
   const investTxs = transactions.filter((t) => {
     if (t.isSplitChild || t.deletedAt) return false;
@@ -1636,156 +1657,93 @@ export function calculatePatrimonyEvolution(
 
   const hasEarlyHistory = investTxs.some((t) => getYearMonthKey(t.date) < "2026-05");
 
-  if (!hasEarlyHistory && investTxs.length === 0 && initialReserveBalance <= 0) {
-    // Conta limpa sem investimentos
+  // Se houver lançamentos de investimento (histórico real), aciona o motor puro de cálculo de rendimentos CDI
+  if (hasEarlyHistory || investTxs.length > 0) {
+    const yieldResult = calculatePortfolioCdiYield(investTxs, yieldConfig, initialReserveBalance);
     return {
-      data: [],
-      hasDeficit: false,
-      deficitAmount: 0,
-      totalAportes: 0,
-      totalResgates: 0,
-      saldoFinal: 0
+      data: yieldResult.data,
+      hasDeficit: yieldResult.hasDeficit,
+      deficitAmount: yieldResult.deficitAmount,
+      totalAportes: yieldResult.totalAportes,
+      totalResgates: yieldResult.totalResgates,
+      saldoFinal: yieldResult.saldoFinal,
+      currentCapitalAportado: yieldResult.currentCapitalAportado,
+      grossYieldAccumulated: yieldResult.grossYieldAccumulated,
+      netYieldEstimated: yieldResult.netYieldEstimated,
+      saldoComRendimentoBruto: yieldResult.saldoComRendimentoBruto,
+      saldoComRendimentoLiquido: yieldResult.saldoComRendimentoLiquido,
+      cdiAnnualRateUsed: yieldResult.cdiAnnualRateUsed,
+      appliedCdiPercentage: yieldResult.appliedCdiPercentage,
+      manualAdjustmentApplied: yieldResult.manualAdjustmentApplied
     };
   }
 
-  if (!hasEarlyHistory && baseHistorical.length > 0 && initialReserveBalance <= 0) {
-    const base: PatrimonyDataPoint[] = [...baseHistorical];
-    let runningTotal = base[base.length - 1]?.acumulado || 8200;
-
-    const monthsMap = new Map<string, { aportes: number; resgates: number }>();
-    investTxs.forEach((t) => {
-      const m = getYearMonthKey(t.date);
-      if (m > "2026-08") {
-        const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
-        if (isResgateCategory(t.category)) {
-          entry.resgates = safeAdd(entry.resgates, t.amount);
-        } else {
-          entry.aportes = safeAdd(entry.aportes, t.amount);
-        }
-        monthsMap.set(m, entry);
-      }
-    });
-
-    Array.from(monthsMap.keys())
-      .sort()
-      .forEach((m) => {
-        const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
-        const liquidAporte = safeSub(entry.aportes, entry.resgates);
-        const nextRunning = safeAdd(runningTotal, liquidAporte);
-        if (nextRunning < 0) {
-          hasOverallDeficit = true;
-          maxDeficit = Math.max(maxDeficit, Math.abs(nextRunning));
-          runningTotal = 0;
-        } else {
-          runningTotal = nextRunning;
-        }
-        base.push({
-          month: m,
-          label: formatMonthShortLabel(m),
-          aportado: entry.aportes, // SOMA BRUTA DOS APORTES (NUNCA NEGATIVO)
-          acumulado: runningTotal,
-          resgatado: entry.resgates
-        });
-      });
-
-    return {
-      data: base,
-      hasDeficit: hasOverallDeficit,
-      deficitAmount: maxDeficit,
-      totalAportes: totAportes,
-      totalResgates: totResgates,
-      saldoFinal: runningTotal
-    };
-  }
-
-  // Agrupa todas as transações de investimento por mês
-  const monthsMap = new Map<string, { aportes: number; resgates: number }>();
-  investTxs.forEach((t) => {
-    const m = getYearMonthKey(t.date);
-    const entry = monthsMap.get(m) || { aportes: 0, resgates: 0 };
-    if (isResgateCategory(t.category)) {
-      entry.resgates = safeAdd(entry.resgates, t.amount);
-    } else {
-      entry.aportes = safeAdd(entry.aportes, t.amount);
-    }
-    monthsMap.set(m, entry);
-  });
-
-  const allMonths = Array.from(monthsMap.keys()).sort();
-  if (allMonths.length === 0) {
-    if (initialReserveBalance > 0) {
-      const todayKey = getYearMonthKey(todayBR());
+  if (investTxs.length === 0 && initialReserveBalance <= 0) {
+    if (baseHistorical.length > 0) {
+      const enrichedBase: PatrimonyDataPoint[] = baseHistorical.map((b) => ({
+        ...b,
+        capitalAportadoPuro: b.acumulado,
+        rendimentoBruto: 0,
+        rendimentoLiquido: 0,
+        acumuladoComRendimento: b.acumulado
+      }));
+      const last = enrichedBase[enrichedBase.length - 1];
+      const val = last?.acumulado || 8200;
       return {
-        data: [
-          {
-            month: todayKey,
-            label: formatMonthShortLabel(todayKey),
-            aportado: 0,
-            acumulado: initialReserveBalance,
-            resgatado: 0
-          }
-        ],
+        data: enrichedBase,
         hasDeficit: false,
         deficitAmount: 0,
-        totalAportes: 0,
-        totalResgates: 0,
-        saldoFinal: initialReserveBalance
+        totalAportes: totAportes,
+        totalResgates: totResgates,
+        saldoFinal: val,
+        currentCapitalAportado: val,
+        grossYieldAccumulated: 0,
+        netYieldEstimated: 0,
+        saldoComRendimentoBruto: val,
+        saldoComRendimentoLiquido: val
       };
     }
+
     return {
       data: [],
       hasDeficit: false,
       deficitAmount: 0,
       totalAportes: 0,
       totalResgates: 0,
-      saldoFinal: 0
+      saldoFinal: 0,
+      currentCapitalAportado: 0,
+      grossYieldAccumulated: 0,
+      netYieldEstimated: 0,
+      saldoComRendimentoBruto: 0,
+      saldoComRendimentoLiquido: 0
     };
   }
 
-  const minMonth = allMonths[0]; // e.g. "2025-12"
-  const maxMonth = allMonths[allMonths.length - 1]; // e.g. "2026-10"
-
-  const result: PatrimonyDataPoint[] = [];
-  let running = initialReserveBalance;
-
-  let cur = minMonth;
-  while (cur <= maxMonth) {
-    const entry = monthsMap.get(cur) || { aportes: 0, resgates: 0 };
-    const liquid = safeSub(entry.aportes, entry.resgates);
-    const nextRunning = safeAdd(running, liquid);
-    if (nextRunning < 0) {
-      hasOverallDeficit = true;
-      maxDeficit = Math.max(maxDeficit, Math.abs(nextRunning));
-      running = 0;
-    } else {
-      running = nextRunning;
-    }
-
-    result.push({
-      month: cur,
-      label: formatMonthShortLabel(cur),
-      aportado: entry.aportes, // SOMA BRUTA DOS APORTES (NUNCA NEGATIVO)
-      acumulado: running,
-      resgatado: entry.resgates
-    });
-
-    const [yStr, mStr] = cur.split("-");
-    let y = parseInt(yStr, 10);
-    let m = parseInt(mStr, 10) + 1;
-    if (m > 12) {
-      m = 1;
-      y += 1;
-    }
-    cur = `${y}-${String(m).padStart(2, "0")}`;
-  }
-
+  const todayKey = getYearMonthKey(todayBR());
   return {
-    data: result,
-    hasDeficit: hasOverallDeficit,
-    deficitAmount: maxDeficit,
-    totalAportes: totAportes,
-    totalResgates: totResgates,
-    saldoFinal: running
+    data: [
+      {
+        month: todayKey,
+        label: formatMonthShortLabel(todayKey),
+        aportado: 0,
+        acumulado: initialReserveBalance,
+        resgatado: 0,
+        capitalAportadoPuro: initialReserveBalance,
+        rendimentoBruto: 0,
+        rendimentoLiquido: 0,
+        acumuladoComRendimento: initialReserveBalance
+      }
+    ],
+    hasDeficit: false,
+    deficitAmount: 0,
+    totalAportes: 0,
+    totalResgates: 0,
+    saldoFinal: initialReserveBalance,
+    currentCapitalAportado: initialReserveBalance,
+    grossYieldAccumulated: 0,
+    netYieldEstimated: 0,
+    saldoComRendimentoBruto: initialReserveBalance,
+    saldoComRendimentoLiquido: initialReserveBalance
   };
 }
 

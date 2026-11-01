@@ -229,6 +229,10 @@ interface PatrimonyTooltipPayloadItem {
     aportado: number;
     acumulado: number;
     resgatado?: number;
+    capitalAportadoPuro?: number;
+    rendimentoBruto?: number;
+    rendimentoLiquido?: number;
+    acumuladoComRendimento?: number;
   };
 }
 
@@ -237,47 +241,73 @@ interface PatrimonyCyberTooltipProps {
   payload?: PatrimonyTooltipPayloadItem[];
   label?: string;
   moneyBlur?: string;
+  cdiPercentage?: number;
 }
 
-function PatrimonyCyberTooltip({ active, payload, label, moneyBlur = "" }: PatrimonyCyberTooltipProps) {
+function PatrimonyCyberTooltip({ active, payload, label, moneyBlur = "", cdiPercentage = 115 }: PatrimonyCyberTooltipProps) {
   if (!active || !payload || !payload.length) return null;
   const data = payload[0]?.payload;
   if (!data) return null;
 
+  const totalComJuros = data.acumuladoComRendimento ?? data.acumulado ?? 0;
+  const capitalPuro = data.capitalAportadoPuro ?? safeSub(totalComJuros, data.rendimentoBruto || 0);
+  const rendimento = data.rendimentoBruto || 0;
+
   return (
-    <div className="bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] backdrop-blur-md rounded-xl px-3.5 py-2.5 text-xs space-y-1.5 min-w-[210px]">
-      <p className="font-semibold text-slate-100 border-b border-white/10 pb-1 mb-1">
-        {label || data.label}
-      </p>
-      <div className="flex items-center justify-between gap-3">
-        <span className="flex items-center gap-1.5 text-slate-400">
-          <span className="w-2 h-2 rounded-full bg-[#0A84FF] shrink-0" />
-          Patrimônio Acumulado:
+    <div className="bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] backdrop-blur-md rounded-xl px-3.5 py-2.5 text-xs space-y-1.5 min-w-[240px]">
+      <div className="flex items-center justify-between border-b border-white/10 pb-1 mb-1">
+        <p className="font-semibold text-slate-100">
+          {label || data.label}
+        </p>
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[#0A84FF]/20 text-[#64D2FF] border border-[#0A84FF]/30 font-bold">
+          {cdiPercentage}% CDI
         </span>
-        <strong className={`text-white font-mono tabular-nums ${moneyBlur}`}>
-          {formatBRL(data.acumulado)}
+      </div>
+
+      {/* 1. Patrimônio Total (c/ Juros) */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-slate-300">
+          <span className="w-2 h-2 rounded-full bg-[#0A84FF] shrink-0" />
+          Patrimônio Total (c/ Juros):
+        </span>
+        <strong className={`text-white font-mono font-bold tabular-nums ${moneyBlur}`}>
+          {formatBRL(totalComJuros)}
         </strong>
       </div>
+
+      {/* 2. Capital Líquido Aportado */}
       <div className="flex items-center justify-between gap-3">
         <span className="flex items-center gap-1.5 text-slate-400">
           <span className="w-2 h-2 rounded-full bg-[#5E5CE6] shrink-0" />
-          Aportes Brutos no Mês:
+          Capital Líquido Aportado:
         </span>
-        <strong className={`text-[#5E5CE6] font-mono tabular-nums ${moneyBlur}`}>
-          {formatBRL(data.aportado)}
+        <strong className={`text-[#A5B4FC] font-mono tabular-nums ${moneyBlur}`}>
+          {formatBRL(capitalPuro)}
         </strong>
       </div>
-      {Boolean(data.resgatado && data.resgatado > 0) && (
-        <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/5">
-          <span className="flex items-center gap-1.5 text-slate-400">
-            <span className="w-2 h-2 rounded-full bg-[#FF453A] shrink-0" />
-            Resgates no Mês:
+
+      {/* 3. Rendimento Acumulado */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-[#30D158] shrink-0" />
+          Rendimento Acumulado ({cdiPercentage}% CDI):
+        </span>
+        <strong className={`text-[#30D158] font-mono font-bold tabular-nums ${moneyBlur}`}>
+          +{formatBRL(rendimento)}
+        </strong>
+      </div>
+
+      {/* 4. Aportes e Resgates no Mês */}
+      <div className="flex items-center justify-between gap-3 pt-1.5 border-t border-white/5 text-[11px]">
+        <span className="text-slate-400">
+          Aportes no Mês: <strong className={`text-white font-mono tabular-nums ${moneyBlur}`}>{formatBRL(data.aportado)}</strong>
+        </span>
+        {Boolean(data.resgatado && data.resgatado > 0) && (
+          <span className="text-[#FF453A]">
+            Resgates: <strong className={`font-mono tabular-nums ${moneyBlur}`}>{formatBRL(data.resgatado || 0)}</strong>
           </span>
-          <strong className={`text-[#FF453A] font-mono tabular-nums ${moneyBlur}`}>
-            {formatBRL(data.resgatado || 0)}
-          </strong>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -610,6 +640,22 @@ export default function CoindexApp() {
   const [dashboardLayout, setDashboardLayout] = useState<DashboardWidgetConfig[]>(DEFAULT_DASHBOARD_LAYOUT);
   const [showPatrimonyAportesCurve, setShowPatrimonyAportesCurve] = useState<boolean>(false);
 
+  // SPRINT 30: Motor de Rendimento Automático CDI via API do Banco Central
+  const [marketRates, setMarketRates] = useState<{
+    cdiAnnualRate: number;
+    dailyFactor252: number;
+    updatedAt: string;
+    source: string;
+  }>({
+    cdiAnnualRate: 13.65,
+    dailyFactor252: 0.000508,
+    updatedAt: "29/10/2026",
+    source: "BCB-SGS"
+  });
+  const [yieldMode, setYieldMode] = useState<"bruto" | "liquido" | "aportes">("bruto");
+  const [manualAdjustment, setManualAdjustment] = useState<number>(0);
+  const [showAdjustmentInput, setShowAdjustmentInput] = useState<boolean>(false);
+
   // SPRINT 29: Dashboard 2.0 States (Multi-View Patrimônio, Drill-Down Donut e Radar)
   const [patrimonyCardView, setPatrimonyCardView] = useState<"patrimony" | "pace" | "forecast">("patrimony");
   const [selectedCategoryDrillDown, setSelectedCategoryDrillDown] = useState<string | null>(null);
@@ -885,6 +931,8 @@ export default function CoindexApp() {
     linkedReceivableId?: string;
     fuelType?: "Gasolina" | "Etanol";
     fullTank?: boolean;
+    indexer?: string;
+    cdiPercentage?: string;
   }>({
     date: "2026-10-20",
     description: "",
@@ -908,7 +956,9 @@ export default function CoindexApp() {
     personalAmount: "",
     linkedReceivableId: "",
     fuelType: "Gasolina",
-    fullTank: true
+    fullTank: true,
+    indexer: "115% CDI (Caixinha Turbo)",
+    cdiPercentage: "115"
   });
 
   // Estados das Abas Secundárias
@@ -1129,6 +1179,11 @@ export default function CoindexApp() {
         if (sAutoLayout) setAutoDashboardLayout(JSON.parse(sAutoLayout));
         const sAutoWidgetConfigs = localStorage.getItem("lifeos_auto_widget_configs_v1");
         if (sAutoWidgetConfigs) setAutoWidgetConfigs(JSON.parse(sAutoWidgetConfigs));
+
+        const sAdj = localStorage.getItem("coindex_patrimony_real_adjustment");
+        if (sAdj) setManualAdjustment(parseFloat(sAdj) || 0);
+        const sYMode = localStorage.getItem("coindex_patrimony_yield_mode") as "bruto" | "liquido" | "aportes" | null;
+        if (sYMode && ["bruto", "liquido", "aportes"].includes(sYMode)) setYieldMode(sYMode);
       } catch (e) {
         console.error("Erro ao ler cache local:", e);
       }
@@ -1305,6 +1360,33 @@ export default function CoindexApp() {
 
     syncInitialSupabaseData();
   }, [currentUser, cloudLoadedForUser]);
+
+  // SPRINT 30: Consulta Oficial ao SGS / Banco Central do Brasil para Taxa CDI
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/market-rates")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && data && typeof data.cdiAnnualRate === "number") {
+          setMarketRates(data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleSetYieldMode = (mode: "bruto" | "liquido" | "aportes") => {
+    setYieldMode(mode);
+    localStorage.setItem("coindex_patrimony_yield_mode", mode);
+  };
+
+  const handleSaveManualAdjustment = (val: number) => {
+    setManualAdjustment(val);
+    localStorage.setItem("coindex_patrimony_real_adjustment", String(val));
+    notify("Ajuste de Saldo Salvo", `Ajuste patrimonial de ${formatBRL(val)} calibrado com sucesso.`, "success");
+  };
 
   const changeThemeMode = (m: ThemeMode) => {
     setThemeMode(m);
@@ -1739,8 +1821,13 @@ export default function CoindexApp() {
   }, [transactions, getFlowType]);
 
   const patrimonyEvolution = useMemo(() => {
-    return calculatePatrimonyEvolution(transactions, HISTORICAL_INVESTMENTS, initialPatrimony);
-  }, [transactions, initialPatrimony]);
+    return calculatePatrimonyEvolution(transactions, HISTORICAL_INVESTMENTS, initialPatrimony, {
+      cdiAnnualRate: marketRates.cdiAnnualRate,
+      defaultCdiPercentage: 115,
+      manualAdjustment: manualAdjustment,
+      yieldMode: yieldMode
+    });
+  }, [transactions, initialPatrimony, marketRates.cdiAnnualRate, manualAdjustment, yieldMode]);
   const patrimonyChartData = patrimonyEvolution.data;
 
   const filteredPatrimonyChartData = useMemo(() => {
@@ -2728,7 +2815,9 @@ export default function CoindexApp() {
       thirdPartyAmount: "",
       thirdPartyName: "",
       personalAmount: "",
-      linkedReceivableId: ""
+      linkedReceivableId: "",
+      indexer: "115% CDI (Caixinha Turbo)",
+      cdiPercentage: "115"
     });
     setShowTxModal(true);
   };
@@ -2783,7 +2872,9 @@ export default function CoindexApp() {
       personalAmount: tx.personalAmount != null ? String(tx.personalAmount) : "",
       linkedReceivableId: tx.linkedReceivableId || "",
       fuelType: tx.fuelType || (isEtanol ? "Etanol" : "Gasolina"),
-      fullTank: tx.fullTank ?? true
+      fullTank: tx.fullTank ?? true,
+      indexer: tx.indexer || (tx.category.toLowerCase().includes("aporte") ? "115% CDI (Caixinha Turbo)" : undefined),
+      cdiPercentage: tx.cdiPercentage ? String(tx.cdiPercentage) : (tx.category.toLowerCase().includes("aporte") ? "115" : undefined)
     });
     setShowTxModal(true);
   };
@@ -2853,7 +2944,9 @@ export default function CoindexApp() {
       thirdPartyAmount: parsedThirdAmount,
       thirdPartyName: cleanThirdName,
       personalAmount: calculatedPersonal,
-      linkedReceivableId: newTx.linkedReceivableId || undefined
+      linkedReceivableId: newTx.linkedReceivableId || undefined,
+      indexer: newTx.indexer || undefined,
+      cdiPercentage: newTx.cdiPercentage ? parseFloat(newTx.cdiPercentage) : undefined
     });
 
     if (!validation.success) {
@@ -2987,6 +3080,8 @@ export default function CoindexApp() {
                 thirdPartyName: cleanThirdName,
                 personalAmount: calculatedPersonal,
                 linkedReceivableId: finalLinkedReceivableId,
+                indexer: newTx.indexer,
+                cdiPercentage: newTx.cdiPercentage ? parseFloat(newTx.cdiPercentage) : undefined,
                 updatedAt: nowIso
               };
               return editedItem;
@@ -3125,6 +3220,8 @@ export default function CoindexApp() {
           thirdPartyName: cleanThirdName,
           personalAmount: calculatedPersonal,
           linkedReceivableId: childId,
+          indexer: newTx.indexer,
+          cdiPercentage: newTx.cdiPercentage ? parseFloat(newTx.cdiPercentage) : undefined,
           updatedAt: nowIso
         };
 
@@ -5389,7 +5486,7 @@ export default function CoindexApp() {
 
                     const processedPatrimonyData = applyZeroHandling(
                       filteredPatrimonyChartData as unknown as Array<Record<string, unknown>>,
-                      ["acumulado", "aportado", "resgatado"],
+                      ["acumulado", "aportado", "resgatado", "capitalAportadoPuro", "rendimentoBruto", "acumuladoComRendimento"],
                       cfg.zeroHandling
                     );
 
@@ -5627,29 +5724,109 @@ export default function CoindexApp() {
                                   </div>
                                 )}
 
-                                <div className="flex flex-wrap items-baseline gap-2.5">
-                                  <span className={`text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums tracking-tight ${moneyBlur}`}>
-                                    {formatBRL(patrimonyStats.currentValue)}
-                                  </span>
-                                  <span
-                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-mono font-bold tabular-nums border ${
-                                      patrimonyStats.isPositive
-                                        ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
-                                        : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
-                                    }`}
-                                  >
-                                    {patrimonyStats.isPositive ? (
-                                      <ArrowUpRight className="w-3.5 h-3.5 text-[#30D158]" />
-                                    ) : (
-                                      <ArrowDownRight className="w-3.5 h-3.5 text-[#FF453A]" />
-                                    )}
-                                    <span>
-                                      {patrimonyStats.isPositive ? "+" : ""}
-                                      {formatBRL(patrimonyStats.diffAmount)} ({patrimonyStats.diffPercent >= 0 ? "+" : ""}
-                                      {patrimonyStats.diffPercent.toFixed(1).replace(".", ",")}%)
+                                <div className="flex flex-wrap items-center gap-2.5">
+                                  <div className="flex flex-wrap items-baseline gap-2">
+                                    <span className={`text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums tracking-tight ${moneyBlur}`}>
+                                      {formatBRL(patrimonyStats.currentValue)}
                                     </span>
-                                  </span>
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-mono font-bold tabular-nums border ${
+                                        patrimonyStats.isPositive
+                                          ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
+                                          : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
+                                      }`}
+                                    >
+                                      {patrimonyStats.isPositive ? (
+                                        <ArrowUpRight className="w-3.5 h-3.5 text-[#30D158]" />
+                                      ) : (
+                                        <ArrowDownRight className="w-3.5 h-3.5 text-[#FF453A]" />
+                                      )}
+                                      <span>
+                                        {patrimonyStats.isPositive ? "+" : ""}
+                                        {formatBRL(patrimonyStats.diffAmount)} ({patrimonyStats.diffPercent >= 0 ? "+" : ""}
+                                        {patrimonyStats.diffPercent.toFixed(1).replace(".", ",")}%)
+                                      </span>
+                                    </span>
+                                  </div>
+
+                                  {/* SPRINT 30: Badge Cupertino com Rendimento CDI Oficial BCB */}
+                                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold shadow-xs">
+                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                    <span>
+                                      +{formatBRL(yieldMode === "liquido" ? (patrimonyEvolution.netYieldEstimated || 0) : (patrimonyEvolution.grossYieldAccumulated || 0))} de Rendimento
+                                    </span>
+                                    <span className="text-[10px] text-emerald-400/80 font-normal">
+                                      ({patrimonyEvolution.appliedCdiPercentage || 115}% CDI • BCB Ao Vivo)
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowAdjustmentInput((prev) => !prev)}
+                                      title="Calibrar Ajuste de Saldo Real do App (Nubank/BTG)"
+                                      className="ml-1 text-emerald-400/70 hover:text-white cursor-pointer transition p-0.5"
+                                    >
+                                      <SlidersHorizontal className="w-3 h-3" />
+                                    </button>
+                                  </div>
+
+                                  {/* SPRINT 30: Toggle Rápido [Bruto | Líquido IR | Só Aportes] */}
+                                  <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs sm:ml-auto">
+                                    {(
+                                      [
+                                        { id: "bruto", label: "Bruto" },
+                                        { id: "liquido", label: "Líquido IR" },
+                                        { id: "aportes", label: "Só Aportes" }
+                                      ] as const
+                                    ).map((mode) => (
+                                      <button
+                                        key={mode.id}
+                                        type="button"
+                                        onClick={() => handleSetYieldMode(mode.id)}
+                                        className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all cursor-pointer ${
+                                          yieldMode === mode.id
+                                            ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
+                                            : "text-slate-400 hover:text-white hover:bg-white/5"
+                                        }`}
+                                      >
+                                        {mode.label}
+                                      </button>
+                                    ))}
+                                  </div>
                                 </div>
+
+                                {showAdjustmentInput && (
+                                  <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 text-xs">
+                                    <span className="text-slate-300 font-semibold text-[11px] shrink-0">
+                                      Ajuste de Saldo Real do App (Nubank/BTG):
+                                    </span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="Ex: 0.00 ou -12.50"
+                                      defaultValue={manualAdjustment || ""}
+                                      id="patrimonyManualAdjustmentInput"
+                                      className="w-32 px-2.5 py-1 rounded-lg bg-black/60 border border-white/15 text-white font-mono text-xs outline-none focus:border-emerald-400"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const el = document.getElementById("patrimonyManualAdjustmentInput") as HTMLInputElement;
+                                        const val = parseFloat(el?.value) || 0;
+                                        handleSaveManualAdjustment(val);
+                                        setShowAdjustmentInput(false);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40 font-semibold cursor-pointer text-xs"
+                                    >
+                                      Salvar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowAdjustmentInput(false)}
+                                      className="px-2 py-1 text-slate-400 hover:text-white text-xs cursor-pointer"
+                                    >
+                                      Fechar
+                                    </button>
+                                  </div>
+                                )}
 
                                 <div className={`${chartHeightClass} select-none transition-all duration-300`}>
                                   <ResponsiveContainer width="100%" height="100%">
@@ -5680,30 +5857,43 @@ export default function CoindexApp() {
                                             return `R$ ${num}`;
                                           }}
                                         />
-                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
+                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} cdiPercentage={patrimonyEvolution.appliedCdiPercentage || 115} />} cursor={false} />
                                         {milestones.map((m) => (
                                           <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
                                         ))}
                                         <Line
                                           type={cfg.curveType || "monotone"}
                                           dataKey="acumulado"
-                                          name="Patrimônio Acumulado"
+                                          name={yieldMode === "aportes" ? "Capital Aportado" : "Patrimônio Total c/ CDI"}
                                           stroke={primaryColor}
                                           strokeWidth={cfg.strokeWidth || 2.5}
                                           dot={cfg.showDots ? { r: 3.5, fill: primaryColor, stroke: "#07030f", strokeWidth: 1.5 } : false}
                                           activeDot={{ r: 5, strokeWidth: 2, stroke: primaryColor, fill: "#0d061c" }}
                                           connectNulls={true}
                                         />
-                                        {showPatrimonyAportesCurve && (
+                                        {yieldMode !== "aportes" && (
                                           <Line
                                             type={cfg.curveType || "monotone"}
-                                            dataKey="aportado"
-                                            name="Aportes Brutos"
+                                            dataKey="capitalAportadoPuro"
+                                            name="Capital Aportado Puro"
                                             stroke="#5E5CE6"
                                             strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
                                             strokeDasharray="4 4"
                                             dot={cfg.showDots ? { r: 3, fill: "#5E5CE6", stroke: "#07030f", strokeWidth: 1.5 } : false}
                                             activeDot={{ r: 4, stroke: "#5E5CE6", fill: "#0d061c" }}
+                                            connectNulls={true}
+                                          />
+                                        )}
+                                        {showPatrimonyAportesCurve && (
+                                          <Line
+                                            type={cfg.curveType || "monotone"}
+                                            dataKey="aportado"
+                                            name="Aportes no Mês"
+                                            stroke="#30D158"
+                                            strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
+                                            strokeDasharray="2 2"
+                                            dot={cfg.showDots ? { r: 2.5, fill: "#30D158", stroke: "#07030f", strokeWidth: 1 } : false}
+                                            activeDot={{ r: 3.5, stroke: "#30D158", fill: "#0d061c" }}
                                             connectNulls={true}
                                           />
                                         )}
@@ -5716,12 +5906,16 @@ export default function CoindexApp() {
                                       >
                                         <defs>
                                           <linearGradient id={`gradPatrimony_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor={primaryColor} stopOpacity={cfg.fillArea !== false ? 0.28 : 0} />
+                                            <stop offset="0%" stopColor={primaryColor} stopOpacity={cfg.fillArea !== false ? 0.32 : 0} />
                                             <stop offset="100%" stopColor={primaryColor} stopOpacity={0.00} />
                                           </linearGradient>
-                                          <linearGradient id={`gradAporte_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
+                                          <linearGradient id={`gradCapitalPuro_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="0%" stopColor="#5E5CE6" stopOpacity={cfg.fillArea !== false ? 0.18 : 0} />
                                             <stop offset="100%" stopColor="#5E5CE6" stopOpacity={0.00} />
+                                          </linearGradient>
+                                          <linearGradient id={`gradAporte_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#30D158" stopOpacity={cfg.fillArea !== false ? 0.12 : 0} />
+                                            <stop offset="100%" stopColor="#30D158" stopOpacity={0.00} />
                                           </linearGradient>
                                         </defs>
                                         {cfg.showGrid && (
@@ -5745,14 +5939,14 @@ export default function CoindexApp() {
                                             return `R$ ${num}`;
                                           }}
                                         />
-                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
+                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} cdiPercentage={patrimonyEvolution.appliedCdiPercentage || 115} />} cursor={false} />
                                         {milestones.map((m) => (
                                           <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
                                         ))}
                                         <Area
                                           type={cfg.curveType || "monotone"}
                                           dataKey="acumulado"
-                                          name="Patrimônio Acumulado"
+                                          name={yieldMode === "aportes" ? "Capital Aportado" : "Patrimônio Total c/ CDI"}
                                           stroke={primaryColor}
                                           strokeWidth={cfg.strokeWidth || 2.5}
                                           dot={cfg.showDots ? { r: 3.5, fill: primaryColor, stroke: "#07030f", strokeWidth: 1.5 } : false}
@@ -5761,15 +5955,31 @@ export default function CoindexApp() {
                                           fillOpacity={1}
                                           connectNulls={true}
                                         />
+                                        {yieldMode !== "aportes" && (
+                                          <Area
+                                            type={cfg.curveType || "monotone"}
+                                            dataKey="capitalAportadoPuro"
+                                            name="Capital Aportado Puro"
+                                            stroke="#5E5CE6"
+                                            strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
+                                            strokeDasharray="4 4"
+                                            dot={cfg.showDots ? { r: 3, fill: "#5E5CE6", stroke: "#07030f", strokeWidth: 1.5 } : false}
+                                            activeDot={{ r: 4, stroke: "#5E5CE6", fill: "#0d061c" }}
+                                            fill={cfg.fillArea !== false ? `url(#gradCapitalPuro_${widget.id})` : "none"}
+                                            fillOpacity={1}
+                                            connectNulls={true}
+                                          />
+                                        )}
                                         {showPatrimonyAportesCurve && (
                                           <Area
                                             type={cfg.curveType || "monotone"}
                                             dataKey="aportado"
-                                            name="Aportes Brutos"
-                                            stroke="#5E5CE6"
+                                            name="Aportes no Mês"
+                                            stroke="#30D158"
                                             strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
-                                            dot={cfg.showDots ? { r: 3, fill: "#5E5CE6", stroke: "#07030f", strokeWidth: 1.5 } : false}
-                                            activeDot={{ r: 4, stroke: "#5E5CE6", fill: "#0d061c" }}
+                                            strokeDasharray="2 2"
+                                            dot={cfg.showDots ? { r: 2.5, fill: "#30D158", stroke: "#07030f", strokeWidth: 1 } : false}
+                                            activeDot={{ r: 3.5, stroke: "#30D158", fill: "#0d061c" }}
                                             fill={cfg.fillArea !== false ? `url(#gradAporte_${widget.id})` : "none"}
                                             fillOpacity={1}
                                             connectNulls={true}

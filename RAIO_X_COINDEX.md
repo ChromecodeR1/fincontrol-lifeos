@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.21.0`  
-> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 29 — Dashboard 2.0 Estilo Copilot Money & Monarch: Bento Grid Inteligente, Curva de Ritmo de Gastos, Projeção 6M, Drill-Down no Donut e Radar de Pendências)  
+> **Versão da Aplicação:** `0.22.0`  
+> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 30 — Motor de Rendimento Automático de Investimentos via API Oficial do Banco Central do Brasil + Curva de Juros Acumulados CDI no Gráfico "Evolução do Meu Patrimônio")  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -41,12 +41,13 @@ fincontrol-lifeos/
 │   │   ├── domain/
 │   │   │   ├── date-br.ts                 # Motor de Datas Brasileiro Puro (DD-MM-YYYY, anti-UTC shift)
 │   │   │   ├── finance.ts                 # Motor Contábil Puro (Centavos inteiros, restos exatos, competência/caixa)
+│   │   │   ├── investment-yield.ts        # Motor de Rendimento Automático CDI e Capitalização Diária (Sprint 30)
 │   │   │   └── user-storage.ts            # Isolamento de Cache por Usuário (userId namespace, tombstones & soft delete)
 │   │   ├── services/coindex-supabase.ts   # CRUD completo e persistência no Supabase PostgreSQL
 │   │   ├── services/spotify-supabase.ts   # Persistência de tokens e preferências Spotify
 │   │   └── supabase/                      # Clientes Supabase Client & Server
 │   ├── components/
-│   │   ├── TransactionModal.tsx           # Modal completo de novo lançamento/edição
+│   │   ├── TransactionModal.tsx           # Modal completo de novo lançamento/edição (com indexador % CDI)
 │   │   ├── SpotifyModule.tsx              # Player cibernético, telemetria e rateio familiar do Spotify
 │   │   ├── VehiclesTab.tsx                # Telemetria automotiva, consumo km/L e Inmetro
 │   │   ├── BanksTab.tsx                   # Gestão de contas bancárias, cartões e limites
@@ -56,7 +57,9 @@ fincontrol-lifeos/
 │   │   ├── CoindexLogo.tsx                # Componente da logo Fintech Prism (isométrica)
 │   │   ├── ChartCard.tsx                  # Container arrastável (Drag-and-Drop) de cards Recharts
 │   │   └── SpotifyLogo.tsx                # Ícone vetorial do Spotify
-│   └── api/auth/route.ts                  # Rota Next.js de autenticação e sessão
+│   ├── api/
+│   │   ├── auth/route.ts                  # Rota Next.js de autenticação e sessão
+│   │   └── market-rates/route.ts          # Rota oficial BCB SGS (Taxa CDI 252 d.u. com cache 1h)
 ```
 
 ### Mapeamento Detalhado de Linhas:
@@ -513,6 +516,24 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - Categorias no Donut interativas (`cursor-pointer`). Ao clicar em uma categoria, expande painel detalhado de drill-down com transações formatadas em `DD-MM-YYYY`, comparativo percentual `vs. mês anterior` e botão `"← Voltar"`.
   - **Widget "Radar de Pendências & Próximos Vencimentos":**
     - Sub-abas especializadas: Fixos a Lançar (com botão 1-clique "Lançar" individual e "Lançar Todos"), Contas Pendentes (com botão 1-clique "✓ Dar Baixa") e Vencimentos/Fechamentos de Faturas de Cartão.
+- **Sprint 30 — Motor de Rendimento Automático de Investimentos via API Oficial do Banco Central do Brasil + Curva de Juros Acumulados CDI no Gráfico "Evolução do Meu Patrimônio":**
+  - **Rota Oficial do Banco Central do Brasil (`app/api/market-rates/route.ts`):**
+    - Consulta em tempo real à API oficial do Sistema Gerenciador de Séries Temporais (SGS) do Banco Central do Brasil (Série `4389`: CDI anualizada base 252 dias úteis).
+    - Cache revalidado de 1 hora (`revalidate: 3600`) e fallback resiliente offline para `12.15% a.a.` em caso de instabilidade de rede.
+    - Retorno estruturado: `{ cdiAnnualRate, dailyFactor252, updatedAt, source }`.
+  - **Motor Matemático Puro de Capitalização Diária (`app/lib/domain/investment-yield.ts`):**
+    - Cálculo composto em dias úteis (segunda a sexta, base 252 d.u./ano): `dailyRate = ((1 + cdiAnnualRate / 100) ** (1 / 252) - 1) * (cdiPercentage / 100)`.
+    - Extração automática de percentual do CDI via Regex `/(\d+(?:[.,]\d+)?)\s*%\s*(?:do\s*)?CDI/i` (com fallback inteligente de 115% para Caixinha Turbo e 100% para outros aportes).
+    - Acumulação composta de Rendimento Bruto (`grossYieldAccumulated`) e Rendimento Líquido Estimado (`netYieldEstimated`) via tabela regressiva de IR de Renda Fixa (22,5% até 180d, 20% até 360d, 17,5% até 720d e 15% acima).
+    - Suporte a ajuste manual no centavo exato: **"Ajuste de Saldo Real do App (Nubank/BTG)"**, persistido no `localStorage`.
+  - **Redesign Multi-Séries do Gráfico "Evolução do Meu Patrimônio":**
+    - Cabeçalho executivo com Badge Cupertino ao vivo: `+R$ XXX,XX de Rendimento (115% CDI • BCB Ao Vivo)` e botão de calibração fina de saldo real.
+    - Controle segmentado de visões de rendimento: **`[Bruto | Líquido IR | Só Aportes]`**.
+    - Gráfico com duas áreas/linhas sobrepostas destacando visualmente os juros ganhos: **Patrimônio Total c/ CDI** (`acumulado`) e **Capital Aportado Puro** (`capitalAportadoPuro`), além de curva opcional de aportes no mês.
+    - `PatrimonyCyberTooltip` renovado com tipografia tabular (`tabular-nums`) e 4 métricas alinhadas: Patrimônio Total c/ Juros, Capital Líquido Aportado, Rendimento Acumulado e Aportes/Resgates no mês.
+  - **Campo de Indexador no Modal de Lançamentos (`TransactionModal.tsx`):**
+    - Quando selecionada a categoria `"Aporte"`, exibe seletor de rendimento com presets rápidos: `115% CDI (Turbo)`, `100% CDI`, `120% CDI` e `Personalizado % CDI`.
+  - **Integridade Contábil Rigorosa:** O rendimento da Caixinha valoriza o patrimônio líquido acumulado, mas NUNCA infla as receitas operacionais do mês nem o Saldo Livre para Gastar da conta corrente enquanto não resgatado.
 
 ---
 
