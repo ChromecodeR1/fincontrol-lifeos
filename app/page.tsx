@@ -45,7 +45,13 @@ import {
   Gauge,
   Layers,
   Trash2,
-  Info
+  Info,
+  Zap,
+  CalendarRange,
+  ArrowLeft,
+  Calendar,
+  Clock,
+  CheckCheck
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -125,6 +131,7 @@ import {
   formatDateBR,
   todayBR,
   todayISO,
+  daysInMonth,
   toSortableISO,
   compareDatesBR,
   getYearMonthKey,
@@ -275,6 +282,172 @@ function PatrimonyCyberTooltip({ active, payload, label, moneyBlur = "" }: Patri
   );
 }
 
+function SparklineSvg({
+  data,
+  color,
+  className = "w-16 h-7"
+}: {
+  data: number[];
+  color: string;
+  className?: string;
+}) {
+  if (!data || data.length < 2) return null;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const width = 60;
+  const height = 24;
+  const paddingY = 4;
+  const plotH = height - paddingY * 2;
+
+  const points = data.map((val, idx) => {
+    const x = (idx / (data.length - 1)) * (width - 6) + 3;
+    const y = height - paddingY - ((val - min) / range) * plotH;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const pathD = `M ${points.join(" L ")}`;
+  const lastPoint = points[points.length - 1].split(",");
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className={className} fill="none" preserveAspectRatio="none">
+      <path
+        d={pathD}
+        stroke={color}
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="opacity-75 group-hover:opacity-100 transition-opacity"
+      />
+      <circle
+        cx={lastPoint[0]}
+        cy={lastPoint[1]}
+        r="2"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
+interface PaceTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value: number; name: string; color?: string; dataKey: string }>;
+  label?: string;
+  moneyBlur?: string;
+}
+
+function PaceCyberTooltip({ active, payload, label, moneyBlur = "" }: PaceTooltipProps) {
+  if (!active || !payload || !payload.length) return null;
+  const realItem = payload.find((p) => p.dataKey === "real");
+  const idealItem = payload.find((p) => p.dataKey === "ideal");
+  const realVal = realItem?.value ?? null;
+  const idealVal = idealItem?.value ?? null;
+  const diff = realVal != null && idealVal != null ? idealVal - realVal : null;
+
+  return (
+    <div className="bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] backdrop-blur-md rounded-xl px-3.5 py-2.5 text-xs space-y-1.5 min-w-[210px]">
+      <p className="font-semibold text-slate-100 border-b border-white/10 pb-1 mb-1">{label}</p>
+      {realVal != null && (
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1.5 text-slate-400">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: diff != null && diff < 0 ? "#FF453A" : "#30D158" }}
+            />
+            Gasto Real Acumulado:
+          </span>
+          <strong className={`text-white font-mono tabular-nums ${moneyBlur}`}>
+            {formatBRL(realVal)}
+          </strong>
+        </div>
+      )}
+      {idealVal != null && (
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1.5 text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0" />
+            Ritmo Ideal Linear:
+          </span>
+          <strong className={`text-slate-300 font-mono tabular-nums ${moneyBlur}`}>
+            {formatBRL(idealVal)}
+          </strong>
+        </div>
+      )}
+      {diff != null && (
+        <div className="pt-1 border-t border-white/10 flex items-center justify-between gap-3 text-[11px]">
+          <span className="text-slate-400">Situação:</span>
+          <span
+            className={`font-mono font-bold tabular-nums ${
+              diff >= 0 ? "text-[#30D158]" : "text-[#FF453A]"
+            }`}
+          >
+            {diff >= 0 ? `+${formatBRL(diff)} abaixo do teto` : `${formatBRL(Math.abs(diff))} acima do teto`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ForecastPayloadItem {
+  value: number;
+  name: string;
+  fill?: string;
+  dataKey: string;
+  payload: {
+    label: string;
+    fixedCosts: number;
+    cardInstallments: number;
+    totalCommitted: number;
+    percentOfIncome: number;
+  };
+}
+
+function ForecastCyberTooltip({
+  active,
+  payload,
+  label,
+  moneyBlur = ""
+}: {
+  active?: boolean;
+  payload?: ForecastPayloadItem[];
+  label?: string;
+  moneyBlur?: string;
+}) {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0]?.payload;
+  if (!d) return null;
+
+  return (
+    <div className="bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] backdrop-blur-md rounded-xl px-3.5 py-2.5 text-xs space-y-1.5 min-w-[220px]">
+      <p className="font-semibold text-slate-100 border-b border-white/10 pb-1 mb-1">{label || d.label}</p>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-[#0A84FF] shrink-0" />
+          Custos Fixos Ativos:
+        </span>
+        <strong className={`text-white font-mono tabular-nums ${moneyBlur}`}>
+          {formatBRL(d.fixedCosts)}
+        </strong>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-[#FF9F0A] shrink-0" />
+          Parcelas de Cartão:
+        </span>
+        <strong className={`text-[#FF9F0A] font-mono tabular-nums ${moneyBlur}`}>
+          {formatBRL(d.cardInstallments)}
+        </strong>
+      </div>
+      <div className="pt-1 border-t border-white/10 flex items-center justify-between gap-3 text-[11px]">
+        <span className="text-slate-300 font-semibold">Total Comprometido:</span>
+        <strong className={`text-white font-mono font-bold tabular-nums ${moneyBlur}`}>
+          {formatBRL(d.totalCommitted)} ({d.percentOfIncome}%)
+        </strong>
+      </div>
+    </div>
+  );
+}
+
 export default function CoindexApp() {
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -342,6 +515,27 @@ export default function CoindexApp() {
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState("2026-10");
+
+  // Data de referência estável para SSR/Prerender (Next.js 16)
+  const [currentCalendarDate, setCurrentCalendarDate] = useState({
+    year: 2026,
+    month: 10,
+    day: 15,
+    yearMonth: "2026-10"
+  });
+
+  useEffect(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    setCurrentCalendarDate({
+      year: y,
+      month: m,
+      day,
+      yearMonth: `${y}-${String(m).padStart(2, "0")}`
+    });
+  }, []);
   const [accountingRegime, setAccountingRegime] = useState<"competencia" | "caixa">("competencia");
   const [patrimonyTimeRange, setPatrimonyTimeRange] = useState<"6M" | "1A" | "ALL">("ALL");
   const [quickFilter, setQuickFilter] = useState<QuickFilterType>("ALL");
@@ -415,6 +609,11 @@ export default function CoindexApp() {
   const [milestones] = useState<ChartMilestone[]>(INITIAL_MILESTONES);
   const [dashboardLayout, setDashboardLayout] = useState<DashboardWidgetConfig[]>(DEFAULT_DASHBOARD_LAYOUT);
   const [showPatrimonyAportesCurve, setShowPatrimonyAportesCurve] = useState<boolean>(false);
+
+  // SPRINT 29: Dashboard 2.0 States (Multi-View Patrimônio, Drill-Down Donut e Radar)
+  const [patrimonyCardView, setPatrimonyCardView] = useState<"patrimony" | "pace" | "forecast">("patrimony");
+  const [selectedCategoryDrillDown, setSelectedCategoryDrillDown] = useState<string | null>(null);
+  const [radarActiveTab, setRadarActiveTab] = useState<"fixos" | "pendentes" | "faturas">("fixos");
 
   // Layout e Configurações dos Gráficos da Aba Meus Veículos (Requisitos 1 e 3)
   const [autoInmetroConfig, setAutoInmetroConfig] = useState<AutoInmetroConfig>(DEFAULT_AUTO_INMETRO_CONFIG);
@@ -1770,6 +1969,471 @@ export default function CoindexApp() {
       globalComprometimento
     };
   }, [banks, cards, transactions]);
+
+  // SPRINT 29: Mini-Sparklines SVG (Últimos 6 meses para os 4 Slim KPI Cards)
+  const kpiSparklines = useMemo(() => {
+    const refMonth = selectedMonth !== "ALL" ? selectedMonth : currentCalendarDate.yearMonth;
+    const [yStr, mStr] = refMonth.split("-");
+    let y = parseInt(yStr, 10);
+    let m = parseInt(mStr, 10);
+    const months: string[] = [];
+    for (let i = 5; i >= 0; i--) {
+      let year = y;
+      let month = m - i;
+      while (month <= 0) {
+        month += 12;
+        year -= 1;
+      }
+      months.push(`${year}-${String(month).padStart(2, "0")}`);
+    }
+
+    const incomeList: number[] = [];
+    const expenseList: number[] = [];
+    const aportesList: number[] = [];
+    const balanceList: number[] = [];
+
+    for (const ym of months) {
+      const list = transactions.filter(
+        (t) =>
+          getTxMonthForRegime(t, accountingRegime) === ym &&
+          !isNeutralFlow(t) &&
+          !t.isSplitChild &&
+          getFlowType(t.category) !== "NEUTRAL"
+      );
+      const inc = safeAdd(...list.filter((t) => (t.flowType || getFlowType(t.category)) === "INCOME").map((t) => t.amount));
+      const exp = safeAdd(
+        ...list
+          .filter((t) => (t.flowType || getFlowType(t.category)) === "EXPENSE")
+          .map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+      );
+      const inv = list.filter((t) => (t.flowType || getFlowType(t.category)) === "INVESTMENT");
+      const ap = safeAdd(...inv.filter((t) => !isResgateCategory(t.category)).map((t) => t.amount));
+      const resg = safeAdd(...inv.filter((t) => isResgateCategory(t.category)).map((t) => t.amount));
+      const bal = safeSub(inc, safeAdd(exp, safeSub(ap, resg)));
+
+      incomeList.push(inc);
+      expenseList.push(exp);
+      aportesList.push(ap);
+      balanceList.push(bal);
+    }
+
+    return {
+      income: incomeList,
+      expense: expenseList,
+      aportes: aportesList,
+      balance: balanceList
+    };
+  }, [transactions, selectedMonth, currentCalendarDate.yearMonth, accountingRegime, getTxMonthForRegime, getFlowType]);
+
+  // SPRINT 29: Cota Diária Livre (R$/dia)
+  const dailyQuotaInfo = useMemo(() => {
+    const currentYearMonth = currentCalendarDate.yearMonth;
+    const targetMonth = selectedMonth !== "ALL" ? selectedMonth : currentYearMonth;
+    const [yStr, mStr] = targetMonth.split("-");
+    const totalDays = daysInMonth(parseInt(yStr, 10), parseInt(mStr, 10));
+
+    let remainingDays: number;
+    if (targetMonth === currentYearMonth) {
+      remainingDays = Math.max(1, totalDays - currentCalendarDate.day + 1);
+    } else if (targetMonth < currentYearMonth) {
+      remainingDays = 1;
+    } else {
+      remainingDays = totalDays;
+    }
+
+    const remainingFree = Math.max(0, effectivePersonalBudgetLimit - monthSummary.personalSpent);
+    const dailyBudget = remainingFree / remainingDays;
+
+    return {
+      remainingDays,
+      daysInMonth: totalDays,
+      remainingFree,
+      dailyBudget
+    };
+  }, [selectedMonth, effectivePersonalBudgetLimit, monthSummary.personalSpent, currentCalendarDate]);
+
+  // SPRINT 29: Alocação Real 50/30/20 (Fixos vs. Variáveis vs. Aportes)
+  const allocation503020 = useMemo(() => {
+    const fixedTxs = regimeTransactions.filter(
+      (t) =>
+        !isNeutralFlow(t) &&
+        !t.isSplitChild &&
+        (t.flowType || getFlowType(t.category)) === "EXPENSE" &&
+        t.costType === "Fixo"
+    );
+    const fixedTotal = safeAdd(
+      ...fixedTxs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+    );
+
+    const varTxs = regimeTransactions.filter(
+      (t) =>
+        !isNeutralFlow(t) &&
+        !t.isSplitChild &&
+        (t.flowType || getFlowType(t.category)) === "EXPENSE" &&
+        t.costType !== "Fixo"
+    );
+    const variableTotal = safeAdd(
+      ...varTxs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+    );
+
+    const investTotal = monthSummary.aportes;
+
+    const totalBase =
+      monthSummary.income > 0
+        ? monthSummary.income
+        : Math.max(1, safeAdd(fixedTotal, variableTotal, investTotal));
+
+    const pctFixed = Math.round((fixedTotal / totalBase) * 100);
+    const pctVariable = Math.round((variableTotal / totalBase) * 100);
+    const pctInvest = Math.round((investTotal / totalBase) * 100);
+
+    return {
+      fixedTotal,
+      variableTotal,
+      investTotal,
+      totalBase,
+      pctFixed,
+      pctVariable,
+      pctInvest
+    };
+  }, [regimeTransactions, monthSummary.income, monthSummary.aportes, getFlowType]);
+
+  // SPRINT 29: Multi-View - Curva de Ritmo de Gastos Diária (Pace)
+  const paceChartData = useMemo(() => {
+    const currentYearMonth = currentCalendarDate.yearMonth;
+    const targetMonth = selectedMonth !== "ALL" ? selectedMonth : currentYearMonth;
+    const [yStr, mStr] = targetMonth.split("-");
+    const yearNum = parseInt(yStr, 10);
+    const monthNum = parseInt(mStr, 10);
+    const totalDays = daysInMonth(yearNum, monthNum);
+
+    let maxDayTracked = totalDays;
+    if (targetMonth === currentYearMonth) {
+      maxDayTracked = currentCalendarDate.day;
+    } else if (targetMonth > currentYearMonth) {
+      maxDayTracked = 0;
+    }
+
+    const dailyPace = effectivePersonalBudgetLimit / totalDays;
+
+    const personalExpenses = regimeTransactions.filter(
+      (t) =>
+        !isNeutralFlow(t) &&
+        !t.isSplitChild &&
+        (t.flowType || getFlowType(t.category)) === "EXPENSE" &&
+        (t.category === "Gastos Pessoais" || t.category === "Gastos Pessoais / Besteiras" || t.costType !== "Fixo")
+    );
+
+    const spentByDay = new Map<number, number>();
+    for (const t of personalExpenses) {
+      let d = 1;
+      if (t.date && t.date.includes("-")) {
+        const parts = t.date.split("-");
+        if (parts[0].length === 4) {
+          d = parseInt(parts[2], 10);
+        } else {
+          d = parseInt(parts[0], 10);
+        }
+      }
+      const amt = t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount;
+      spentByDay.set(d, (spentByDay.get(d) || 0) + amt);
+    }
+
+    let accumulated = 0;
+    const data: Array<{
+      day: number;
+      dayLabel: string;
+      ideal: number;
+      real: number | null;
+    }> = [];
+
+    for (let day = 1; day <= totalDays; day++) {
+      const ideal = Math.round(dailyPace * day);
+      if (day <= maxDayTracked) {
+        accumulated = safeAdd(accumulated, spentByDay.get(day) || 0);
+        data.push({
+          day,
+          dayLabel: `Dia ${day}`,
+          ideal,
+          real: accumulated
+        });
+      } else {
+        data.push({
+          day,
+          dayLabel: `Dia ${day}`,
+          ideal,
+          real: null
+        });
+      }
+    }
+
+    const currentReal = maxDayTracked > 0 ? (data[maxDayTracked - 1]?.real ?? 0) : 0;
+    const currentIdeal = maxDayTracked > 0 ? (data[maxDayTracked - 1]?.ideal ?? 0) : 0;
+    const isBelowPace = currentReal <= currentIdeal;
+    const paceDiff = Math.abs(currentIdeal - currentReal);
+
+    return {
+      data,
+      daysInMonth: totalDays,
+      maxDayTracked,
+      currentReal,
+      currentIdeal,
+      isBelowPace,
+      paceDiff
+    };
+  }, [selectedMonth, effectivePersonalBudgetLimit, regimeTransactions, getFlowType, currentCalendarDate]);
+
+  const staticStatusSummary = useMemo(() => calculateStaticStatusSummary(staticStatus), [staticStatus]);
+
+  // SPRINT 29: Multi-View - Projeção 6 Meses de Comprometimento Futuro
+  const forecast6MData = useMemo(() => {
+    const currentYear = currentCalendarDate.year;
+    const currentMonth = currentCalendarDate.month;
+
+    const activeFixedItems = staticStatus.filter(
+      (s) => s.type === "Custo Fixo" && !s.deletedAt
+    );
+    const fixedMonthlyTotal = safeAdd(...activeFixedItems.map((s) => s.amount));
+
+    const baseIncome =
+      staticStatusSummary.rendaBase > 0
+        ? staticStatusSummary.rendaBase
+        : monthSummary.income > 0
+        ? monthSummary.income
+        : 6000;
+
+    const months: Array<{
+      key: string;
+      label: string;
+      fixedCosts: number;
+      cardInstallments: number;
+      totalCommitted: number;
+      percentOfIncome: number;
+    }> = [];
+
+    const monthNamesShort = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+    for (let i = 1; i <= 6; i++) {
+      let y = currentYear;
+      let m = currentMonth + i;
+      while (m > 12) {
+        m -= 12;
+        y += 1;
+      }
+      const key = `${y}-${String(m).padStart(2, "0")}`;
+      const label = `${monthNamesShort[m - 1]}/${String(y).slice(2)}`;
+
+      const cardTxs = transactions.filter((t) => {
+        if (t.isSplitChild || isNeutralFlow(t)) return false;
+        const isCard = t.paymentMethod === "Cartão de Crédito" || Boolean(t.cardUsed) || Boolean(t.invoiceMonth);
+        if (!isCard) return false;
+        return (
+          t.invoiceMonth === key ||
+          t.cashMonth === key ||
+          getTxMonthForRegime(t, "caixa") === key
+        );
+      });
+
+      const cardTotal = safeAdd(
+        ...cardTxs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+      );
+      const totalCommitted = safeAdd(fixedMonthlyTotal, cardTotal);
+      const percentOfIncome = Math.round((totalCommitted / Math.max(1, baseIncome)) * 100);
+
+      months.push({
+        key,
+        label,
+        fixedCosts: fixedMonthlyTotal,
+        cardInstallments: cardTotal,
+        totalCommitted,
+        percentOfIncome
+      });
+    }
+
+    const avgCommitted = Math.round(
+      months.reduce((acc, cur) => acc + cur.totalCommitted, 0) / months.length
+    );
+    const avgPercent = Math.round(
+      months.reduce((acc, cur) => acc + cur.percentOfIncome, 0) / months.length
+    );
+    const peakMonth = [...months].sort((a, b) => b.totalCommitted - a.totalCommitted)[0];
+
+    return {
+      months,
+      baseIncome,
+      avgCommitted,
+      avgPercent,
+      peakMonth
+    };
+  }, [staticStatus, staticStatusSummary.rendaBase, monthSummary.income, transactions, getTxMonthForRegime, currentCalendarDate]);
+
+  // SPRINT 29: Drill-Down no Donut de Despesas
+  const categoryDrillDownData = useMemo(() => {
+    if (!selectedCategoryDrillDown) return null;
+
+    const txs = regimeTransactions
+      .filter(
+        (t) =>
+          t.category === selectedCategoryDrillDown &&
+          !isNeutralFlow(t) &&
+          !t.isSplitChild &&
+          (t.flowType || getFlowType(t.category)) === "EXPENSE"
+      )
+      .sort((a, b) => compareDatesBR(b.date, a.date));
+
+    const totalCurrent = safeAdd(
+      ...txs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+    );
+
+    const prevPrefix = getPreviousMonthPrefix(selectedMonth);
+    const prevTxs = prevPrefix
+      ? transactions.filter(
+          (t) =>
+            getTxMonthForRegime(t, accountingRegime) === prevPrefix &&
+            t.category === selectedCategoryDrillDown &&
+            !isNeutralFlow(t) &&
+            !t.isSplitChild &&
+            (t.flowType || getFlowType(t.category)) === "EXPENSE"
+        )
+      : [];
+    const totalPrev = safeAdd(
+      ...prevTxs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+    );
+
+    const diffPercent =
+      totalPrev > 0 ? Math.round(((totalCurrent - totalPrev) / totalPrev) * 100) : 0;
+
+    return {
+      categoryName: selectedCategoryDrillDown,
+      txs,
+      totalCurrent,
+      totalPrev,
+      diffPercent
+    };
+  }, [selectedCategoryDrillDown, regimeTransactions, selectedMonth, transactions, accountingRegime, getTxMonthForRegime, getFlowType]);
+
+  // SPRINT 29: Radar de Pendências & Próximos Vencimentos
+  const pendingRadarData = useMemo(() => {
+    const targetMonth =
+      selectedMonth && selectedMonth !== "ALL"
+        ? selectedMonth
+        : currentCalendarDate.yearMonth;
+
+    const normalizeDesc = (str: string) =>
+      str
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    const txsInMonth = transactions.filter((t) => {
+      const m = getTxMonthForRegime(t, accountingRegime);
+      return m === targetMonth;
+    });
+
+    const unlaunchedFixed = staticStatus.filter((item) => {
+      if (item.type !== "Custo Fixo" || item.deletedAt) return false;
+      const itemTitleNorm = normalizeDesc(item.title);
+      return !txsInMonth.some((t) => {
+        const tDescNorm = normalizeDesc(t.description);
+        return (
+          tDescNorm === itemTitleNorm ||
+          (itemTitleNorm.length >= 4 && tDescNorm.includes(itemTitleNorm)) ||
+          (tDescNorm.length >= 4 && itemTitleNorm.includes(tDescNorm))
+        );
+      });
+    });
+
+    const pendingTxs = regimeTransactions.filter(
+      (t) =>
+        t.status === "Pendente" &&
+        !isNeutralFlow(t) &&
+        !t.isSplitChild &&
+        (t.flowType || getFlowType(t.category)) === "EXPENSE"
+    );
+    const totalPendingAmount = safeAdd(
+      ...pendingTxs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+    );
+
+    const currentDay = currentCalendarDate.day;
+    const cardSchedules = cards.map((card) => {
+      const closingDay = card.closingDay || 1;
+      const dueDay = card.dueDay || 10;
+      let daysToClose = closingDay - currentDay;
+      if (daysToClose < 0) daysToClose += 30;
+      let daysToDue = dueDay - currentDay;
+      if (daysToDue < 0) daysToDue += 30;
+
+      const exposure = calculateCardExposure(card, transactions);
+
+      return {
+        card,
+        closingDay,
+        dueDay,
+        daysToClose,
+        daysToDue,
+        invoiceAmount: exposure.used
+      };
+    });
+
+    return {
+      targetMonth,
+      unlaunchedFixed,
+      pendingTxs,
+      totalPendingAmount,
+      cardSchedules
+    };
+  }, [selectedMonth, transactions, staticStatus, regimeTransactions, cards, accountingRegime, getTxMonthForRegime, getFlowType, currentCalendarDate]);
+
+  // Lançador rápido individual de item fixo no radar
+  const handleLaunchSingleFixed = useCallback((item: StaticStatusItem) => {
+    const targetMonth =
+      selectedMonth && selectedMonth !== "ALL"
+        ? selectedMonth
+        : todayISO().slice(0, 7);
+
+    let dayStr = "05";
+    const dayMatch = item.notes ? item.notes.match(/(\d{1,2})[ºª]?\s*(?:dia|útil)?/i) : null;
+    if (dayMatch && dayMatch[1]) {
+      const d = Math.min(28, Math.max(1, parseInt(dayMatch[1], 10)));
+      dayStr = String(d).padStart(2, "0");
+    }
+    const [y, m] = targetMonth.split("-");
+    const dateFormatted = `${dayStr}-${m}-${y}`;
+
+    const resolvedOriginBank = banks[0]?.name || "Conta Corrente";
+    const newTx: Transaction = {
+      id: `tx-fixed-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      date: dateFormatted,
+      description: item.title,
+      amount: item.amount,
+      category: "Moradia",
+      costType: "Fixo",
+      paymentMethod: "Débito em Conta",
+      bankAccount: resolvedOriginBank,
+      status: "Pendente",
+      flowType: "EXPENSE",
+      notes: item.notes || "Lançado via Radar de Pendências"
+    };
+
+    setTransactions((prev) => [newTx, ...prev]);
+    void upsertTransactionsInDb([newTx], debtorMap);
+    notify(
+      "Fixo Lançado com Sucesso!",
+      `"${item.title}" (${formatBRL(item.amount)}) inserido para ${targetMonth}.`,
+      "success",
+      "FINANCE"
+    );
+  }, [selectedMonth, banks, debtorMap, notify]);
+
+  // Garante que o layout efetivo inclua novos widgets padrão mesmo em caches locais antigos
+  const effectiveDashboardLayout = useMemo(() => {
+    const existingIds = new Set(dashboardLayout.map((w) => w.id));
+    const missingDefaults = DEFAULT_DASHBOARD_LAYOUT.filter(
+      (def) => !existingIds.has(def.id) && def.id !== "kpis"
+    );
+    return [...dashboardLayout, ...missingDefaults];
+  }, [dashboardLayout]);
 
   const autoMetrics = useMemo(() => {
     const autoCategories = new Set(categoriesCatalog.filter((c) => c.isAuto).map((c) => c.name));
@@ -4449,12 +5113,239 @@ export default function CoindexApp() {
                 </div>
               </div>
 
+              {/* ZONA 1 ANCORADA: Resumo Financeiro do Mês (4 Slim KPI Cards com Mini-Sparklines SVG) */}
+              <div className="glass-card rounded-3xl p-5 border border-white/10 space-y-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-1 border-b border-white/5">
+                  <div>
+                    <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#0A84FF]" />
+                      {selectedMonth === "ALL" ? "Resumo Financeiro — Histórico Geral" : "Resumo Financeiro do Mês"}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {selectedMonth === "ALL"
+                        ? "Consolidado geral de todas as entradas, despesas operacionais e patrimônio guardado"
+                        : "Visão executiva com tendências históricas de 6 meses (sparklines)"}
+                    </p>
+                  </div>
+
+                  {/* Barra de controle: Seletor de Regime Contábil */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <span>Regime:</span>
+                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
+                        <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                        <div className="absolute top-full right-0 mt-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-64 p-2.5 rounded-xl bg-slate-900/95 border border-white/15 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                          <strong className="text-white mb-1">Regimes de Visualização:</strong>
+                          <p className="text-slate-300">
+                            <strong className="text-[#0A84FF]">Competência:</strong> despesas alocadas pela data do lançamento/compra.
+                          </p>
+                          <p className="text-slate-300 mt-1">
+                            <strong className="text-[#FF453A]">Caixa:</strong> compras de cartão alocadas no mês do vencimento/pagamento da fatura.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setAccountingRegime("competencia")}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          accountingRegime === "competencia"
+                            ? "bg-[#0A84FF] text-white shadow-sm"
+                            : "text-slate-400 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        Competência
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAccountingRegime("caixa")}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          accountingRegime === "caixa"
+                            ? "bg-[#0A84FF] text-white shadow-sm"
+                            : "text-slate-400 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        Caixa
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${moneyBlur}`}>
+                  {/* Card 1: Entradas */}
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span>{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
+                          <div className="relative group/tip inline-flex items-center hover:z-[9999]">
+                            <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                            <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#30D158]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                              <strong className="text-[#30D158] mb-0.5">Fórmula de Entradas:</strong>
+                              <span>Soma de créditos e receitas ativas (FlowType = INCOME), excluindo transferências neutras e estornos.</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-1 rounded-lg bg-[#30D158]/15 text-[#30D158] border border-[#30D158]/25">
+                          <TrendingUp className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                      <p className="text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#30D158] leading-tight mt-0.5">
+                        +{formatBRL(monthSummary.income)}
+                      </p>
+                    </div>
+                    <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
+                      {selectedMonth === "ALL" ? (
+                        <span>Média mensal: {formatBRL(monthSummary.income / filterMonthsCount)}</span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <ArrowUpRight className="w-3.5 h-3.5 text-[#30D158]" />
+                          {monthSummary.incomeDiff >= 0
+                            ? `+${monthSummary.incomeDiff}%`
+                            : `${monthSummary.incomeDiff}%`}{" "}
+                          vs. anterior
+                        </span>
+                      )}
+                      <SparklineSvg data={kpiSparklines.income} color="#30D158" className="w-14 h-6 opacity-80" />
+                    </div>
+                  </div>
+
+                  {/* Card 2: Saídas & Despesas */}
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span>{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
+                          <div className="relative group/tip inline-flex items-center hover:z-[9999]">
+                            <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                            <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#FF453A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                              <strong className="text-[#FF453A] mb-0.5">Fórmula de Saídas:</strong>
+                              <span>Soma de débitos e faturas (FlowType = EXPENSE), respeitando a cota pessoal em despesas divididas (split).</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-1 rounded-lg bg-[#FF453A]/15 text-[#FF453A] border border-[#FF453A]/25">
+                          <TrendingDown className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                      <p className="text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#FF453A] leading-tight mt-0.5">
+                        -{formatBRL(monthSummary.expense)}
+                      </p>
+                    </div>
+                    <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
+                      {selectedMonth === "ALL" ? (
+                        <span>Média mensal: {formatBRL(monthSummary.expense / filterMonthsCount)}</span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <ArrowDownRight className="w-3.5 h-3.5 text-[#FF453A]" />
+                          {monthSummary.expenseDiff >= 0
+                            ? `+${monthSummary.expenseDiff}%`
+                            : `${monthSummary.expenseDiff}%`}{" "}
+                          vs. anterior
+                        </span>
+                      )}
+                      <SparklineSvg data={kpiSparklines.expense} color="#FF453A" className="w-14 h-6 opacity-80" />
+                    </div>
+                  </div>
+
+                  {/* Card 3: Aportes Brutos */}
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span>{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
+                          <div className="relative group/tip inline-flex items-center hover:z-[9999]">
+                            <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                            <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#0A84FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                              <strong className="text-[#0A84FF] mb-0.5">Fórmula de Aportes:</strong>
+                              <span>Soma bruta de lançamentos de investimento e caixinhas (Aportes ≥ 0). Resgates não reduzem o aporte bruto.</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-1 rounded-lg bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/25">
+                          <PiggyBank className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                      <p className="text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#0A84FF] leading-tight mt-0.5">
+                        +{formatBRL(monthSummary.aportes)}
+                      </p>
+                    </div>
+                    <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
+                      {selectedMonth === "ALL" ? (
+                        <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)}`}>
+                          Reserva: <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong>
+                        </span>
+                      ) : (
+                        <span>Meta: {formatBRL(monthlyInvestmentGoal)}</span>
+                      )}
+                      <SparklineSvg data={kpiSparklines.aportes} color="#0A84FF" className="w-14 h-6 opacity-80" />
+                    </div>
+                  </div>
+
+                  {/* Card 4: Saldo Livre Líquido */}
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span>{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
+                          <div className="relative group/tip inline-flex items-center hover:z-[9999]">
+                            <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                            <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-60 p-2 rounded-xl bg-slate-900/95 border border-[#64D2FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                              <strong className="text-[#64D2FF] mb-0.5">Resultado Operacional:</strong>
+                              <span>Entradas - (Despesas Operacionais + Investimento Líquido do período). Indica a folga de caixa líquida.</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-1 rounded-lg bg-[#64D2FF]/15 text-[#64D2FF] border border-[#64D2FF]/25">
+                          <Wallet className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                      <p
+                        className={`text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums leading-tight mt-0.5 ${
+                          monthSummary.balance >= 0 ? "text-[#30D158]" : "text-[#FF453A]"
+                        }`}
+                      >
+                        {monthSummary.balance >= 0 ? "+" : ""}{formatBRL(monthSummary.balance)}
+                      </p>
+                    </div>
+
+                    <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] tabular-nums">
+                      {selectedMonth === "ALL" ? (
+                        <span className="text-slate-400 flex items-center gap-1 font-sans">
+                          <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
+                          <span>Caixinhas: {formatBRL(allTimeReserva.liquido)}</span>
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1 text-slate-400 font-sans">
+                          <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
+                          <span>Safe:</span>
+                          <span
+                            className={`font-semibold px-1 py-0.2 rounded text-[10px] border tabular-nums ${
+                              safeToSpend.projected > 200
+                                ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
+                                : safeToSpend.projected >= 0
+                                ? "bg-[#FF9F0A]/15 text-[#FF9F0A] border-[#FF9F0A]/30"
+                                : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
+                            }`}
+                          >
+                            {formatBRL(safeToSpend.projected)}
+                          </span>
+                        </div>
+                      )}
+                      <SparklineSvg data={kpiSparklines.balance} color="#64D2FF" className="w-14 h-6 opacity-80" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* BENTO GRID 2.0 REORGANIZADO */}
               <div className="grid grid-cols-12 gap-6">
-                {dashboardLayout
-                  .filter((w) => w.visible !== false)
+                {effectiveDashboardLayout
+                  .filter((w) => w.visible !== false && w.id !== "kpis")
                   .map((widget) => {
                     const defaultSize: ChartWidgetSize =
-                      widget.id === "thermometer" || widget.id === "kpis" ? "full" : "half";
+                      widget.id === "thermometer" ? "full" : "half";
                     const widgetSize: ChartWidgetSize = widget.size ?? defaultSize;
 
                     const chartKind: ChartKind =
@@ -4506,20 +5397,8 @@ export default function CoindexApp() {
                       <ChartCard
                         key={widget.id}
                         id={widget.id}
-                        title={
-                          widget.id === "kpis"
-                            ? selectedMonth === "ALL"
-                              ? "Resumo Financeiro — Histórico Geral"
-                              : "Resumo Financeiro do Mês"
-                            : widget.title
-                        }
-                        subtitle={
-                          widget.id === "kpis"
-                            ? selectedMonth === "ALL"
-                              ? "Consolidado geral de todas as entradas, despesas operacionais e patrimônio guardado"
-                              : widget.subtitle
-                            : widget.subtitle
-                        }
+                        title={widget.title}
+                        subtitle={widget.subtitle}
                         chartKind={chartKind}
                         hasMultipleSeries={
                           widget.id === "patrimony_chart" ||
@@ -4539,10 +5418,12 @@ export default function CoindexApp() {
                         isDropTarget={dragOverWidgetId === widget.id}
                         className="glass-card"
                       >
+                        {/* WIDGET 1: TERMÔMETRO + COTA DIÁRIA + ALOCAÇÃO 50/30/20 */}
                         {widget.id === "thermometer" && (
-                          <div className="space-y-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                              <div className="flex items-center gap-2">
+                          <div className="space-y-4">
+                            {/* Linha Superior: Status do Teto + Pílula Copilot de Cota Diária Livre */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+                              <div className="flex flex-wrap items-center gap-2.5">
                                 <span
                                   className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
                                     personalPct >= 100
@@ -4558,14 +5439,24 @@ export default function CoindexApp() {
                                     ? "ZONA DE ATENÇÃO"
                                     : "DENTRO DA META"}
                                 </span>
-                                <span className="text-slate-400">
-                                  Restante livre:{" "}
-                                  <strong className={`text-white tabular-nums ${moneyBlur}`}>
-                                    {formatBRL(Math.max(0, effectivePersonalBudgetLimit - monthSummary.personalSpent))}
-                                  </strong>
-                                </span>
+
+                                {/* Pílula Copilot Money: Cota Diária Livre (R$/dia) */}
+                                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#0A84FF]/15 border border-[#0A84FF]/30 text-[#64D2FF] text-xs font-semibold shadow-xs">
+                                  <Zap className="w-3.5 h-3.5 text-[#0A84FF] shrink-0" />
+                                  <span>
+                                    Cota Diária Livre:{" "}
+                                    <strong className={`font-mono text-white tabular-nums ${moneyBlur}`}>
+                                      {formatBRL(dailyQuotaInfo.dailyBudget)} / dia
+                                    </strong>
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-sans font-normal">
+                                    ({dailyQuotaInfo.remainingDays} {dailyQuotaInfo.remainingDays === 1 ? "dia rest." : "dias rest."})
+                                  </span>
+                                </div>
                               </div>
+
                               <div className="text-right flex items-baseline gap-1 justify-end">
+                                <span className="text-slate-400 text-xs mr-1">Gasto Pessoal:</span>
                                 <span
                                   className={`font-semibold text-sm font-mono tabular-nums ${moneyBlur} ${
                                     personalPct >= 100 ? "text-[#FF453A]" : "text-[#30D158]"
@@ -4581,13 +5472,10 @@ export default function CoindexApp() {
                                   ({personalPct}%)
                                 </span>
                               </div>
-                              {filterMonthsCount > 1 && (
-                                <span className="block text-[10px] text-slate-400 font-mono tabular-nums">
-                                  ({formatBRL(personalBudgetLimit)} × {filterMonthsCount} meses)
-                                </span>
-                              )}
                             </div>
-                            <div className="w-full h-3.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-white/10">
+
+                            {/* Barra de Progresso do Teto Pessoal */}
+                            <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-white/10">
                               <div
                                 className={`h-full rounded-full transition-all duration-700 ${
                                   personalPct >= 100
@@ -4597,265 +5485,158 @@ export default function CoindexApp() {
                                 style={{ width: `${personalPct}%` }}
                               />
                             </div>
-                          </div>
-                        )}
 
-                        {widget.id === "kpis" && (
-                          <div className="space-y-3 mb-4">
-                            {/* Barra de controle: Seletor de Regime Contábil */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
-                              <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                                <span>Regime Contábil:</span>
-                                <div className="relative group/tip inline-flex items-center hover:z-[9999]">
-                                  <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                  <div className="absolute top-full left-0 mt-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-64 p-2.5 rounded-xl bg-slate-900/95 border border-white/15 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                                    <strong className="text-white mb-1">Regimes de Visualização:</strong>
-                                    <p className="text-slate-300">
-                                      <strong className="text-[#0A84FF]">Competência:</strong> despesas alocadas pela data do lançamento/compra.
-                                    </p>
-                                    <p className="text-slate-300 mt-1">
-                                      <strong className="text-[#FF453A]">Caixa:</strong> compras de cartão alocadas no mês do vencimento/pagamento da fatura.
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
-                                <button
-                                  type="button"
-                                  onClick={() => setAccountingRegime("competencia")}
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                                    accountingRegime === "competencia"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  Competência
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setAccountingRegime("caixa")}
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                                    accountingRegime === "caixa"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  Caixa
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${moneyBlur}`}>
-                              {/* Card 1: Entradas */}
-                              <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm">
-                                <div>
-                                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                    <div className="flex items-center gap-1.5">
-                                      <span>{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
-                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
-                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#30D158]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                                          <strong className="text-[#30D158] mb-0.5">Fórmula de Entradas:</strong>
-                                          <span>Soma de créditos e receitas ativas (FlowType = INCOME), excluindo transferências neutras e estornos.</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="p-1 rounded-lg bg-[#30D158]/15 text-[#30D158] border border-[#30D158]/25">
-                                      <TrendingUp className="w-3.5 h-3.5" />
-                                    </div>
-                                  </div>
-                                  <p className="text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#30D158] leading-tight mt-0.5">
-                                    +{formatBRL(monthSummary.income)}
-                                  </p>
-                                </div>
-                                <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
-                                  {selectedMonth === "ALL" ? (
-                                    <span>Média mensal: {formatBRL(monthSummary.income / filterMonthsCount)}</span>
-                                  ) : (
-                                    <span className="flex items-center gap-1">
-                                      <ArrowUpRight className="w-3.5 h-3.5 text-[#30D158]" />
-                                      {monthSummary.incomeDiff >= 0
-                                        ? `+${monthSummary.incomeDiff}%`
-                                        : `${monthSummary.incomeDiff}%`}{" "}
-                                      vs. mês anterior
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Card 2: Saídas & Despesas */}
-                              <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm">
-                                <div>
-                                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                    <div className="flex items-center gap-1.5">
-                                      <span>{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
-                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
-                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#FF453A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                                          <strong className="text-[#FF453A] mb-0.5">Fórmula de Saídas:</strong>
-                                          <span>Soma de débitos e faturas (FlowType = EXPENSE), respeitando a cota pessoal em despesas divididas (split).</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="p-1 rounded-lg bg-[#FF453A]/15 text-[#FF453A] border border-[#FF453A]/25">
-                                      <TrendingDown className="w-3.5 h-3.5" />
-                                    </div>
-                                  </div>
-                                  <p className="text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#FF453A] leading-tight mt-0.5">
-                                    -{formatBRL(monthSummary.expense)}
-                                  </p>
-                                </div>
-                                <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
-                                  {selectedMonth === "ALL" ? (
-                                    <span>Média mensal: {formatBRL(monthSummary.expense / filterMonthsCount)}</span>
-                                  ) : (
-                                    <span className="flex items-center gap-1">
-                                      <ArrowDownRight className="w-3.5 h-3.5 text-[#FF453A]" />
-                                      {monthSummary.expenseDiff >= 0
-                                        ? `+${monthSummary.expenseDiff}%`
-                                        : `${monthSummary.expenseDiff}%`}{" "}
-                                      vs. mês anterior
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Card 3: Aportes Brutos */}
-                              <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm">
-                                <div>
-                                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                    <div className="flex items-center gap-1.5">
-                                      <span>{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
-                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
-                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#0A84FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                                          <strong className="text-[#0A84FF] mb-0.5">Fórmula de Aportes:</strong>
-                                          <span>Soma bruta de lançamentos de investimento e caixinhas (Aportes ≥ 0). Resgates não reduzem o aporte bruto.</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="p-1 rounded-lg bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/25">
-                                      <PiggyBank className="w-3.5 h-3.5" />
-                                    </div>
-                                  </div>
-                                  <p className="text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#0A84FF] leading-tight mt-0.5">
-                                    +{formatBRL(monthSummary.aportes)}
-                                  </p>
-                                </div>
-                                <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
-                                  {selectedMonth === "ALL" ? (
-                                    <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)} • Resgatado: ${formatBRL(allTimeReserva.resgates)}`}>
-                                      Em Reserva (Líquido): <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong> • Resgatado: {formatBRL(allTimeReserva.resgates)}
-                                    </span>
-                                  ) : (
-                                    <span>Meta: {formatBRL(monthlyInvestmentGoal)}</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Card 4: Saldo Livre / Balanço Operacional Líquido */}
-                              <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm">
-                                <div>
-                                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                                    <div className="flex items-center gap-1.5">
-                                      <span>{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
-                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
-                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-60 p-2 rounded-xl bg-slate-900/95 border border-[#64D2FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                                          <strong className="text-[#64D2FF] mb-0.5">Resultado Operacional:</strong>
-                                          <span>Entradas - (Despesas Operacionais + Investimento Líquido do período). Indica a folga de caixa líquida.</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="p-1 rounded-lg bg-[#64D2FF]/15 text-[#64D2FF] border border-[#64D2FF]/25">
-                                      <Wallet className="w-3.5 h-3.5" />
-                                    </div>
-                                  </div>
-                                  <p
-                                    className={`text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums leading-tight mt-0.5 ${
-                                      monthSummary.balance >= 0 ? "text-[#30D158]" : "text-[#FF453A]"
-                                    }`}
-                                  >
-                                    {monthSummary.balance >= 0 ? "+" : ""}{formatBRL(monthSummary.balance)}
-                                  </p>
-                                </div>
-
-                                {/* Rodapé Adaptativo */}
-                                {selectedMonth === "ALL" ? (
-                                  <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] tabular-nums">
-                                    <span className="text-slate-400 flex items-center gap-1 font-sans">
-                                      <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
-                                      <span>Patrimônio em Caixinhas:</span>
-                                    </span>
-                                    <span className="font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border tabular-nums bg-[#0A84FF]/15 text-[#0A84FF] border-[#0A84FF]/30 shadow-none">
-                                      {formatBRL(allTimeReserva.liquido)}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <div
-                                    className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] tabular-nums"
-                                  >
-                                    <div className="flex items-center gap-1 text-slate-400 font-sans">
-                                      <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
-                                      <span>Safe-to-Spend:</span>
-                                      <div className="relative group/tip inline-flex items-center hover:z-[9999]">
-                                        <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                                        <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-64 p-2 rounded-xl bg-slate-900/95 border border-white/15 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                                          <strong className="text-white mb-0.5">Safe-to-Spend Projetado:</strong>
-                                          <span>Saldo em Contas ({formatBRL(safeToSpend.currentCash)}) + Entradas Pendentes ({formatBRL(safeToSpend.pendingIncome)}) - Fixos/Faturas Pendentes ({formatBRL(safeAdd(safeToSpend.pendingDirectExpenses, safeToSpend.pendingInvoices))}).</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <span
-                                      className={`font-semibold px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border tabular-nums ${
-                                        safeToSpend.projected > 200
-                                          ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
-                                          : safeToSpend.projected >= 0
-                                          ? "bg-[#FF9F0A]/15 text-[#FF9F0A] border-[#FF9F0A]/30"
-                                          : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
-                                      }`}
-                                    >
-                                      {formatBRL(safeToSpend.projected)}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {widget.id === "patrimony_chart" && (
-                          <div className="space-y-4">
-                            {patrimonyEvolution.hasDeficit && (
-                              <div className="px-3.5 py-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between gap-2 shadow-[0_0_15px_rgba(244,63,94,0.15)] animate-pulse">
-                                <div className="flex items-center gap-2">
-                                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                                  <span>
-                                    <strong className="text-rose-200">Aviso de Déficit:</strong> Os resgates registrados superam o total acumulado de aportes (+ reserva inicial) em{" "}
-                                    <span className="font-mono font-bold text-white">{formatBRL(patrimonyEvolution.deficitAmount)}</span>.
+                            {/* Barra Segmentada da Alocação Real 50/30/20 */}
+                            <div className="pt-2 border-t border-white/5 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <span className="font-semibold text-slate-300 text-[11px] flex items-center gap-1.5">
+                                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#0A84FF]" /> Alocação Real 50/30/20
+                                </span>
+                                <div className="flex flex-wrap items-center gap-3 text-[11px] tabular-nums font-mono">
+                                  <span className="flex items-center gap-1 text-[#0A84FF]">
+                                    <span className="w-2 h-2 rounded-full bg-[#0A84FF]" />
+                                    Fixos: <strong>{allocation503020.pctFixed}%</strong> (Meta 50%) • {formatBRL(allocation503020.fixedTotal)}
+                                  </span>
+                                  <span className="flex items-center gap-1 text-[#FF9F0A]">
+                                    <span className="w-2 h-2 rounded-full bg-[#FF9F0A]" />
+                                    Variáveis: <strong>{allocation503020.pctVariable}%</strong> (Meta 30%) • {formatBRL(allocation503020.variableTotal)}
+                                  </span>
+                                  <span className="flex items-center gap-1 text-[#30D158]">
+                                    <span className="w-2 h-2 rounded-full bg-[#30D158]" />
+                                    Aportes: <strong>{allocation503020.pctInvest}%</strong> (Meta 20%) • {formatBRL(allocation503020.investTotal)}
                                   </span>
                                 </div>
                               </div>
-                            )}
 
-                            {/* Cabeçalho Interno Estilo Copilot Money: KPI Destaque + Filtro + Legenda Interativa */}
-                            <div className="flex flex-wrap items-end justify-between gap-3 pb-1 border-b border-white/5">
-                              {/* KPI Destaque Copilot Money */}
-                              <div>
-                                <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-0.5">
-                                  Patrimônio Acumulado {patrimonyTimeRange === "ALL" ? "(Total)" : `(${patrimonyTimeRange})`}
-                                </span>
+                              <div className="w-full h-2 rounded-full overflow-hidden bg-slate-950 border border-white/10 flex gap-0.5 p-0.5">
+                                <div
+                                  className="h-full rounded-l-full bg-[#0A84FF] transition-all duration-500"
+                                  style={{ width: `${Math.min(100, allocation503020.pctFixed)}%` }}
+                                  title={`Custos Fixos: ${allocation503020.pctFixed}%`}
+                                />
+                                <div
+                                  className="h-full bg-[#FF9F0A] transition-all duration-500"
+                                  style={{ width: `${Math.min(100, allocation503020.pctVariable)}%` }}
+                                  title={`Gastos Variáveis: ${allocation503020.pctVariable}%`}
+                                />
+                                <div
+                                  className="h-full rounded-r-full bg-[#30D158] transition-all duration-500"
+                                  style={{ width: `${Math.min(100, allocation503020.pctInvest)}%` }}
+                                  title={`Aportes/Investimentos: ${allocation503020.pctInvest}%`}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* WIDGET 2: CENTRAL ANALÍTICA MULTI-VIEW (Patrimônio, Ritmo/Pace e Projeção 6M) */}
+                        {widget.id === "patrimony_chart" && (
+                          <div className="space-y-4">
+                            {/* Segmented Control de 3 Visões Analíticas Estilo Copilot Money */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/5">
+                              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setPatrimonyCardView("patrimony")}
+                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                                    patrimonyCardView === "patrimony"
+                                      ? "bg-[#0A84FF] text-white shadow-sm"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  <TrendingUp className="w-3.5 h-3.5" /> Patrimônio
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPatrimonyCardView("pace")}
+                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                                    patrimonyCardView === "pace"
+                                      ? "bg-[#0A84FF] text-white shadow-sm"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  <Activity className="w-3.5 h-3.5" /> Ritmo no Mês (Pace)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPatrimonyCardView("forecast")}
+                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                                    patrimonyCardView === "forecast"
+                                      ? "bg-[#0A84FF] text-white shadow-sm"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  <CalendarRange className="w-3.5 h-3.5" /> Projeção 6M
+                                </button>
+                              </div>
+
+                              {patrimonyCardView === "patrimony" && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {/* Seletor de Período */}
+                                  <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
+                                    {(["6M", "1A", "ALL"] as const).map((range) => (
+                                      <button
+                                        key={range}
+                                        type="button"
+                                        onClick={() => setPatrimonyTimeRange(range)}
+                                        className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
+                                          patrimonyTimeRange === range
+                                            ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
+                                            : "text-slate-400 hover:text-white hover:bg-white/5"
+                                        }`}
+                                      >
+                                        {range === "ALL" ? "Tudo" : range}
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {/* Toggle Clicável de Aportes Brutos */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowPatrimonyAportesCurve((prev) => !prev)}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer border ${
+                                      showPatrimonyAportesCurve
+                                        ? "bg-[#5E5CE6]/20 text-[#A5B4FC] border-[#5E5CE6]/50 shadow-sm"
+                                        : "bg-slate-900/60 text-slate-400 border-white/5 opacity-70 hover:opacity-100"
+                                    }`}
+                                    title="Ligar ou desligar curva de Aportes"
+                                  >
+                                    <span
+                                      className={`w-2 h-2 rounded-full shrink-0 transition ${
+                                        showPatrimonyAportesCurve ? "bg-[#5E5CE6]" : "bg-slate-600"
+                                      }`}
+                                    />
+                                    <span>Aportes {showPatrimonyAportesCurve ? "" : "(oculto)"}</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* ABA 1: VISÃO PATRIMÔNIO ACUMULADO */}
+                            {patrimonyCardView === "patrimony" && (
+                              <div className="space-y-3">
+                                {patrimonyEvolution.hasDeficit && (
+                                  <div className="px-3.5 py-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between gap-2 shadow-[0_0_15px_rgba(244,63,94,0.15)] animate-pulse">
+                                    <div className="flex items-center gap-2">
+                                      <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                                      <span>
+                                        <strong className="text-rose-200">Aviso de Déficit:</strong> Resgates superam aportes em{" "}
+                                        <span className="font-mono font-bold text-white">{formatBRL(patrimonyEvolution.deficitAmount)}</span>.
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+
                                 <div className="flex flex-wrap items-baseline gap-2.5">
                                   <span className={`text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums tracking-tight ${moneyBlur}`}>
                                     {formatBRL(patrimonyStats.currentValue)}
                                   </span>
                                   <span
-                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-mono font-bold tabular-nums border shadow-sm ${
+                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-mono font-bold tabular-nums border ${
                                       patrimonyStats.isPositive
-                                        ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30 shadow-none"
-                                        : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30 shadow-none"
+                                        ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
+                                        : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
                                     }`}
-                                    title="Variação líquida de patrimônio acumulado no período filtrado"
                                   >
                                     {patrimonyStats.isPositive ? (
                                       <ArrowUpRight className="w-3.5 h-3.5 text-[#30D158]" />
@@ -4869,288 +5650,287 @@ export default function CoindexApp() {
                                     </span>
                                   </span>
                                 </div>
+
+                                <div className={`${chartHeightClass} select-none transition-all duration-300`}>
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    {effectiveChartType === "line" ? (
+                                      <LineChart
+                                        data={processedPatrimonyData}
+                                        accessibilityLayer={false}
+                                        margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
+                                      >
+                                        {cfg.showGrid && (
+                                          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.12)" />
+                                        )}
+                                        <XAxis dataKey="label" stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} tickMargin={10} />
+                                        <YAxis
+                                          stroke="#64748b"
+                                          fontSize={11}
+                                          width={60}
+                                          domain={[0, "auto"]}
+                                          axisLine={false}
+                                          tickLine={false}
+                                          tickFormatter={(v) => {
+                                            const num = Number(v) || 0;
+                                            if (num <= 0) return "R$ 0";
+                                            if (num >= 1000) {
+                                              const k = num / 1000;
+                                              return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
+                                            }
+                                            return `R$ ${num}`;
+                                          }}
+                                        />
+                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
+                                        {milestones.map((m) => (
+                                          <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
+                                        ))}
+                                        <Line
+                                          type={cfg.curveType || "monotone"}
+                                          dataKey="acumulado"
+                                          name="Patrimônio Acumulado"
+                                          stroke={primaryColor}
+                                          strokeWidth={cfg.strokeWidth || 2.5}
+                                          dot={cfg.showDots ? { r: 3.5, fill: primaryColor, stroke: "#07030f", strokeWidth: 1.5 } : false}
+                                          activeDot={{ r: 5, strokeWidth: 2, stroke: primaryColor, fill: "#0d061c" }}
+                                          connectNulls={true}
+                                        />
+                                        {showPatrimonyAportesCurve && (
+                                          <Line
+                                            type={cfg.curveType || "monotone"}
+                                            dataKey="aportado"
+                                            name="Aportes Brutos"
+                                            stroke="#5E5CE6"
+                                            strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
+                                            strokeDasharray="4 4"
+                                            dot={cfg.showDots ? { r: 3, fill: "#5E5CE6", stroke: "#07030f", strokeWidth: 1.5 } : false}
+                                            activeDot={{ r: 4, stroke: "#5E5CE6", fill: "#0d061c" }}
+                                            connectNulls={true}
+                                          />
+                                        )}
+                                      </LineChart>
+                                    ) : (
+                                      <AreaChart
+                                        data={processedPatrimonyData}
+                                        accessibilityLayer={false}
+                                        margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
+                                      >
+                                        <defs>
+                                          <linearGradient id={`gradPatrimony_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor={primaryColor} stopOpacity={cfg.fillArea !== false ? 0.28 : 0} />
+                                            <stop offset="100%" stopColor={primaryColor} stopOpacity={0.00} />
+                                          </linearGradient>
+                                          <linearGradient id={`gradAporte_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#5E5CE6" stopOpacity={cfg.fillArea !== false ? 0.18 : 0} />
+                                            <stop offset="100%" stopColor="#5E5CE6" stopOpacity={0.00} />
+                                          </linearGradient>
+                                        </defs>
+                                        {cfg.showGrid && (
+                                          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.12)" />
+                                        )}
+                                        <XAxis dataKey="label" stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} tickMargin={10} />
+                                        <YAxis
+                                          stroke="#64748b"
+                                          fontSize={11}
+                                          width={60}
+                                          domain={[0, "auto"]}
+                                          axisLine={false}
+                                          tickLine={false}
+                                          tickFormatter={(v) => {
+                                            const num = Number(v) || 0;
+                                            if (num <= 0) return "R$ 0";
+                                            if (num >= 1000) {
+                                              const k = num / 1000;
+                                              return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
+                                            }
+                                            return `R$ ${num}`;
+                                          }}
+                                        />
+                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
+                                        {milestones.map((m) => (
+                                          <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
+                                        ))}
+                                        <Area
+                                          type={cfg.curveType || "monotone"}
+                                          dataKey="acumulado"
+                                          name="Patrimônio Acumulado"
+                                          stroke={primaryColor}
+                                          strokeWidth={cfg.strokeWidth || 2.5}
+                                          dot={cfg.showDots ? { r: 3.5, fill: primaryColor, stroke: "#07030f", strokeWidth: 1.5 } : false}
+                                          activeDot={{ r: 5, strokeWidth: 2, stroke: primaryColor, fill: "#0d061c" }}
+                                          fill={cfg.fillArea !== false ? `url(#gradPatrimony_${widget.id})` : "none"}
+                                          fillOpacity={1}
+                                          connectNulls={true}
+                                        />
+                                        {showPatrimonyAportesCurve && (
+                                          <Area
+                                            type={cfg.curveType || "monotone"}
+                                            dataKey="aportado"
+                                            name="Aportes Brutos"
+                                            stroke="#5E5CE6"
+                                            strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
+                                            dot={cfg.showDots ? { r: 3, fill: "#5E5CE6", stroke: "#07030f", strokeWidth: 1.5 } : false}
+                                            activeDot={{ r: 4, stroke: "#5E5CE6", fill: "#0d061c" }}
+                                            fill={cfg.fillArea !== false ? `url(#gradAporte_${widget.id})` : "none"}
+                                            fillOpacity={1}
+                                            connectNulls={true}
+                                          />
+                                        )}
+                                      </AreaChart>
+                                    )}
+                                  </ResponsiveContainer>
+                                </div>
                               </div>
+                            )}
 
-                              {/* Controles: Seletor de Período & Toggles Clicáveis de Legenda */}
-                              <div className="flex flex-wrap items-center gap-2">
-                                {/* Seletor de Período */}
-                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
-                                  {(["6M", "1A", "ALL"] as const).map((range) => (
-                                    <button
-                                      key={range}
-                                      type="button"
-                                      onClick={() => setPatrimonyTimeRange(range)}
-                                      className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
-                                        patrimonyTimeRange === range
-                                          ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
-                                          : "text-slate-400 hover:text-white hover:bg-white/5"
-                                      }`}
-                                    >
-                                      {range === "ALL" ? "Tudo" : range}
-                                    </button>
-                                  ))}
-                                </div>
+                            {/* ABA 2: CURVA DE RITMO DE GASTOS DIÁRIA (PACE) */}
+                            {patrimonyCardView === "pace" && (
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <div>
+                                    <span className="text-slate-400 block text-[11px]">Gasto Real até Hoje:</span>
+                                    <strong className={`text-xl font-bold font-mono tabular-nums text-white ${moneyBlur}`}>
+                                      {formatBRL(paceChartData.currentReal)}
+                                    </strong>
+                                    <span className="text-slate-400 text-[11px] ml-2">
+                                      (Ritmo Ideal: {formatBRL(paceChartData.currentIdeal)})
+                                    </span>
+                                  </div>
 
-                                {/* Pílula 1: Patrimônio Acumulado (Fixa em Destaque) */}
-                                <div
-                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/90 border border-white/10 text-slate-200 text-[11px] font-semibold shadow-xs"
-                                  title="Série principal do patrimônio guardado"
-                                >
                                   <span
-                                    className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
-                                    style={{
-                                      backgroundColor: primaryColor,
-                                      boxShadow: `0 0 8px ${primaryColor}`
-                                    }}
-                                  />
-                                  <span>Patrimônio Acumulado</span>
-                                </div>
-
-                                {/* Pílula 2: Toggle Clicável de Aportes Brutos */}
-                                <button
-                                  type="button"
-                                  onClick={() => setShowPatrimonyAportesCurve((prev) => !prev)}
-                                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer border ${
-                                    showPatrimonyAportesCurve
-                                      ? "bg-[#5E5CE6]/20 text-[#A5B4FC] border-[#5E5CE6]/50 shadow-sm"
-                                      : "bg-slate-900/60 text-slate-400 border-white/5 opacity-70 hover:opacity-100"
-                                  }`}
-                                  title="Clique para ligar ou desligar a curva suave de Aportes Brutos"
-                                >
-                                  <span
-                                    className={`w-2.5 h-2.5 rounded-full shrink-0 transition ${
-                                      showPatrimonyAportesCurve
-                                        ? "bg-[#5E5CE6] shadow-[0_0_8px_#5E5CE6]"
-                                        : "bg-slate-600"
+                                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-mono font-bold border ${
+                                      paceChartData.isBelowPace
+                                        ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
+                                        : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
                                     }`}
-                                  />
-                                  <span>
-                                    Aportes Brutos {showPatrimonyAportesCurve ? "" : "(oculto)"}
+                                  >
+                                    <Activity className="w-3.5 h-3.5" />
+                                    {paceChartData.isBelowPace
+                                      ? `-${formatBRL(paceChartData.paceDiff)} abaixo do ritmo (Saudável)`
+                                      : `+${formatBRL(paceChartData.paceDiff)} acima do ritmo (Atenção)`}
                                   </span>
-                                </button>
-                              </div>
-                            </div>
+                                </div>
 
-                            {/* Gráfico Estilo Copilot Money com Eixo Único e Sem Torres/Barras */}
-                            <div className={`${chartHeightClass} select-none transition-all duration-300`}>
-                              <ResponsiveContainer width="100%" height="100%">
-                                {effectiveChartType === "line" ? (
-                                  <LineChart
-                                    data={processedPatrimonyData}
-                                    accessibilityLayer={false}
-                                    margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
-                                  >
-                                    {cfg.showGrid && (
-                                      <CartesianGrid
-                                        vertical={false}
-                                        strokeDasharray="3 3"
-                                        stroke="rgba(148, 163, 184, 0.12)"
+                                <div className={`${chartHeightClass} select-none transition-all duration-300`}>
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart
+                                      data={paceChartData.data}
+                                      accessibilityLayer={false}
+                                      margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
+                                    >
+                                      <defs>
+                                        <linearGradient id="gradPaceReal" x1="0" y1="0" x2="0" y2="1">
+                                          <stop
+                                            offset="0%"
+                                            stopColor={paceChartData.isBelowPace ? "#30D158" : "#FF453A"}
+                                            stopOpacity={0.25}
+                                          />
+                                          <stop
+                                            offset="100%"
+                                            stopColor={paceChartData.isBelowPace ? "#30D158" : "#FF453A"}
+                                            stopOpacity={0.0}
+                                          />
+                                        </linearGradient>
+                                      </defs>
+                                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.12)" />
+                                      <XAxis dataKey="dayLabel" stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} />
+                                      <YAxis
+                                        stroke="#64748b"
+                                        fontSize={11}
+                                        width={60}
+                                        domain={[0, "auto"]}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tickFormatter={(v) => `R$ ${Number(v) || 0}`}
                                       />
-                                    )}
-                                    <XAxis
-                                      dataKey="label"
-                                      stroke="#64748b"
-                                      fontSize={11}
-                                      axisLine={false}
-                                      tickLine={false}
-                                      tickMargin={10}
-                                    />
-                                    <YAxis
-                                      stroke="#64748b"
-                                      fontSize={11}
-                                      width={60}
-                                      domain={[0, "auto"]}
-                                      axisLine={false}
-                                      tickLine={false}
-                                      tickFormatter={(v) => {
-                                        const num = Number(v) || 0;
-                                        if (num <= 0) return "R$ 0";
-                                        if (num >= 1000) {
-                                          const k = num / 1000;
-                                          return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
-                                        }
-                                        return `R$ ${num}`;
-                                      }}
-                                    />
-                                    <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
-                                    {milestones.map((m) => (
-                                      <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
-                                    ))}
-                                    <Line
-                                      type={cfg.curveType || "monotone"}
-                                      dataKey="acumulado"
-                                      name="Patrimônio Acumulado"
-                                      stroke={primaryColor}
-                                      strokeWidth={cfg.strokeWidth || 2.5}
-                                      dot={cfg.showDots ? { r: 3.5, fill: primaryColor, stroke: "#07030f", strokeWidth: 1.5 } : false}
-                                      activeDot={{ r: 5, strokeWidth: 2, stroke: primaryColor, fill: "#0d061c" }}
-                                      connectNulls={true}
-                                    />
-                                    {showPatrimonyAportesCurve && (
+                                      <Tooltip content={<PaceCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
                                       <Line
-                                        type={cfg.curveType || "monotone"}
-                                        dataKey="aportado"
-                                        name="Aportes Brutos"
-                                        stroke="#5E5CE6"
-                                        strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
+                                        type="linear"
+                                        dataKey="ideal"
+                                        name="Ritmo Ideal Linear"
+                                        stroke="#94A3B8"
                                         strokeDasharray="4 4"
-                                        dot={cfg.showDots ? { r: 3, fill: "#5E5CE6", stroke: "#07030f", strokeWidth: 1.5 } : false}
-                                        activeDot={{ r: 4, stroke: "#5E5CE6", fill: "#0d061c" }}
-                                        connectNulls={true}
+                                        strokeWidth={1.75}
+                                        dot={false}
                                       />
-                                    )}
-                                  </LineChart>
-                                ) : effectiveChartType === "bar" ? (
-                                  <BarChart
-                                    data={processedPatrimonyData}
-                                    accessibilityLayer={false}
-                                    margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
-                                  >
-                                    {cfg.showGrid && (
-                                      <CartesianGrid
-                                        vertical={false}
-                                        strokeDasharray="3 3"
-                                        stroke="rgba(148, 163, 184, 0.12)"
-                                      />
-                                    )}
-                                    <XAxis
-                                      dataKey="label"
-                                      stroke="#64748b"
-                                      fontSize={11}
-                                      axisLine={false}
-                                      tickLine={false}
-                                      tickMargin={10}
-                                    />
-                                    <YAxis
-                                      stroke="#64748b"
-                                      fontSize={11}
-                                      width={60}
-                                      domain={[0, "auto"]}
-                                      axisLine={false}
-                                      tickLine={false}
-                                      tickFormatter={(v) => {
-                                        const num = Number(v) || 0;
-                                        if (num <= 0) return "R$ 0";
-                                        if (num >= 1000) {
-                                          const k = num / 1000;
-                                          return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
-                                        }
-                                        return `R$ ${num}`;
-                                      }}
-                                    />
-                                    <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
-                                    {milestones.map((m) => (
-                                      <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
-                                    ))}
-                                    <Bar
-                                      dataKey="acumulado"
-                                      name="Patrimônio Acumulado"
-                                      fill={primaryColor}
-                                      radius={[4, 4, 0, 0]}
-                                      maxBarSize={36}
-                                    />
-                                    {showPatrimonyAportesCurve && (
-                                      <Bar
-                                        dataKey="aportado"
-                                        name="Aportes Brutos"
-                                        fill="#5E5CE6"
-                                        radius={[4, 4, 0, 0]}
-                                        maxBarSize={28}
-                                      />
-                                    )}
-                                  </BarChart>
-                                ) : (
-                                  /* Modo Padrão: AreaChart Estilo Copilot Money com Gradiente Translúcido */
-                                  <AreaChart
-                                    data={processedPatrimonyData}
-                                    accessibilityLayer={false}
-                                    margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
-                                  >
-                                    <defs>
-                                      <linearGradient id={`gradPatrimony_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor={primaryColor} stopOpacity={cfg.fillArea !== false ? 0.28 : 0} />
-                                        <stop offset="100%" stopColor={primaryColor} stopOpacity={0.00} />
-                                      </linearGradient>
-                                      <linearGradient id={`gradAporte_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#5E5CE6" stopOpacity={cfg.fillArea !== false ? 0.18 : 0} />
-                                        <stop offset="100%" stopColor="#5E5CE6" stopOpacity={0.00} />
-                                      </linearGradient>
-                                    </defs>
-
-                                    {cfg.showGrid && (
-                                      <CartesianGrid
-                                        vertical={false}
-                                        strokeDasharray="3 3"
-                                        stroke="rgba(148, 163, 184, 0.12)"
-                                      />
-                                    )}
-
-                                    <XAxis
-                                      dataKey="label"
-                                      stroke="#64748b"
-                                      fontSize={11}
-                                      axisLine={false}
-                                      tickLine={false}
-                                      tickMargin={10}
-                                    />
-                                    {/* Eixo Esquerdo Único: Patrimônio Formatado */}
-                                    <YAxis
-                                      stroke="#64748b"
-                                      fontSize={11}
-                                      width={60}
-                                      domain={[0, "auto"]}
-                                      axisLine={false}
-                                      tickLine={false}
-                                      tickFormatter={(v) => {
-                                        const num = Number(v) || 0;
-                                        if (num <= 0) return "R$ 0";
-                                        if (num >= 1000) {
-                                          const k = num / 1000;
-                                          return `R$ ${k % 1 === 0 ? k : k.toFixed(1).replace(".", ",")}k`;
-                                        }
-                                        return `R$ ${num}`;
-                                      }}
-                                    />
-                                    <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
-                                    {milestones.map((m) => (
-                                      <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
-                                    ))}
-                                    <Area
-                                      type={cfg.curveType || "monotone"}
-                                      dataKey="acumulado"
-                                      name="Patrimônio Acumulado"
-                                      stroke={primaryColor}
-                                      strokeWidth={cfg.strokeWidth || 2.5}
-                                      dot={cfg.showDots ? { r: 3.5, fill: primaryColor, stroke: "#07030f", strokeWidth: 1.5 } : false}
-                                      activeDot={{ r: 5, strokeWidth: 2, stroke: primaryColor, fill: "#0d061c" }}
-                                      fill={cfg.fillArea !== false ? `url(#gradPatrimony_${widget.id})` : "none"}
-                                      fillOpacity={1}
-                                      connectNulls={true}
-                                    />
-                                    {showPatrimonyAportesCurve && (
                                       <Area
-                                        type={cfg.curveType || "monotone"}
-                                        dataKey="aportado"
-                                        name="Aportes Brutos"
-                                        stroke="#5E5CE6"
-                                        strokeWidth={Math.max(1.5, (cfg.strokeWidth || 2.5) - 0.5)}
-                                        dot={cfg.showDots ? { r: 3, fill: "#5E5CE6", stroke: "#07030f", strokeWidth: 1.5 } : false}
-                                        activeDot={{ r: 4, stroke: "#5E5CE6", fill: "#0d061c" }}
-                                        fill={cfg.fillArea !== false ? `url(#gradAporte_${widget.id})` : "none"}
-                                        fillOpacity={1}
-                                        connectNulls={true}
+                                        type="monotone"
+                                        dataKey="real"
+                                        name="Gasto Real Acumulado"
+                                        stroke={paceChartData.isBelowPace ? "#30D158" : "#FF453A"}
+                                        strokeWidth={2.5}
+                                        fill="url(#gradPaceReal)"
+                                        dot={false}
+                                        connectNulls={false}
                                       />
-                                    )}
-                                  </AreaChart>
-                                )}
-                              </ResponsiveContainer>
-                            </div>
+                                    </AreaChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ABA 3: PROJEÇÃO 6 MESES DE COMPROMETIMENTO FUTURO */}
+                            {patrimonyCardView === "forecast" && (
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <div>
+                                    <span className="text-slate-400 block text-[11px]">Comprometimento Médio Futuro:</span>
+                                    <strong className={`text-xl font-bold font-mono tabular-nums text-white ${moneyBlur}`}>
+                                      {formatBRL(forecast6MData.avgCommitted)} / mês
+                                    </strong>
+                                    <span className="text-[#0A84FF] text-[11px] font-semibold ml-2">
+                                      ({forecast6MData.avgPercent}% da Renda Base)
+                                    </span>
+                                  </div>
+
+                                  {forecast6MData.peakMonth && (
+                                    <div className="text-right text-[11px]">
+                                      <span className="text-slate-400 block">Mês de Pico:</span>
+                                      <span className="text-amber-400 font-mono font-bold">
+                                        {forecast6MData.peakMonth.label} ({formatBRL(forecast6MData.peakMonth.totalCommitted)})
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className={`${chartHeightClass} select-none transition-all duration-300`}>
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                      data={forecast6MData.months}
+                                      barSize={32}
+                                      accessibilityLayer={false}
+                                      margin={{ top: 12, right: 12, left: 4, bottom: 0 }}
+                                    >
+                                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.12)" />
+                                      <XAxis dataKey="label" stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} />
+                                      <YAxis
+                                        stroke="#64748b"
+                                        fontSize={11}
+                                        width={60}
+                                        domain={[0, "auto"]}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tickFormatter={(v) => {
+                                          const num = Number(v) || 0;
+                                          if (num >= 1000) return `R$ ${(num / 1000).toFixed(0)}k`;
+                                          return `R$ ${num}`;
+                                        }}
+                                      />
+                                      <Tooltip content={<ForecastCyberTooltip moneyBlur={moneyBlur} />} cursor={false} />
+                                      <Legend wrapperStyle={{ fontSize: "11px" }} />
+                                      <Bar dataKey="fixedCosts" name="Custos Fixos Ativos" stackId="commit" fill="#0A84FF" />
+                                      <Bar dataKey="cardInstallments" name="Parcelas de Cartão" stackId="commit" fill="#FF9F0A" radius={[6, 6, 0, 0]} />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
+                        {/* WIDGET 3: PARA ONDE VAI O MEU DINHEIRO 2.0 COM DRILL-DOWN */}
                         {widget.id === "category_chart" && (
-                          <div className={`grid ${cfg.showLegend !== false ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} gap-4 items-center`}>
-                            {/* Donut Moderno com Rótulo Centralizado Total Gasto (Sprint 16) */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                            {/* Donut Moderno com Rótulo Centralizado Total Gasto */}
                             <div className={`relative ${chartHeightClass} select-none flex items-center justify-center`}>
                               <ResponsiveContainer width="100%" height="100%">
                                 <PieChart accessibilityLayer={false}>
@@ -5165,28 +5945,16 @@ export default function CoindexApp() {
                                     paddingAngle={4}
                                     cornerRadius={6}
                                     stroke="none"
-                                    label={
-                                      cfg.showDataLabels
-                                        ? ({ percent }: { percent?: number }) =>
-                                            percent && percent > 0.05
-                                              ? `${Math.round((percent || 0) * 100)}%`
-                                              : ""
-                                        : false
-                                    }
-                                    labelLine={false}
                                   >
                                     {categoryChartData.map((entry, idx) => (
-                                      <Cell
-                                        key={`cell-${idx}`}
-                                        fill={entry.color}
-                                      />
+                                      <Cell key={`cell-${idx}`} fill={entry.color} />
                                     ))}
                                   </Pie>
                                   <Tooltip content={<CustomCyberTooltip isCurrency={true} moneyBlur={moneyBlur} />} cursor={false} />
                                 </PieChart>
                               </ResponsiveContainer>
 
-                              {/* Rótulo Central do Donut: TOTAL GASTO + Valor em R$ */}
+                              {/* Rótulo Central do Donut */}
                               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center select-none">
                                 <span className="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">
                                   Total Gasto
@@ -5197,15 +5965,74 @@ export default function CoindexApp() {
                               </div>
                             </div>
 
-                            {/* Lista de Categorias com Bolinha Colorida Correspondente */}
-                            {cfg.showLegend !== false && (
-                              <div className={`space-y-2 max-h-64 overflow-y-auto pr-1 text-xs`}>
+                            {/* LADO DIREITO: LISTA OU DRILL-DOWN */}
+                            {selectedCategoryDrillDown && categoryDrillDownData ? (
+                              <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1 text-xs">
+                                <div className="flex items-center justify-between pb-1.5 border-b border-white/10">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedCategoryDrillDown(null)}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 flex items-center gap-1.5 transition cursor-pointer"
+                                  >
+                                    <ArrowLeft className="w-3.5 h-3.5 text-[#0A84FF]" /> Voltar
+                                  </button>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                                      categoryDrillDownData.diffPercent >= 0
+                                        ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                                        : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                    }`}
+                                  >
+                                    {categoryDrillDownData.diffPercent >= 0
+                                      ? `+${categoryDrillDownData.diffPercent}%`
+                                      : `${categoryDrillDownData.diffPercent}%`}{" "}
+                                    vs. anterior
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-between px-1">
+                                  <span className="font-bold text-white text-sm flex items-center gap-2">
+                                    {renderCategorySemanticIcon(selectedCategoryDrillDown, "#0A84FF")}
+                                    {selectedCategoryDrillDown}
+                                  </span>
+                                  <strong className={`text-white font-mono text-sm tabular-nums ${moneyBlur}`}>
+                                    {formatBRL(categoryDrillDownData.totalCurrent)}
+                                  </strong>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  {categoryDrillDownData.txs.length === 0 ? (
+                                    <p className="text-slate-400 text-center py-4">Nenhum lançamento no período.</p>
+                                  ) : (
+                                    categoryDrillDownData.txs.map((tx) => (
+                                      <div
+                                        key={tx.id}
+                                        className="p-2 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between text-xs"
+                                      >
+                                        <div className="min-w-0 pr-2">
+                                          <span className="text-[10px] font-mono text-slate-400 block tabular-nums">
+                                            {formatDateBR(tx.date)} • {tx.paymentMethod}
+                                          </span>
+                                          <strong className="text-slate-200 block truncate">{tx.description}</strong>
+                                        </div>
+                                        <span className={`font-mono font-bold text-white shrink-0 tabular-nums ${moneyBlur}`}>
+                                          {formatBRL(tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount)}
+                                        </span>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 text-xs">
                                 {categoryChartData.map((cat) => {
                                   const pct = Math.round((cat.value / totalExpenses) * 100);
                                   return (
                                     <div
                                       key={cat.name}
-                                      className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-1.5"
+                                      onClick={() => setSelectedCategoryDrillDown(cat.name)}
+                                      className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-1.5 cursor-pointer hover:bg-slate-900/90 hover:border-white/15 transition group"
+                                      title="Clique para ver detalhamento de lançamentos"
                                     >
                                       <div className="flex items-center justify-between">
                                         <span className="font-semibold text-slate-200 flex items-center gap-2">
@@ -5214,12 +6041,17 @@ export default function CoindexApp() {
                                             style={{ backgroundColor: cat.color }}
                                           />
                                           {renderCategorySemanticIcon(cat.name, cat.color)}
-                                          <span className="truncate max-w-[130px]">{cat.name}</span>
+                                          <span className="truncate max-w-[130px] group-hover:text-white transition">
+                                            {cat.name}
+                                          </span>
                                         </span>
-                                        <span className={`font-bold text-white tabular-nums font-mono ${moneyBlur}`}>
-                                          {formatBRL(cat.value)}{" "}
-                                          <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
-                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className={`font-bold text-white tabular-nums font-mono ${moneyBlur}`}>
+                                            {formatBRL(cat.value)}{" "}
+                                            <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
+                                          </span>
+                                          <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-white transition" />
+                                        </div>
                                       </div>
                                       <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
                                         <div
@@ -5235,6 +6067,191 @@ export default function CoindexApp() {
                           </div>
                         )}
 
+                        {/* WIDGET 4: RADAR DE PENDÊNCIAS & PRÓXIMOS VENCIMENTOS */}
+                        {widget.id === "pending_radar" && (
+                          <div className="space-y-3 text-xs">
+                            {/* Abas Internas do Radar */}
+                            <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/5">
+                              <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setRadarActiveTab("fixos")}
+                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1 ${
+                                    radarActiveTab === "fixos"
+                                      ? "bg-[#0A84FF] text-white shadow-sm"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  <span>Fixos a Lançar</span>
+                                  {pendingRadarData.unlaunchedFixed.length > 0 && (
+                                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/30 text-amber-300 border border-amber-500/50">
+                                      {pendingRadarData.unlaunchedFixed.length}
+                                    </span>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRadarActiveTab("pendentes")}
+                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1 ${
+                                    radarActiveTab === "pendentes"
+                                      ? "bg-[#0A84FF] text-white shadow-sm"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  <span>Contas Pendentes</span>
+                                  {pendingRadarData.pendingTxs.length > 0 && (
+                                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500/30 text-rose-300 border border-rose-500/50">
+                                      {pendingRadarData.pendingTxs.length}
+                                    </span>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRadarActiveTab("faturas")}
+                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1 ${
+                                    radarActiveTab === "faturas"
+                                      ? "bg-[#0A84FF] text-white shadow-sm"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  <span>Vencimentos Cartões</span>
+                                </button>
+                              </div>
+
+                              {radarActiveTab === "fixos" && pendingRadarData.unlaunchedFixed.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleLaunchFixedTransactions()}
+                                  className="px-2.5 py-1 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium text-[11px] transition cursor-pointer flex items-center gap-1"
+                                >
+                                  <Sparkles className="w-3 h-3" /> Lançar Todos
+                                </button>
+                              )}
+                            </div>
+
+                            {/* SUB-ABA 1: FIXOS A LANÇAR */}
+                            {radarActiveTab === "fixos" && (
+                              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                {pendingRadarData.unlaunchedFixed.length === 0 ? (
+                                  <div className="p-4 rounded-xl bg-slate-950/40 border border-emerald-500/20 text-center space-y-1">
+                                    <CheckCircle2 className="w-6 h-6 text-[#30D158] mx-auto" />
+                                    <p className="font-semibold text-white">Todos os fixos já lançados!</p>
+                                    <p className="text-[11px] text-slate-400">
+                                      Nenhum custo fixo pendente de registro em {pendingRadarData.targetMonth}.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  pendingRadarData.unlaunchedFixed.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between gap-3 hover:border-white/15 transition"
+                                    >
+                                      <div className="min-w-0">
+                                        <strong className="text-white block truncate">{item.title}</strong>
+                                        <span className="text-[10px] text-slate-400 block truncate font-mono">
+                                          {item.notes || "Custo Fixo"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <span className={`font-mono font-bold text-white tabular-nums ${moneyBlur}`}>
+                                          {formatBRL(item.amount)}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleLaunchSingleFixed(item)}
+                                          className="px-2 py-1 rounded-lg bg-[#0A84FF]/20 hover:bg-[#0A84FF] text-[#64D2FF] hover:text-white border border-[#0A84FF]/30 text-[11px] font-semibold transition cursor-pointer"
+                                        >
+                                          Lançar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            )}
+
+                            {/* SUB-ABA 2: CONTAS PENDENTES */}
+                            {radarActiveTab === "pendentes" && (
+                              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                {pendingRadarData.pendingTxs.length === 0 ? (
+                                  <div className="p-4 rounded-xl bg-slate-950/40 border border-emerald-500/20 text-center space-y-1">
+                                    <CheckCircle2 className="w-6 h-6 text-[#30D158] mx-auto" />
+                                    <p className="font-semibold text-white">Tudo em dia!</p>
+                                    <p className="text-[11px] text-slate-400">
+                                      Nenhuma despesa pendente de pagamento no mês selecionado.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="px-1 text-[11px] text-slate-400 flex items-center justify-between">
+                                      <span>Total Pendente:</span>
+                                      <strong className={`text-rose-400 font-mono font-bold tabular-nums ${moneyBlur}`}>
+                                        {formatBRL(pendingRadarData.totalPendingAmount)}
+                                      </strong>
+                                    </div>
+                                    {pendingRadarData.pendingTxs.map((tx) => (
+                                      <div
+                                        key={tx.id}
+                                        className="p-2.5 rounded-xl bg-slate-950/60 border border-rose-500/20 flex items-center justify-between gap-3 hover:border-rose-500/30 transition"
+                                      >
+                                        <div className="min-w-0">
+                                          <span className="text-[10px] font-mono text-slate-400 block tabular-nums">
+                                            {formatDateBR(tx.date)}
+                                          </span>
+                                          <strong className="text-white block truncate">{tx.description}</strong>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span className={`font-mono font-bold text-rose-300 tabular-nums ${moneyBlur}`}>
+                                            {formatBRL(tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount)}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleToggleStatus(tx)}
+                                            className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-white border border-emerald-500/30 text-[11px] font-semibold transition cursor-pointer"
+                                            title="Marcar como Pago"
+                                          >
+                                            ✓ Dar Baixa
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                            )}
+
+                            {/* SUB-ABA 3: FATURAS & CARTÕES */}
+                            {radarActiveTab === "faturas" && (
+                              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                {pendingRadarData.cardSchedules.map((item) => (
+                                  <div
+                                    key={item.card.id}
+                                    className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between gap-3"
+                                  >
+                                    <div className="min-w-0">
+                                      <strong className="text-white block truncate">{item.card.name}</strong>
+                                      <span className="text-[10px] text-slate-400 block font-mono">
+                                        Fecha dia {item.closingDay} • Vence dia {item.dueDay}
+                                      </span>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <span className={`font-mono font-bold text-white block ${moneyBlur}`}>
+                                        {formatBRL(item.invoiceAmount)}
+                                      </span>
+                                      <span className="text-[10px] text-[#0A84FF] font-medium block">
+                                        {item.daysToClose <= 5
+                                          ? `Fecha em ${item.daysToClose}d`
+                                          : `Vence em ${item.daysToDue}d`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* WIDGET 5: EXPOSIÇÃO & LIMITE DE CARTÕES */}
                         {widget.id === "credit_chart" && (
                           <div className={`${chartHeightClass} select-none transition-all duration-300`}>
                             <ResponsiveContainer width="100%" height="100%">
@@ -5268,6 +6285,7 @@ export default function CoindexApp() {
                           </div>
                         )}
 
+                        {/* WIDGET 6: LIMITES BANCÁRIOS & RANKING */}
                         {widget.id === "bank_limits_chart" && (
                           <div className="space-y-4">
                             {/* Resumo Consolidado de Limites Bancários */}
@@ -5386,6 +6404,7 @@ export default function CoindexApp() {
                           </div>
                         )}
 
+                        {/* WIDGET 7: BENEFÍCIOS & STRAVA */}
                         {widget.id === "benefits_strava" && (
                           <div className="space-y-4 text-xs">
                             <div className="p-4 rounded-2xl bg-slate-950/75 border border-emerald-500/20 flex items-center justify-between">

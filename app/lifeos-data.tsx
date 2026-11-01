@@ -84,6 +84,7 @@ export type DashboardWidgetId =
   | "patrimony_chart"
   | "category_chart"
   | "benefits_strava"
+  | "pending_radar"
   | "auto_odometer"
   | "auto_consumption"
   | "auto_fuel_monthly"
@@ -871,43 +872,36 @@ export const COLOR_PRESETS = [
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
   {
     id: "thermometer",
-    title: "Termômetro de Orçamento & Alertas",
-    subtitle: "Consumo do teto pessoal e avisos ativos",
+    title: "Termômetro de Orçamento & Cota Diária",
+    subtitle: "Consumo do teto pessoal, cota diária livre e alocação 50/30/20",
     visible: true,
     size: "full"
-  },
-  {
-    id: "kpis",
-    title: "KPIs Executivos",
-    subtitle: "Resumo financeiro e patrimonial do período",
-    visible: true,
-    size: "full"
-  },
-  {
-    id: "credit_chart",
-    title: "Exposição & Limite de Cartões",
-    subtitle: "Faturas abertas vs limite total disponível",
-    visible: true,
-    size: "half"
-  },
-  {
-    id: "bank_limits_chart",
-    title: "Limites Bancários & Ranking",
-    subtitle: "Exposição total, ranking de limites e disponibilidade por banco",
-    visible: true,
-    size: "half"
   },
   {
     id: "patrimony_chart",
-    title: "Evolução Patrimonial",
-    subtitle: "Crescimento acumulado e fluxo mensal",
+    title: "Central Analítica de Patrimônio & Caixa",
+    subtitle: "Evolução patrimonial, curva de ritmo diário e projeção de 6 meses",
     visible: true,
     size: "half"
   },
   {
     id: "category_chart",
-    title: "Despesas por Categoria",
-    subtitle: "Distribuição percentual dos gastos",
+    title: "Para Onde Vai o Meu Dinheiro 2.0",
+    subtitle: "Distribuição percentual e drill-down interativo por categoria",
+    visible: true,
+    size: "half"
+  },
+  {
+    id: "pending_radar",
+    title: "Radar de Pendências & Próximos Vencimentos",
+    subtitle: "Itens fixos a lançar, contas pendentes e faturas próximas",
+    visible: true,
+    size: "half"
+  },
+  {
+    id: "bank_limits_chart",
+    title: "Exposição de Cartões, Bancos & Limites",
+    subtitle: "Exposição total, ranking de limites e disponibilidade bancária",
     visible: true,
     size: "half"
   },

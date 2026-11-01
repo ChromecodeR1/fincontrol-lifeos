@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.20.0`  
-> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 28 — Correção Global de Sobreposição / Stacking Context via Portals e Elevação Dinâmica, Contraste do Termômetro e Unificação de Controles Cupertino)  
+> **Versão da Aplicação:** `0.21.0`  
+> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 29 — Dashboard 2.0 Estilo Copilot Money & Monarch: Bento Grid Inteligente, Curva de Ritmo de Gastos, Projeção 6M, Drill-Down no Donut e Radar de Pendências)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -496,6 +496,23 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
   - **Unificação dos Controles Segmentados e Cores no Padrão Cupertino:**
     - Pílulas selecionadas padronizadas com Apple Blue (`bg-[#0A84FF] text-white shadow-sm`): barra de filtros rápidos (`Todos | Fixos | Variáveis | Cartão | PIX`), seletores de curva, espessura, altura e zeros no popover de gráficos, abas de filtro na tabela de transações e filtros do mural de notas.
     - Seletor de cores no `ChartSettingsPopover` com anel indicador e checkmark nítidos, sincronizando a cor primária da curva e do degradê instantaneamente.
+- **Sprint 29 — Dashboard 2.0 Estilo Copilot Money & Monarch: Bento Grid Inteligente, Curva de Ritmo de Gastos, Projeção 6M, Drill-Down no Donut e Radar de Pendências:**
+  - **Hierarquia Bento & Ancoragem dos 4 Slim KPI Cards (Zona 1):**
+    - Seção "Resumo Financeiro do Mês" permanentemente ancorada no topo do Dashboard com seletor de Regime Contábil (Competência vs. Caixa).
+    - Mini-sparklines SVG puras nos 4 Slim KPI cards renderizando tendências históricas reais de 6 meses (Entradas em `#30D158`, Saídas em `#FF453A`, Aportes em `#0A84FF`, Balanço em `#64D2FF`).
+    - Layout padrão inteligente Bento no `DEFAULT_DASHBOARD_LAYOUT` e botão "Restaurar Ordem": Linha 1 (Termômetro 1/1), Linha 2 (Patrimônio & Caixa 1/2 + Para Onde Vai o Meu Dinheiro 2.0 1/2), Linha 3 (Radar de Pendências 1/2 + Limites Bancários 1/2).
+  - **Upgrade do Termômetro com Cota Diária e Alocação 50/30/20:**
+    - Pílula Copilot Money com cálculo em tempo real da **Cota Diária Livre**: `Restante Livre / Dias Restantes no Mês` (`"Cota Diária Livre: R$ XX,XX / dia"`).
+    - Barra segmentada da Alocação Real 50/30/20 com comparação óptica frente aos benchmarks clássicos: Fixos (`#0A84FF`, meta 50%), Variáveis/Pessoais (`#FF9F0A`, meta 30%) e Aportes/Reservas (`#30D158`, meta 20%).
+  - **Multi-View Chart Estilo Copilot Money (3 Visões no Card Principal):**
+    - Segmented control no cabeçalho alternando instantaneamente entre:
+      * **Patrimônio:** Evolução histórica Copilot Money com eixos travados, degradê translúcido e toggle de Aportes.
+      * **Ritmo no Mês (Pace):** Gráfico diário comparando linha linear ideal vs. curva real acumulada de gastos (verde quando dentro do ritmo, vermelho quando acima).
+      * **Projeção 6M (Futuro):** Barras empilhadas dos próximos 6 meses somando custos fixos ativos (`staticStatus`) e parcelas futuras de cartões cadastradas, indicando comprometimento médio e % da renda base.
+  - **"Para Onde Vai o Meu Dinheiro 2.0" com Drill-Down Interativo:**
+    - Categorias no Donut interativas (`cursor-pointer`). Ao clicar em uma categoria, expande painel detalhado de drill-down com transações formatadas em `DD-MM-YYYY`, comparativo percentual `vs. mês anterior` e botão `"← Voltar"`.
+  - **Widget "Radar de Pendências & Próximos Vencimentos":**
+    - Sub-abas especializadas: Fixos a Lançar (com botão 1-clique "Lançar" individual e "Lançar Todos"), Contas Pendentes (com botão 1-clique "✓ Dar Baixa") e Vencimentos/Fechamentos de Faturas de Cartão.
 
 ---
 
