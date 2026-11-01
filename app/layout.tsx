@@ -1,20 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"]
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"]
-});
 
 export const metadata: Metadata = {
   title: "Coindex — Personal Finance & BI",
-  description: "Sistema financeiro pessoal, Business Intelligence patrimonial e telemetria automotiva.",
+  description: "Sistema financeiro pessoal, Business Intelligence patrimonial e telemetria automotiva estilo Apple Copilot Pure.",
   icons: {
     icon: "/icon.svg",
     shortcut: "/icon.svg",
@@ -28,8 +17,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className="dark">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="pt-BR" className="dark" data-theme="dark">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var t = localStorage.getItem('coindex_cupertino_theme') || 'dark';
+                  document.documentElement.setAttribute('data-theme', t);
+                  if (t === 'dark') {
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch(e) {}
+              })();
+            `
+          }}
+        />
+      </head>
+      <body className="antialiased">
         {children}
       </body>
     </html>

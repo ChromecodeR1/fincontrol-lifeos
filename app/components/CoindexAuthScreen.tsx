@@ -90,12 +90,12 @@ export default function CoindexAuthScreen({
   };
 
   return (
-    <div className="min-h-screen bg-[#07030f] text-slate-100 grid grid-cols-1 lg:grid-cols-12 relative overflow-hidden">
-      <div className="pointer-events-none absolute -top-36 -left-36 w-[420px] h-[420px] rounded-full bg-[#FF2A85]/20 blur-[130px]" />
-      <div className="pointer-events-none absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full bg-[#A855F7]/15 blur-[140px]" />
+    <div className="min-h-screen bg-[#0b0c0e] text-slate-100 grid grid-cols-1 lg:grid-cols-12 relative overflow-hidden">
+      <div className="pointer-events-none absolute -top-36 -left-36 w-[420px] h-[420px] rounded-full bg-blue-500/10 blur-[130px]" />
+      <div className="pointer-events-none absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full bg-indigo-500/10 blur-[140px]" />
 
       {/* Coluna Esquerda: Identidade Visual Coindex */}
-      <div className="hidden lg:flex lg:col-span-7 flex-col justify-between p-12 xl:p-16 border-r border-white/[0.07] bg-gradient-to-br from-slate-950/95 via-[#070b16] to-indigo-950/25 relative z-10">
+      <div className="hidden lg:flex lg:col-span-7 flex-col justify-between p-12 xl:p-16 border-r border-white/[0.07] bg-gradient-to-br from-[#121316] via-[#0b0c0e] to-indigo-950/20 relative z-10">
         <div className="flex items-center justify-between">
           <CoindexLogoHorizontal size="lg" />
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-emerald-500/30 text-[11px] text-emerald-300 font-mono">
@@ -105,11 +105,11 @@ export default function CoindexAuthScreen({
 
         <div className="space-y-8 max-w-xl">
           <div className="space-y-4">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 text-xs font-semibold">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/25 text-blue-300 text-xs font-semibold">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               Arquitetura Single-Owner • Supabase Auth + Row Level Security
             </span>
-            <h1 className="text-3xl xl:text-4xl font-extrabold text-white leading-tight tracking-tight">
+            <h1 className="text-3xl xl:text-4xl font-semibold text-white leading-tight tracking-[-0.02em]">
               Inteligência financeira pessoal e controle patrimonial em tempo real.
             </h1>
             <p className="text-sm text-slate-400 leading-relaxed">
@@ -119,7 +119,7 @@ export default function CoindexAuthScreen({
 
           <div className="grid grid-cols-3 gap-4">
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.07] backdrop-blur-md space-y-1">
-              <span className="text-[11px] font-mono uppercase text-indigo-400 block">Banco Relacional</span>
+              <span className="text-[11px] font-mono uppercase text-blue-400 block">Banco Relacional</span>
               <strong className="text-xs text-white block">Supabase PostgreSQL</strong>
               <p className="text-[11px] text-slate-400">Sincronização instantânea em qualquer dispositivo.</p>
             </div>
@@ -137,7 +137,7 @@ export default function CoindexAuthScreen({
         </div>
 
         <div className="flex items-center justify-between text-xs text-slate-400 border-t border-white/[0.06] pt-6">
-          <span>Coindex Financial OS • Uso Pessoal Exclusivo</span>
+          <span>Coindex Financial OS • Cupertino Pure Design</span>
           <span className="font-mono text-slate-400">Vercel + Supabase Cloud</span>
         </div>
       </div>
@@ -151,10 +151,10 @@ export default function CoindexAuthScreen({
             </div>
 
             <div className="flex items-center justify-between">
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
                 hasOwner
                   ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
-                  : "bg-indigo-500/15 text-indigo-300 border-indigo-500/30"
+                  : "bg-blue-500/15 text-blue-300 border-blue-500/30"
               }`}>
                 {hasOwner ? (
                   <>
@@ -163,7 +163,7 @@ export default function CoindexAuthScreen({
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
                     Primeiro Acesso (Supabase)
                   </>
                 )}
@@ -171,7 +171,7 @@ export default function CoindexAuthScreen({
             </div>
 
             <div>
-              <h2 className="text-xl font-extrabold text-white tracking-tight">
+              <h2 className="text-xl font-semibold tracking-[-0.02em] text-white">
                 {mode === "login" ? "Bem-vindo de volta ao Coindex" : "Criar Conta Proprietária"}
               </h2>
               <p className="text-xs text-slate-400 mt-1">
@@ -190,18 +190,18 @@ export default function CoindexAuthScreen({
           )}
 
           {!hasOwner && (
-            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-slate-950 border border-white/10 text-xs font-bold">
+            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-slate-950 border border-white/10 text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => { setMode("login"); setErrorMsg(""); }}
-                className={`py-2 rounded-xl transition ${mode === "login" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
+                className={`py-2 rounded-xl transition ${mode === "login" ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"}`}
               >
                 Já tenho conta
               </button>
               <button
                 type="button"
                 onClick={() => { setMode("register"); setErrorMsg(""); }}
-                className={`py-2 rounded-xl transition ${mode === "register" ? "bg-emerald-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
+                className={`py-2 rounded-xl transition ${mode === "register" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}
               >
                 Primeiro Acesso
               </button>
@@ -210,7 +210,7 @@ export default function CoindexAuthScreen({
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
             <div className="space-y-1.5">
-              <label className="text-slate-300 font-semibold block">Usuário Proprietário</label>
+              <label className="text-slate-300 font-medium block">Usuário Proprietário</label>
               <div className="relative">
                 <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
                 <input
@@ -220,13 +220,13 @@ export default function CoindexAuthScreen({
                   placeholder="Ex: Sabrino"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950/90 border border-white/10 text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950/90 border border-white/10 text-white placeholder-slate-500 outline-none focus:border-[#0A84FF] focus:ring-2 focus:ring-[#0A84FF]/25 transition-all"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-slate-300 font-semibold block">Senha de Acesso</label>
+              <label className="text-slate-300 font-medium block">Senha de Acesso</label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
                 <input
@@ -236,7 +236,7 @@ export default function CoindexAuthScreen({
                   placeholder="Mínimo de 8 caracteres..."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-950/90 border border-white/10 text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-950/90 border border-white/10 text-white placeholder-slate-500 outline-none focus:border-[#0A84FF] focus:ring-2 focus:ring-[#0A84FF]/25 transition-all"
                 />
                 <button
                   type="button"
@@ -251,7 +251,7 @@ export default function CoindexAuthScreen({
 
             {mode === "register" && password.length > 0 && (
               <div className="p-3 rounded-xl bg-slate-950/80 border border-white/[0.07] space-y-1.5 text-[11px]">
-                <span className="text-slate-400 font-semibold block">Requisitos de segurança:</span>
+                <span className="text-slate-400 font-medium block">Requisitos de segurança:</span>
                 <div className="flex flex-wrap gap-3">
                   <span className={pwdRules.minLength ? "text-emerald-400 font-semibold" : "text-slate-400"}>
                     {pwdRules.minLength ? "✓" : "○"} Mín. 8 caracteres
@@ -272,7 +272,7 @@ export default function CoindexAuthScreen({
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-white/20 bg-slate-950 text-indigo-600 focus:ring-indigo-500/30"
+                  className="rounded border-white/20 bg-slate-950 text-[#0A84FF] focus:ring-[#0A84FF]/30"
                 />
                 <span>Manter sessão conectada neste dispositivo</span>
               </label>
@@ -288,11 +288,7 @@ export default function CoindexAuthScreen({
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full py-3 rounded-xl font-extrabold text-white shadow-lg flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 ${
-                mode === "login"
-                  ? "bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] shadow-[0_0_20px_rgba(255,42,133,0.35)] border border-pink-400/30"
-                  : "bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] shadow-[0_0_20px_rgba(255,42,133,0.35)] border border-pink-400/30"
-              }`}
+              className="w-full py-3 rounded-xl font-medium text-white bg-[#0A84FF] hover:bg-[#0070E0] shadow-sm flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60"
             >
               {isLoading ? (
                 <>

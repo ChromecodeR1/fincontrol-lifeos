@@ -1487,7 +1487,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 ? "bg-sky-600 hover:bg-sky-500 shadow-lg shadow-sky-600/25"
                 : isPostoExpress
                 ? "bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-600/20"
-                : "bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] shadow-[0_0_18px_rgba(255,42,133,0.38)] border border-pink-400/30"
+                : "bg-[#0A84FF] hover:bg-[#0070E0] shadow-sm font-medium"
             }`}
           >
             {isSavingTx ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

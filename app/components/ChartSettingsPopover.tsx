@@ -39,17 +39,15 @@ export const DEFAULT_CHART_WIDGET_SETTINGS: ChartWidgetSettings = {
 };
 
 export const CHART_COLOR_PALETTE: ReadonlyArray<{ id: string; label: string; hex: string }> = [
-  { id: "auto", label: "Automática (Cyberpunk Pink)", hex: "linear-gradient(135deg,#FF2A85,#A855F7)" },
-  { id: "#FF2A85", label: "Laser Pink", hex: "#FF2A85" },
-  { id: "#00F5D4", label: "Neon Mint", hex: "#00F5D4" },
-  { id: "#A855F7", label: "Electric Violet", hex: "#A855F7" },
-  { id: "#38BDF8", label: "Electric Sky", hex: "#38BDF8" },
-  { id: "#FFB800", label: "Cyber Amber", hex: "#FFB800" },
-  { id: "#FF6B4A", label: "Synth Coral", hex: "#FF6B4A" },
-  { id: "#A3E635", label: "Acid Lime", hex: "#A3E635" },
-  { id: "#6366f1", label: "Índigo", hex: "#6366f1" },
-  { id: "#10b981", label: "Esmeralda", hex: "#10b981" },
-  { id: "#ef4444", label: "Vermelho", hex: "#ef4444" }
+  { id: "auto", label: "Automática (Azul Apple)", hex: "linear-gradient(135deg,#0A84FF,#5E5CE6)" },
+  { id: "#0A84FF", label: "Azul Apple", hex: "#0A84FF" },
+  { id: "#30D158", label: "Verde Menta", hex: "#30D158" },
+  { id: "#5E5CE6", label: "Índigo Apple", hex: "#5E5CE6" },
+  { id: "#64D2FF", label: "Ciano Apple", hex: "#64D2FF" },
+  { id: "#FF9F0A", label: "Âmbar Laranja", hex: "#FF9F0A" },
+  { id: "#FF453A", label: "Vermelho Coral", hex: "#FF453A" },
+  { id: "#BF5AF2", label: "Púrpura Apple", hex: "#BF5AF2" },
+  { id: "#8E8E93", label: "Cinza Neutro", hex: "#8E8E93" }
 ];
 
 interface ChartSettingsPopoverProps {
@@ -129,12 +127,12 @@ export default function ChartSettingsPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute right-0 top-10 z-50 w-80 max-h-[85vh] overflow-y-auto rounded-2xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] p-4 text-xs text-slate-200"
+      className="absolute right-0 top-10 z-50 w-80 max-h-[85vh] overflow-y-auto rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] p-4 text-xs text-slate-200"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-2.5">
         <span className="font-semibold text-slate-100 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-[#FF2A85] shadow-[0_0_8px_#FF2A85]" />
+          <span className="w-2 h-2 rounded-full bg-[#0A84FF]" />
           Personalizar Gráfico
         </span>
         <button
@@ -165,7 +163,7 @@ export default function ChartSettingsPopover({
                   onClick={() => updateField("chartType", opt.id)}
                   className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition ${
                     currentDisplayType === opt.id
-                      ? "bg-[#FF2A85] text-white shadow-[0_0_10px_rgba(255,42,133,0.4)]"
+                      ? "bg-[#0A84FF] text-white shadow-sm"
                       : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                   }`}
                 >
@@ -191,7 +189,7 @@ export default function ChartSettingsPopover({
                     title={swatch.label}
                     className={`relative flex h-6 w-6 items-center justify-center rounded-full border transition ${
                       selected
-                        ? "scale-110 border-white ring-2 ring-[#FF2A85]/70 shadow-[0_0_8px_rgba(255,42,133,0.5)]"
+                        ? "scale-110 border-white ring-2 ring-[#0A84FF]/70 shadow-sm"
                         : "border-slate-700 opacity-80 hover:opacity-100 hover:scale-105"
                     }`}
                     style={{ background: swatch.hex }}
@@ -223,7 +221,7 @@ export default function ChartSettingsPopover({
                     onClick={() => updateField("curveType", opt.id)}
                     className={`rounded-md py-1.5 text-center text-[11px] font-medium transition ${
                       settings.curveType === opt.id
-                        ? "bg-[#A855F7] text-white shadow-[0_0_8px_rgba(168,85,247,0.4)]"
+                        ? "bg-[#5E5CE6] text-white shadow-sm"
                         : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                     }`}
                   >
@@ -327,7 +325,7 @@ export default function ChartSettingsPopover({
                   type="checkbox"
                   checked={settings.fillArea}
                   onChange={(e) => updateField("fillArea", e.target.checked)}
-                  className="h-4 w-4 rounded accent-[#FF2A85]"
+                  className="h-4 w-4 rounded accent-[#0A84FF]"
                 />
               </label>
 
@@ -337,7 +335,7 @@ export default function ChartSettingsPopover({
                   type="checkbox"
                   checked={settings.showDots}
                   onChange={(e) => updateField("showDots", e.target.checked)}
-                  className="h-4 w-4 rounded accent-[#FF2A85]"
+                  className="h-4 w-4 rounded accent-[#0A84FF]"
                 />
               </label>
             </>
@@ -350,7 +348,7 @@ export default function ChartSettingsPopover({
                 type="checkbox"
                 checked={settings.showGrid}
                 onChange={(e) => updateField("showGrid", e.target.checked)}
-                className="h-4 w-4 rounded accent-[#FF2A85]"
+                className="h-4 w-4 rounded accent-[#0A84FF]"
               />
             </label>
           )}
@@ -362,7 +360,7 @@ export default function ChartSettingsPopover({
                 type="checkbox"
                 checked={settings.showLegend}
                 onChange={(e) => updateField("showLegend", e.target.checked)}
-                className="h-4 w-4 rounded accent-[#FF2A85]"
+                className="h-4 w-4 rounded accent-[#0A84FF]"
               />
             </label>
           )}
@@ -374,7 +372,7 @@ export default function ChartSettingsPopover({
                 type="checkbox"
                 checked={settings.showDataLabels}
                 onChange={(e) => updateField("showDataLabels", e.target.checked)}
-                className="h-4 w-4 rounded accent-[#FF2A85]"
+                className="h-4 w-4 rounded accent-[#0A84FF]"
               />
             </label>
           )}

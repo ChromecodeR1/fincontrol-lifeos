@@ -608,7 +608,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
               if (onNewTransaction) onNewTransaction();
               else if (handleOpenNewTxModal) handleOpenNewTxModal();
             }}
-            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] text-white font-semibold shadow-[0_0_18px_rgba(255,42,133,0.38)] border border-pink-400/30 transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition-all text-xs flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" /> Novo Lançamento
           </button>
@@ -617,44 +617,44 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
 
       {/* Barra de Filtros Ativos e Botão de Limpar */}
       {hasActiveFiltersOrSort && (
-        <div className="p-3 rounded-2xl bg-[#190a2a]/80 border border-[#A855F7]/30 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="p-3 rounded-2xl bg-slate-900/90 border border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-bold text-pink-300 flex items-center gap-1.5">
-              <Filter className="w-3.5 h-3.5 text-pink-400" /> Filtros e Ordenação Ativos:
+            <span className="font-semibold text-blue-400 flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-blue-400" /> Filtros e Ordenação Ativos:
             </span>
             {sortConfig && (
-              <span className="px-2.5 py-1 rounded-xl bg-[#FF2A85]/20 text-[#FF2A85] border border-[#FF2A85]/40 text-[11px] font-semibold flex items-center gap-1">
+              <span className="px-2.5 py-1 rounded-xl bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30 text-[11px] font-semibold flex items-center gap-1">
                 Coluna: <strong className="text-white">{sortConfig.key}</strong> (
                 {sortConfig.dir === "asc" ? "Crescente ↑" : "Decrescente ↓"})
               </span>
             )}
             {columnFilters.categories.length > 0 && (
-              <span className="px-2.5 py-1 rounded-xl bg-[#FF2A85]/20 text-[#FF2A85] border border-[#FF2A85]/40 text-[11px] font-semibold">
+              <span className="px-2.5 py-1 rounded-xl bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30 text-[11px] font-semibold">
                 Categorias ({columnFilters.categories.length})
               </span>
             )}
             {columnFilters.costTypes.length > 0 && (
-              <span className="px-2.5 py-1 rounded-xl bg-[#FF2A85]/20 text-[#FF2A85] border border-[#FF2A85]/40 text-[11px] font-semibold">
+              <span className="px-2.5 py-1 rounded-xl bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30 text-[11px] font-semibold">
                 Custo: {columnFilters.costTypes.join(", ")}
               </span>
             )}
             {columnFilters.methods.length > 0 && (
-              <span className="px-2.5 py-1 rounded-xl bg-[#FF2A85]/20 text-[#FF2A85] border border-[#FF2A85]/40 text-[11px] font-semibold">
+              <span className="px-2.5 py-1 rounded-xl bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30 text-[11px] font-semibold">
                 Métodos ({columnFilters.methods.length})
               </span>
             )}
             {columnFilters.statuses.length > 0 && (
-              <span className="px-2.5 py-1 rounded-xl bg-[#FF2A85]/20 text-[#FF2A85] border border-[#FF2A85]/40 text-[11px] font-semibold">
+              <span className="px-2.5 py-1 rounded-xl bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30 text-[11px] font-semibold">
                 Situação: {columnFilters.statuses.join(", ")}
               </span>
             )}
             {columnFilters.hasKmOnly && (
-              <span className="px-2.5 py-1 rounded-xl bg-[#FF2A85]/20 text-[#FF2A85] border border-[#FF2A85]/40 text-[11px] font-semibold">
+              <span className="px-2.5 py-1 rounded-xl bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30 text-[11px] font-semibold">
                 Com Odômetro
               </span>
             )}
             {(columnFilters.minAmount || columnFilters.maxAmount) && (
-              <span className="px-2.5 py-1 rounded-xl bg-[#FF2A85]/20 text-[#FF2A85] border border-[#FF2A85]/40 text-[11px] font-semibold">
+              <span className="px-2.5 py-1 rounded-xl bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30 text-[11px] font-semibold">
                 Faixa de Valor
               </span>
             )}
@@ -798,7 +798,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                               >
                                 <input
                                   type="checkbox"
-                                  className="accent-[#FF2A85] rounded cursor-pointer"
+                                  className="accent-[#0A84FF] rounded cursor-pointer"
                                   checked={checked}
                                   onChange={(e) => {
                                     const next = e.target.checked
@@ -860,7 +860,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                           >
                             <input
                               type="checkbox"
-                              className="accent-[#FF2A85] rounded cursor-pointer"
+                              className="accent-[#0A84FF] rounded cursor-pointer"
                               checked={columnFilters.costTypes.includes(cType)}
                               onChange={(e) => {
                                 const next = e.target.checked
@@ -930,7 +930,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                             >
                               <input
                                 type="checkbox"
-                                className="accent-[#FF2A85] rounded cursor-pointer"
+                                className="accent-[#0A84FF] rounded cursor-pointer"
                                 checked={columnFilters.methods.includes(m)}
                                 onChange={(e) => {
                                   const next = e.target.checked
@@ -986,7 +986,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                         <label className="flex items-center gap-2 text-slate-200 cursor-pointer">
                           <input
                             type="checkbox"
-                            className="accent-[#FF2A85] rounded cursor-pointer"
+                            className="accent-[#0A84FF] rounded cursor-pointer"
                             checked={columnFilters.hasKmOnly}
                             onChange={(e) =>
                               setColumnFilters({ ...columnFilters, hasKmOnly: e.target.checked })
@@ -1042,7 +1042,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                           >
                             <input
                               type="checkbox"
-                              className="accent-[#FF2A85] rounded cursor-pointer"
+                              className="accent-[#0A84FF] rounded cursor-pointer"
                               checked={columnFilters.statuses.includes(st)}
                               onChange={(e) => {
                                 const next = e.target.checked

@@ -242,7 +242,7 @@ export function ProfileModal({
                       value="merge"
                       checked={restoreMode === "merge"}
                       onChange={() => setRestoreMode("merge")}
-                      className="accent-[#FF2A85]"
+                      className="accent-[#0A84FF]"
                     />
                     <div>
                       <strong className="text-xs block text-white">Mesclar com dados atuais (Recomendado)</strong>
@@ -263,7 +263,7 @@ export function ProfileModal({
                       value="replace"
                       checked={restoreMode === "replace"}
                       onChange={() => setRestoreMode("replace")}
-                      className="accent-[#FF2A85]"
+                      className="accent-[#0A84FF]"
                     />
                     <div>
                       <strong className="text-xs block text-rose-300">Substituir tudo</strong>
@@ -290,7 +290,7 @@ export function ProfileModal({
                       onClose();
                     }
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#FF2A85] to-[#A855F7] text-white text-xs font-bold shadow-md hover:brightness-110"
+                  className="px-3 py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white text-xs font-medium shadow-sm transition"
                 >
                   ✓ Confirmar Restauração
                 </button>
@@ -325,7 +325,7 @@ export function ProfileModal({
             type="button"
             disabled={isSaving}
             onClick={handleSave}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#FF2A85] to-[#A855F7] hover:from-[#FF4796] hover:to-[#B86BFF] text-white font-semibold shadow-[0_0_18px_rgba(255,42,133,0.38)] border border-pink-400/30 flex items-center gap-1.5 transition disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm flex items-center gap-1.5 transition disabled:opacity-50"
           >
             <Check className="w-4 h-4" /> Salvar Perfil
           </button>

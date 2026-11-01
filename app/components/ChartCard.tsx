@@ -87,7 +87,7 @@ export default function ChartCard({
       }}
       className={`${spanClass} relative rounded-2xl border transition-all duration-200 ${
         isDropTarget
-          ? "border-[#FF2A85] ring-2 ring-[#FF2A85]/40 shadow-[0_0_20px_rgba(255,42,133,0.3)]"
+          ? "border-[#0A84FF] ring-2 ring-[#0A84FF]/40 shadow-sm"
           : "border-slate-800/80"
       } ${isDragging ? " scale-[0.99] opacity-60" : "opacity-100"} bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm ${className}`}
     >
@@ -95,7 +95,7 @@ export default function ChartCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {icon}
-            <h3 className="truncate text-sm font-semibold text-slate-100">{title}</h3>
+            <h3 className="truncate text-sm font-semibold tracking-[-0.02em] text-slate-100">{title}</h3>
           </div>
           {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
         </div>
@@ -146,7 +146,7 @@ export default function ChartCard({
                 title="Configurações deste gráfico"
                 className={`rounded p-1 transition ${
                   popoverOpen
-                    ? "bg-[#FF2A85] text-white shadow-[0_0_8px_rgba(255,42,133,0.5)]"
+                    ? "bg-[#0A84FF] text-white shadow-sm"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                 }`}
               >

@@ -1,23 +1,23 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.18.0`  
-> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 26 — Redesign do Gráfico "Evolução do Meu Patrimônio" para Linha/Área Limpa Estilo Copilot Money, Remoção das Torres e Reconexão Total do Menu de Personalização ChartSettingsPopover)  
+> **Versão da Aplicação:** `0.19.0`  
+> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 27 — Implementação do Design System "Apple Copilot Pure — Cupertino Light & Dark" + Formatação Tipográfica Apple no Layout Atual)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
 
 ## 1. Visão Geral da Arquitetura & Stack Tecnológica
 
-O **Coindex** é uma plataforma corporativa e pessoal de Business Intelligence (BI) financeiro, telemetria patrimonial, gestão de cartões de crédito e telemetria automotiva, construída sob a estética **Cyber-Glassmorphism** e design system **Cyberpunk Neon (Synthwave Spark)**.
+O **Coindex** é uma plataforma corporativa e pessoal de Business Intelligence (BI) financeiro, telemetria patrimonial, gestão de cartões de crédito e telemetria automotiva, construída sob a estética **Apple Copilot Pure — Cupertino Light & Dark** e princípios de Human Interface Design da Apple com inspiração no Copilot Money.
 
 ### Stack Base:
 - **Framework:** Next.js 16.4.2 (App Router, Turbopack, Cache Components, Partial Prefetching).
 - **Linguagem:** TypeScript 5 (Modo Estrito / Strict Mode habilitado).
-- **Estilização:** Tailwind CSS v4 com temas inline `@theme`, Glassmorphism, scrollbars personalizadas e tipografia tabular global (`tabular-nums`).
-- **Visualização de Dados:** Recharts 2.x com Tooltips Cyber-Glassmorphism customizados, eixos travados no zero e supressão global de cursores e halos de foco brancos via CSS.
+- **Estilização & Design System:** Tailwind CSS v4 com temas dinâmicos Dual Theme Cupertino (Claro e Escuro via `data-theme`), Glassmorphism, scrollbars personalizadas discretas estilo macOS, tipografia tabular global (`tabular-nums`) e precisão óptica OpenType (`cv02-cv11`).
+- **Visualização de Dados:** Recharts 2.x com Tooltips Cupertino Glassmorphism customizados, eixos travados no zero, área translúcida fluida estilo Copilot Money e supressão global de cursores e halos de foco brancos via CSS.
 - **Backend & Persistência:**
-  - Supabase PostgreSQL com Row Level Security (RLS) por usuário autenticado.
+  - Supabase PostgreSQL com Row Level Security (RLS) por usuário autenticado e isolamento de cache local por `userId`.
   - Sincronização offline-first: Hidratação instantânea via cache local (`localStorage`), migração automática no 1º acesso e espelhamento bidirecional resiliente em tempo real.
-- **Ícones & Identidade:** Lucide-React + Nova Identidade Vetorial **Fintech Prism** (`CoindexIcon` e `/icon.svg`).
+- **Ícones & Identidade:** Lucide-React + Nova Identidade Vetorial **Fintech Prism Cupertino** (`CoindexLogo`, `CoindexIcon` e `/icon.svg`) com gradiente Apple Blue -> Indigo -> Green.
 - **Idioma:** 100% Português do Brasil (`pt-BR`).
 
 ---
@@ -313,35 +313,41 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
 
 ---
 
-## 6. Padrões de Interface & Design (02. Cyberpunk Neon — Synthwave Spark)
+## 6. Padrões de Interface & Design (03. Apple Copilot Pure — Cupertino Light & Dark)
 
-1. **Paleta de Superfícies & Atmosfera Laser:**
-   - Fundo base: Obsidian-Violet `--cyber-void: #07030f` com iluminação radial fixa (`#FF2A85` 14%, `#A855F7` 14% e `#6366F1` 10%).
-   - Cards e Janelas: `--cyber-card: rgba(19, 9, 39, 0.82)` com `backdrop-blur-xl`, borda em Electric Purple `rgba(168, 85, 247, 0.20)` e inset laser superior `rgba(255, 42, 133, 0.18)`.
-   - Modais e Popovers Flutuantes: `bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)]`.
-   - Inputs e Selects: `bg-[rgba(13,6,28,0.92)] text-slate-100 border-[#A855F7]/28` com foco vibrante em Neon Pink (`#FF2A85`).
-   - Modo Escuro Permanente: `color-scheme: dark !important;` forçado em `html` e `body`, eliminando seletor de tema frágil e impedindo qualquer elemento branco indesejado.
+1. **Dual Theme Motor CSS (Cupertino Dark & Cupertino Light):**
+   - **Cupertino Dark (`html[data-theme="dark"]`):** Fundo base `#0B0C0E`, cards `rgba(20, 22, 26, 0.78)` com `backdrop-blur-xl`, bordas sutis `rgba(255, 255, 255, 0.08)` e textos em `#F5F5F7` e `#86868B`.
+   - **Cupertino Light (`html[data-theme="light"]`):** Fundo base `#F2F2F7`, cards `#FFFFFF` translúcidos `rgba(255, 255, 255, 0.88)` com sombra suave `rgba(0, 0, 0, 0.06)`, bordas `rgba(0, 0, 0, 0.08)` e textos em `#1D1D1F` e `#6E6E73`.
+   - **Segmented Control Apple na Topbar:** Alternância deslizante entre "☀️ Claro" e "🌙 Escuro", persistida no `localStorage` sob `coindex_cupertino_theme` e aplicada via atributo `data-theme` no `<html>`.
+   - **Script Anti-Flicker:** Executado inline no `<head>` em `app/layout.tsx` para sincronização instantânea antes da hidratação do React.
 
-2. **Slim KPI Cards no Padrão Synthwave Spark:**
-   - **Entradas / Receitas:** Neon Mint/Cyan (`text-[#00F5D4] drop-shadow-[0_0_10px_rgba(0,245,212,0.22)]`) com borda `border-[#00F5D4]/25`.
-   - **Saídas & Despesas:** Neon Laser Pink (`text-[#FF2A85] drop-shadow-[0_0_10px_rgba(255,42,133,0.25)]`) com borda `border-[#FF2A85]/30`.
-   - **Aportes / Investimentos:** Electric Violet (`text-[#C084FC] drop-shadow-[0_0_10px_rgba(192,132,252,0.25)]`) com borda `border-[#A855F7]/30`.
-   - **Saldo Livre / Balanço:** Synthwave Coral/Cyan com destaque limpo e rodapé adaptativo de Safe-to-Spend / Caixinhas.
+2. **Formatação Tipográfica Apple SF Pro / Inter & Precisão Óptica:**
+   - Tipografia do sistema: `-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif`.
+   - Recursos OpenType de precisão óptica ativados: `font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum"`.
+   - Renderização anti-serrilhamento Apple: `-webkit-font-smoothing: antialiased` e `-moz-osx-font-smoothing: grayscale`.
+   - Valores monetários (`R$`): `font-semibold tracking-[-0.03em] tabular-nums` (100% nítidos, sem text-shadow ou drop-shadow neon sobre os dígitos).
+   - Títulos com `font-semibold tracking-[-0.02em]` e rótulos com `font-medium tracking-[0.02em]`.
+   - Cantos arredondados squircle Apple (`rounded-2xl` / 20px) em cards, modais e botões.
 
-3. **Recharts Synthwave & Zero White Rings:**
-   - Reset global via `globals.css` das propriedades `:focus` e `:focus-visible` em `.recharts-wrapper`, `.recharts-surface` e `.recharts-sector`.
-   - **Evolução do Meu Patrimônio:** Série Acumulado com linha `stroke="#FF2A85"` (3px) e gradiente vertical de `rgba(255,42,133,0.45)` para `rgba(168,85,247,0.02)`. Série Aportes Brutos com linha `stroke="#A855F7"` (2.5px) e gradiente vertical `rgba(168,85,247,0.35)`.
-   - **Para Onde Vai o Meu Dinheiro:** Fatias com a paleta harmônica Synthwave `['#FF2A85', '#FF6B4A', '#A855F7', '#6366F1', '#00F5D4', '#F43F5E', '#D946EF', '#8B5CF6']`.
-   - Tooltips cibernéticos violeta escuro (`bg-[#0d061c]/95 border border-[#FF2A85]/40 shadow-[0_0_20px_rgba(255,42,133,0.25)]`).
+3. **Slim KPI Cards no Padrão Cupertino:**
+   - **Entradas / Receitas:** Apple Green (`var(--cupertino-green)` / `#30D158`), ícone `TrendingUp` em badge verde translúcido.
+   - **Saídas & Despesas:** Apple Red (`var(--cupertino-red)` / `#FF453A`), ícone `TrendingDown` em badge vermelho translúcido.
+   - **Aportes Brutos:** Apple Blue (`var(--cupertino-blue)` / `#0A84FF`), ícone `PiggyBank` em badge azul translúcido.
+   - **Balanço / Saldo Livre:** Apple Cyan/Teal (`#64D2FF`) se positivo ou Apple Red (`#FF453A`) se negativo, com rodapé adaptativo de Safe-to-Spend.
 
-4. **Identidade Visual — Fintech Prism Logo & Favicon:**
-   - Hexágono isométrico tridimensional em degradê Cyberpunk (`#FF2A85` -> `#A855F7` -> `#00F5D4`).
-   - Camadas de liquidez isométricas (Liquidity Strata).
-   - Três barras verticais ascendentes internas de índice com trajetória laser e vértice em Neon Cyan.
+4. **Recharts Cupertino & Redesign Copilot Money:**
+   - **Evolução do Meu Patrimônio:** Eixo Y único à esquerda com formatação limpa (`R$ 0`, `R$ 1k`, `R$ 2k`), curva contínua fluida em Apple Blue (`#0A84FF`) com preenchimento em degradê translúcido (`stopOpacity` de `0.28` a `0.00`).
+   - **Curva Suave de Aportes Brutos:** Opcional via toggle interativo de legenda, em Apple Indigo (`#5E5CE6`), sem torres/barras invasivas.
+   - **Para Onde Vai o Meu Dinheiro (Donut):** Paleta oficial Apple Cupertino `['#0A84FF', '#30D158', '#FF9F0A', '#BF5AF2', '#FF453A', '#64D2FF', '#5E5CE6', '#8E8E93']`.
+   - Tooltips Cupertino Glassmorphism (`bg-slate-900/95 border border-white/10 text-slate-300 shadow-xl backdrop-blur-md`).
+
+5. **Identidade Visual — Fintech Prism Cupertino:**
+   - Logo e Favicon em hexágono isométrico tridimensional com gradiente de alta fidelidade Apple: Blue (`#0A84FF`) -> Indigo (`#5E5CE6`) -> Mint Green (`#30D158`).
+   - Botão de ação primária "+ Novo Lançamento" e item ativo da Sidebar em Apple System Blue (`#0A84FF` / `#0070E0`).
 
 ---
 
-## 7. Histórico Completo de Sprints (Sprints 1 a 20)
+## 7. Histórico Completo de Sprints (Sprints 1 a 27)
 
 - **Sprint 1 — Fundação Arquitetural:** Criação da estrutura base em Next.js App Router, estado reativo global, paleta Cyber-Glassmorphism e integração inicial com Supabase e Google Sheets.
 - **Sprint 2 — Seleção Condicional de Pagamento:** Modal de Lançamentos inteligente: exibição condicional de seletores de Cartão de Crédito e Fatura ao escolher método de crédito, ou Banco Emissor para Pix/Débito.
@@ -462,6 +468,24 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Paleta de Cores Cibernética:** Seletores de cor atualizados para a paleta Synthwave Spark / Cyberpunk Neon (Laser Pink `#FF2A85`, Neon Mint `#00F5D4`, Electric Violet `#A855F7`, etc.), eliminando cores fixas hardcoded.
     - **Opções Visuais e Toggles:** Switches conectados funcionalmente para Mostrar Grade (`showGrid`), Pontos na Linha (`showDots`), Preenchimento Degradê (`fillArea`), Altura do Gráfico (`height`: Compacto 240px, Padrão 288px, Expandido 384px) e Tamanho do Card (`1/1` tela cheia vs `1/2` meia tela).
     - **Persistência Global:** Salva no `localStorage` sob `lifeos_chart_configs_v1` e sincroniza no perfil do usuário (`setUserItem` e Supabase DB).
+- **Sprint 27 — Implementação do Design System "Apple Copilot Pure — Cupertino Light & Dark" + Formatação Tipográfica Apple no Layout Atual:**
+  - **Motor Dual Theme "Cupertino Dark" & "Cupertino Light" (`app/globals.css`):**
+    - Implementação de variáveis CSS nativas (`--cupertino-bg`, `--cupertino-card`, `--cupertino-border`, `--cupertino-blue`, `--cupertino-green`, `--cupertino-red`, etc.) para dark mode (`#0B0C0E` / cards `rgba(20,22,26,0.78)`) e light mode (`#F2F2F7` / cards `rgba(255,255,255,0.88)`).
+    - Mapeamento universal de superfícies legadas (`.bg-slate-950`, `.bg-slate-900`, `.bg-slate-800`), garantindo contraste automático imediato de textos, inputs e modais.
+    - Script inline anti-flicker no `<head>` de `app/layout.tsx` para sincronização instantânea de tema antes do paint.
+  - **Formatação Tipográfica Apple SF Pro / Inter:**
+    - Família de fontes padrão Apple: `-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif`.
+    - Ativação de precisão óptica e números tabulares: `font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum"` com `-webkit-font-smoothing: antialiased`.
+    - Dígitos monetários 100% nítidos com `font-semibold tracking-[-0.03em] tabular-nums`, removendo text-shadows e drop-shadows fluorescentes sobre números.
+    - Cantos arredondados squircle Apple (`rounded-2xl` / 20px) sem filetes neon rosa/roxo.
+  - **Segmented Control Apple na Topbar:**
+    - Seletor deslizante nativo iOS/macOS com botões "☀️ Claro" e "🌙 Escuro", persistido no `localStorage` (`coindex_cupertino_theme`, padrão "dark").
+  - **Padronização Cromática dos Componentes, KPIs, Gráficos e Identidade:**
+    - Sidebar e botão "+ Novo Lançamento" atualizados para Apple System Blue (`#0A84FF` / `#0070E0`).
+    - 4 KPIs Principais: Entradas (`#30D158`), Saídas (`#FF453A`), Aportes (`#0A84FF`), Balanço / Saldo Livre (`#64D2FF` / `#30D158` / `#FF453A`).
+    - Gráfico de Patrimônio: Curva de Patrimônio Acumulado em `#0A84FF` e curva suave de Aportes Brutos em `#5E5CE6`.
+    - Gráfico Donut de Despesas: Paleta oficial Apple Cupertino `['#0A84FF', '#30D158', '#FF9F0A', '#BF5AF2', '#FF453A', '#64D2FF', '#5E5CE6', '#8E8E93']`.
+    - Identidade Visual: Logo `CoindexLogo` e Favicon `icon.svg` atualizados para o gradiente de alta fidelidade Cupertino (`#0A84FF` -> `#5E5CE6` -> `#30D158`).
 
 ---
 
