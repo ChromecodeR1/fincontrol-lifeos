@@ -3,11 +3,11 @@
 :root,
 html[data-theme="dark"] {
   color-scheme: dark;
-  --cupertino-bg: #0b0c0e;
-  --cupertino-sidebar: #121316;
-  --cupertino-card: #1c1c1e;
-  --cupertino-card-elevated: #2c2c2e;
-  --cupertino-input: #141416;
+  --cupertino-bg: #0B0E14;
+  --cupertino-sidebar: #0E121B;
+  --cupertino-card: #131824;
+  --cupertino-card-elevated: #1A2030;
+  --cupertino-input: #0D111A;
   --cupertino-border: rgba(255, 255, 255, 0.08);
   --cupertino-text-primary: #f5f5f7;
   --cupertino-text-secondary: #98989d;
@@ -21,20 +21,20 @@ html[data-theme="dark"] {
   --cupertino-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.45);
 }
 
-/* SPRINT 34: Nova Arquitetura Completa Cupertino Light 2.0 (4 Níveis de Superfície) */
+/* SPRINT 35: Paleta Cupertino Light 2.0 & Correção Global dos 4 KPIs */
 html[data-theme="light"] {
   color-scheme: light;
-  --cupertino-bg: #f2f2f7;
+  --cupertino-bg: #F2F4F8;
   --cupertino-sidebar: #ffffff;
   --cupertino-card: #ffffff;
   --cupertino-card-elevated: #f5f5f7;
   --cupertino-input: #f5f5f7;
-  --cupertino-border: rgba(0, 0, 0, 0.08);
+  --cupertino-border: rgba(15, 23, 42, 0.08);
   --cupertino-text-primary: #1d1d1f;
   --cupertino-text-secondary: #515154;
   --cupertino-text-muted: #6e6e73;
   --cupertino-green: #15803d;
-  --cupertino-red: #d70015;
+  --cupertino-red: #dc2626;
   --cupertino-blue: #0066cc;
   --cupertino-indigo: #4338ca;
   --cupertino-cyan: #0284c7;
@@ -63,10 +63,26 @@ body {
    MAPEAMENTO ARQUITETURAL DE SUPERFÍCIES (DARK & LIGHT)
    ============================================================================ */
 
-/* Nível 0: Fundo da Página */
+/* Nível 0: Fundo da Página uniforme à direita da Sidebar */
 html[data-theme="light"] body,
-html[data-theme="light"] main {
-  background-color: #f2f2f7 !important;
+html[data-theme="light"] main,
+html[data-theme="light"] .dashboard-root-wrapper,
+html[data-theme="light"] .dashboard-main-content {
+  background-color: #F2F4F8 !important;
+}
+
+/* Fundo uniforme no Modo Escuro Cupertino Midnight */
+html[data-theme="dark"] body,
+html[data-theme="dark"] main,
+html[data-theme="dark"] .dashboard-root-wrapper,
+html[data-theme="dark"] .dashboard-main-content {
+  background-color: #0B0E14 !important;
+}
+
+html[data-theme="dark"] [class*="bg-slate-950"]:not(.wallet-physical-card),
+html[data-theme="dark"] [class*="bg-black/"]:not(.wallet-physical-card) {
+  background-color: var(--cupertino-card-elevated) !important;
+  border-color: var(--cupertino-border) !important;
 }
 
 /* Nível 1: Cards Principais (.ChartCard, KPIs, Sidebar, Topbar, Modais e Tabelas) */
@@ -81,8 +97,65 @@ html[data-theme="light"] .cyber-card,
 html[data-theme="light"] .glass-card,
 html[data-theme="light"] [class*="bg-slate-900"]:not(.wallet-physical-card):not([class*="from-"]):not([class*="to-"]):not([class*="via-"]) {
   background-color: #ffffff !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+/* SPRINT 35: Correção Definitiva dos 4 Slim KPI Cards no Modo Claro */
+html[data-theme="light"] .kpi-slim-card {
+  background-image: none !important;
+  background-color: #F8FAFC !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] [class*="bg-gradient-to-"]:not(.wallet-physical-card):not(button):not([class*="from-blue"]):not([class*="from-[#0A84FF]"]) {
+  background-image: none !important;
+  background-color: #F8FAFC !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .kpi-slim-card .kpi-title,
+html[data-theme="light"] .kpi-title {
+  color: #475569 !important;
+  font-weight: 600 !important;
+}
+
+html[data-theme="light"] .kpi-val-income {
+  color: #15803D !important;
+}
+html[data-theme="light"] .kpi-val-expense {
+  color: #DC2626 !important;
+}
+html[data-theme="light"] .kpi-val-invest {
+  color: #0066CC !important;
+}
+html[data-theme="light"] .kpi-val-balance {
+  color: #0284C7 !important;
+}
+
+/* Controles Segmentados e Pílulas no Modo Claro */
+html[data-theme="light"] .segmented-control-container,
+html[data-theme="light"] [class*="bg-black/40"],
+html[data-theme="light"] [class*="bg-black/60"],
+html[data-theme="light"] [class*="bg-slate-900/90"] {
+  background-color: #EEF2F6 !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .segmented-btn-inactive,
+html[data-theme="light"] [class*="bg-black/"] button:not([class*="bg-\[\#0A84FF\]"]):not([class*="bg-white"]):not([class*="bg-slate-800"]):not(.segmented-btn-active),
+html[data-theme="light"] [class*="bg-slate-900/90"] button:not([class*="bg-\[\#0A84FF\]"]):not([class*="bg-white"]):not(.segmented-btn-active) {
+  background-color: #EEF2F6 !important;
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .segmented-btn-active,
+html[data-theme="light"] [class*="bg-black/"] button[class*="bg-\[\#0A84FF\]"],
+html[data-theme="light"] [class*="bg-slate-900/90"] button[class*="bg-\[\#0A84FF\]"] {
+  background-color: #0A84FF !important;
+  color: #FFFFFF !important;
 }
 
 /* Nível 2: Sub-Cards Internos, Pílulas de Categorias, Caixas de Limites e Linhas */
@@ -91,7 +164,7 @@ html[data-theme="light"] [class*="bg-black/"]:not(.wallet-physical-card):not([cl
 html[data-theme="light"] .bg-\[\#14161A\],
 html[data-theme="light"] .bg-\[\#181A20\] {
   background-color: #f5f5f7 !important;
-  border-color: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(15, 23, 42, 0.06) !important;
 }
 
 /* Textos adaptados para Nível 2 no modo claro */

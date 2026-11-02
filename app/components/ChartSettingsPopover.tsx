@@ -9,7 +9,7 @@ export type ChartKind = "line" | "area" | "bar" | "pie" | "composed" | "kpi";
 export type ChartZeroHandling = "include" | "omit";
 export type ChartWidgetSize = "half" | "full" | "third" | "two-thirds";
 export type ChartDisplayType = "area" | "line" | "bar";
-export type ChartHeightSetting = "compact" | "normal" | "tall";
+export type ChartHeightSetting = "compact" | "normal" | "tall" | "expanded";
 
 export interface ChartWidgetSettings {
   color: string;
@@ -36,7 +36,7 @@ export const DEFAULT_CHART_WIDGET_SETTINGS: ChartWidgetSettings = {
   showGrid: true,
   showLegend: true,
   chartType: "area",
-  height: "normal"
+  height: "compact"
 };
 
 export const CHART_COLOR_PALETTE: ReadonlyArray<{ id: string; label: string; hex: string }> = [
@@ -309,16 +309,16 @@ export default function ChartSettingsPopover({
           <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Altura do gráfico</label>
           <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950/80 p-1 border border-white/5">
             {[
-              { id: "compact" as const, label: "Compacto" },
+              { id: "compact" as const, label: "Compacta" },
               { id: "normal" as const, label: "Padrão" },
-              { id: "tall" as const, label: "Expandido" }
+              { id: "tall" as const, label: "Ampla" }
             ].map((opt) => (
               <button
                 key={opt.id}
                 type="button"
                 onClick={() => updateField("height", opt.id)}
                 className={`rounded-md py-1.5 text-center text-[11px] font-semibold transition cursor-pointer ${
-                  (settings.height || "normal") === opt.id
+                  (settings.height || "compact") === opt.id || (opt.id === "tall" && settings.height === "expanded")
                     ? "bg-[#0A84FF] text-white shadow-sm"
                     : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                 }`}

@@ -364,10 +364,23 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.26.0";
-export const PREVIOUS_VERSION = "0.25.0";
+export const APP_VERSION = "0.27.0";
+export const PREVIOUS_VERSION = "0.26.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.27.0",
+    date: "Nov/2026",
+    title: "Sprint 35: Altura Compacta Funcional nos Gráficos, Paleta Cupertino Midnight e Correção dos KPIs no Modo Claro",
+    highlights: [
+      "Altura Compacta dos Gráficos: Reativação imediata do controle de altura na engrenagem (Compacta 175px como novo padrão, Padrão 220px e Ampla 290px), removendo esticamentos forçados de flexbox.",
+      "Compactação da Apple Wallet: Redução da sobreposição dos cartões (-mt-12) e compactação das barras de resumo e bancos, reduzindo a altura do card em mais de 110px.",
+      "Categorias sem Truncamento: Ajuste inteligente para 1 coluna à direita do Donut evitando corte precoce de nomes extensos como Combustível e Manutenção.",
+      "Paleta Cupertino Midnight Slate: Unificação e harmonia no Modo Escuro (#0B0E14 fundo, #0E121B sidebar/topbar e #131824 cards), expurgando resquícios pretos e roxos.",
+      "Correção Definitiva dos 4 KPIs no Modo Claro: Remoção de gradientes escuros com background-image: none, fundo #F8FAFC, títulos em slate #475569 e valores contrastados.",
+      "Fundo Uniforme e Controles Segmentados: Cinza-gelo #F2F4F8 à direita da sidebar e botões inativos/ativos com contraste Apple Cupertino."
+    ]
+  },
   {
     version: "0.26.0",
     date: "Nov/2026",

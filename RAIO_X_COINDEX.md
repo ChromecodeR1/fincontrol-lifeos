@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.26.0`  
-> **Última Atualização:** 2 de Novembro de 2026 (Pós-Sprint 34 — Remoção de Botões <, >, ⇈, Auto-Distribuição de Altura de Cards sem Espaços Vazios, Arquitetura Cupertino Light 2.0 com View Transitions API e Animações Apple Spring)  
+> **Versão da Aplicação:** `0.27.0`  
+> **Última Atualização:** 2 de Novembro de 2026 (Pós-Sprint 35 — Correção da Opção de Altura dos Gráficos, Compactação Vertical dos Cards, Restauração da Paleta Escura Cupertino Midnight Slate e Correção dos 4 KPIs no Modo Claro)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -621,6 +621,31 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
   - **Apple Spring Motion Engine:**
     - Animação de entrada suave `@keyframes cupertinoFadeSlideUp` e classe `.animate-cupertino-in` com curva de aceleração de molas iOS (`cubic-bezier(0.16, 1, 0.3, 1)`) em todas as trocas de abas primárias, secundárias e sub-visões do dashboard.
     - Classe `.cupertino-card-hover` adicionando elevação tátil (`translate-y(-2px)`) e halo translúcido nos 4 Slim KPI cards e em todos os cards do dashboard.
+
+- **Sprint 35 (Altura Compacta Funcional nos Gráficos, Compactação Vertical, Restauração da Paleta Cupertino Midnight Slate e Correção dos 4 KPIs no Modo Claro):**
+  - **Reconexão Total da Opção de Altura dos Gráficos:**
+    - Removidos `flex-1` e `min-h-[260px]` dos contêineres de gráficos da Central Analítica (Patrimônio, Ritmo/Pace, Projeção 6M), Donut de Despesas e Fluxo de Caixa 6M, que antes forçavam esticamento vertical e ignoravam o seletor.
+    - Implementação do helper reativo `getChartHeightPx(chartId, defaultPx = 175)` em `app/page.tsx` conectado em tempo real a `getWidgetSettings` e `chartConfigs[chartId]?.height`.
+    - Novos padrões de altura rigorosamente aplicados: `"compact"` (Compacta — novo padrão inicial) em **175px**, `"normal"` (Padrão) em **220px**, e `"tall"` / `"expanded"` (Ampla) em **290px**.
+  - **Compactação do Card "Cartões & Limites (Apple Wallet)":**
+    - Redução do padding dos cartões físicos (`p-3.5`), sobreposição ajustada para `-mt-12`, espaçamentos compactos nos cabeçalhos (`mb-2`) e rodapés (`mt-2 pt-1.5`).
+    - Pílulas de limites consolidadas em barra slim (`py-1.5 px-2.5`) e lista de bancos slim (`py-1.5 px-2.5` com `max-h-36`), reduzindo a altura do card em mais de 110px para equilibrar a grade com a Central Analítica.
+  - **Categorias sem Truncamento no Card de Despesas:**
+    - Exibição em 1 coluna de largura total (`grid-cols-1`) quando o card estiver ao lado do Donut (e 2 colunas apenas quando em tela cheia `1/1`), garantindo que itens extensos como `"Combustível"`, `"Manutenção Veículo"` e `"Alimentação"` não sofram truncamento prematuro.
+  - **Restauração da Paleta Escura Original "Cupertino Midnight Slate":**
+    - Coesão visual restaurada em `app/globals.css` sob `:root, html[data-theme="dark"]`:
+      - `--cupertino-bg: #0B0E14` (Fundo principal Midnight profundo e uniforme).
+      - `--cupertino-sidebar: #0E121B` (Sidebar e Topbar integradas).
+      - `--cupertino-card: #131824` (Cards principais em Grafite-Azulado escuro).
+      - `--cupertino-card-elevated: #1A2030` (Sub-cards internos, inputs e pílulas).
+      - `--cupertino-input: #0D111A`.
+      - `--cupertino-border: rgba(255, 255, 255, 0.08)`.
+    - Expurgados resquícios antigos de tons roxos (`rgba(19, 9, 39, 0.82)`) e fundos pretos soltos (`#07030f`), unificando `<main>`, sidebar, header e dashboard em `var(--cupertino-bg)`.
+  - **Correção Definitiva dos 4 KPIs e Background no Modo Claro:**
+    - **Bug 1 Solucionado:** Sob `html[data-theme="light"]`, aplicada a regra `background-image: none !important; background-color: #F8FAFC !important; border: 1px solid rgba(15, 23, 42, 0.08) !important;` na classe `.kpi-slim-card`, eliminando gradientes escuros inline que mantinham os cards pretos no tema claro.
+    - Títulos dos 4 KPIs com legibilidade ideal em `#475569` (`.kpi-title`), e valores contrastados: Entradas (`#15803D`), Saídas (`#DC2626`), Aportes (`#0066CC`) e Saldo Líquido (`#0284C7`).
+    - **Bug 2 Solucionado:** Removidas caixas brancas intermediárias. O fundo uniforme da página à direita da sidebar permanece cinza-gelo `#F2F4F8` (`var(--cupertino-bg)`), enquanto apenas os cards individuais permanecem brancos `#FFFFFF`.
+    - **Bug 3 Solucionado:** Controles segmentados inativos estilizados com fundo `#EEF2F6` e texto `#334155`, e botões ativos com fundo `#0A84FF` e texto `#FFFFFF` puro.
 
 ---
 

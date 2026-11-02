@@ -797,6 +797,16 @@ export default function CoindexApp() {
     return saved ? { ...base, ...saved } : base;
   };
 
+  // SPRINT 35: Helper Reativo de Altura dos Gráficos com Compactação (175px / 220px / 290px)
+  const getChartHeightPx = (chartId: string, defaultPx = 175): number => {
+    const cfg = getWidgetSettings(chartId, "auto", curveType);
+    const h = cfg.height || "compact";
+    if (h === "compact") return 175;
+    if (h === "normal") return 220;
+    if (h === "tall" || (h as string) === "expanded") return 290;
+    return defaultPx;
+  };
+
   const handleUpdateWidgetSettings = (widgetId: string, next: ChartWidgetSettings) => {
     setChartConfigs((prev) => {
       const updated = { ...prev, [widgetId]: next };
@@ -5208,10 +5218,9 @@ export default function CoindexApp() {
   }
 
   return (
-    <div className="min-h-screen flex text-slate-100 bg-[#07030f]">
+    <div className="min-h-screen flex text-slate-100 bg-[var(--cupertino-bg)] dashboard-root-wrapper">
       <style jsx global>{`
         .glass-card {
-          background: rgba(19, 9, 39, 0.82);
           backdrop-filter: blur(18px);
           transition: all 0.2s ease;
         }
@@ -5292,7 +5301,7 @@ export default function CoindexApp() {
 
       {/* BARRA LATERAL RETRÁTIL COM LOGO COINDEX E MÓDULO SPOTIFY */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 bg-slate-950/95 border-r border-white/[0.08] backdrop-blur-2xl transition-all duration-200 flex flex-col justify-between ${
+        className={`fixed inset-y-0 left-0 z-40 bg-[var(--cupertino-sidebar)] border-r border-[var(--cupertino-border)] backdrop-blur-2xl transition-all duration-200 flex flex-col justify-between ${
           sidebarOpen ? "w-64" : "w-20"
         }`}
       >
@@ -5417,9 +5426,9 @@ export default function CoindexApp() {
         </aside>
 
       {/* CONTEÚDO PRINCIPAL */}
-      <div className={`flex-1 transition-all duration-200 ${sidebarOpen ? "ml-64" : "ml-20"}`}>
+      <div className={`flex-1 transition-all duration-200 ${sidebarOpen ? "ml-64" : "ml-20"} bg-[var(--cupertino-bg)] dashboard-main-content`}>
         {/* CABEÇALHO PRINCIPAL */}
-        <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-slate-950/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
+        <header className="sticky top-0 z-30 border-b border-[var(--cupertino-border)] bg-[var(--cupertino-sidebar)]/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2.5">
               <select
@@ -5629,7 +5638,7 @@ export default function CoindexApp() {
           </header>
 
         {/* CORPO PRINCIPAL */}
-        <main ref={mainScrollRef} className="max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24">
+        <main ref={mainScrollRef} className="max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24 bg-[var(--cupertino-bg)]">
           {activeTab === "dashboard" ? (
             <div key="tab-dashboard" className="space-y-6 animate-cupertino-in">
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -5738,11 +5747,11 @@ export default function CoindexApp() {
 
                 <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${moneyBlur}`}>
                   {/* Card 1: Entradas */}
-                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
+                  <div className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span>{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
+                          <span className="kpi-title">{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
                           <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#30D158]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
@@ -5755,7 +5764,7 @@ export default function CoindexApp() {
                           <TrendingUp className="w-3.5 h-3.5" />
                         </div>
                       </div>
-                      <p className="text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#30D158] leading-tight mt-0.5">
+                      <p className="kpi-val-income text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#30D158] leading-tight mt-0.5">
                         +{formatBRL(monthSummary.income)}
                       </p>
                     </div>
@@ -5776,11 +5785,11 @@ export default function CoindexApp() {
                   </div>
 
                   {/* Card 2: Saídas & Despesas */}
-                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
+                  <div className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span>{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
+                          <span className="kpi-title">{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
                           <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#FF453A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
@@ -5793,7 +5802,7 @@ export default function CoindexApp() {
                           <TrendingDown className="w-3.5 h-3.5" />
                         </div>
                       </div>
-                      <p className="text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#FF453A] leading-tight mt-0.5">
+                      <p className="kpi-val-expense text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#FF453A] leading-tight mt-0.5">
                         -{formatBRL(monthSummary.expense)}
                       </p>
                     </div>
@@ -5814,11 +5823,11 @@ export default function CoindexApp() {
                   </div>
 
                   {/* Card 3: Aportes Brutos */}
-                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
+                  <div className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span>{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
+                          <span className="kpi-title">{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
                           <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#0A84FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
@@ -5831,7 +5840,7 @@ export default function CoindexApp() {
                           <PiggyBank className="w-3.5 h-3.5" />
                         </div>
                       </div>
-                      <p className="text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#0A84FF] leading-tight mt-0.5">
+                      <p className="kpi-val-invest text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#0A84FF] leading-tight mt-0.5">
                         +{formatBRL(monthSummary.aportes)}
                       </p>
                     </div>
@@ -5848,11 +5857,11 @@ export default function CoindexApp() {
                   </div>
 
                   {/* Card 4: Saldo Livre Líquido */}
-                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
+                  <div className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span>{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
+                          <span className="kpi-title">{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
                           <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-60 p-2 rounded-xl bg-slate-900/95 border border-[#64D2FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
@@ -5866,7 +5875,7 @@ export default function CoindexApp() {
                         </div>
                       </div>
                       <p
-                        className={`text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums leading-tight mt-0.5 ${
+                        className={`kpi-val-balance text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums leading-tight mt-0.5 ${
                           monthSummary.balance >= 0 ? "text-[#30D158]" : "text-[#FF453A]"
                         }`}
                       >
@@ -5930,13 +5939,6 @@ export default function CoindexApp() {
                     const cfg = getWidgetSettings(widget.id, "auto", curveType);
                     const primarySeriesColor = (fallbackHex: string) =>
                       cfg.color && cfg.color !== "auto" ? cfg.color : fallbackHex;
-
-                    const chartHeightClass =
-                      cfg.height === "compact"
-                        ? "h-60"
-                        : cfg.height === "tall"
-                        ? "h-96"
-                        : "h-72";
 
                     const effectiveChartType =
                       cfg.chartType ||
@@ -6309,7 +6311,7 @@ export default function CoindexApp() {
                                   </div>
                                 )}
 
-                                <div className="flex-1 min-h-[260px] w-full select-none transition-all duration-300">
+                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("patrimony", 175)}px` }}>
                                   <ResponsiveContainer width="100%" height="100%">
                                     {effectiveChartType === "line" ? (
                                       <LineChart
@@ -6501,7 +6503,7 @@ export default function CoindexApp() {
                                   </span>
                                 </div>
 
-                                <div className="flex-1 min-h-[260px] w-full select-none transition-all duration-300">
+                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("patrimony", 175)}px` }}>
                                   <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart
                                       data={paceChartData.data}
@@ -6583,7 +6585,7 @@ export default function CoindexApp() {
                                   )}
                                 </div>
 
-                                <div className="flex-1 min-h-[260px] w-full select-none transition-all duration-300">
+                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("patrimony", 175)}px` }}>
                                   <ResponsiveContainer width="100%" height="100%">
                                     <BarChart
                                       data={forecast6MData.months}
@@ -6653,7 +6655,7 @@ export default function CoindexApp() {
                         {(widget.id === "expenses" || widget.id === "category_chart") && (
                           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
                             {/* Donut Moderno com Rótulo Centralizado Total Gasto - col-span-12 lg:col-span-5 */}
-                            <div className="relative h-[175px] sm:h-[185px] select-none flex items-center justify-center lg:col-span-5">
+                            <div className="relative select-none flex items-center justify-center lg:col-span-5" style={{ height: `${getChartHeightPx("expenses", 175)}px` }}>
                               <ResponsiveContainer width="100%" height="100%">
                                 <PieChart accessibilityLayer={false}>
                                   <Pie
@@ -6747,7 +6749,7 @@ export default function CoindexApp() {
                                   </div>
                                 </div>
                               ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1 text-xs">
+                                <div className={`grid ${widgetSize === "full" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} gap-2 max-h-[280px] overflow-y-auto pr-1 text-xs`}>
                                   {categoryChartData.map((cat) => {
                                     const pct = Math.round((cat.value / totalExpenses) * 100);
                                     return (
@@ -7050,7 +7052,7 @@ export default function CoindexApp() {
 
                         {/* WIDGET 5: CARTÕES & LIMITES (APPLE WALLET STACK + MERCURY/LINEAR BARS) */}
                         {(widget.id === "wallet_limits" || widget.id === "wallet_card") && (
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             {/* PARTE SUPERIOR: Apple Wallet Card Stack */}
                             <div>
                               <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/5 text-xs">
@@ -7092,8 +7094,8 @@ export default function CoindexApp() {
                                         key={card.id}
                                         onClick={() => setSelectedWalletCardId(card.id)}
                                         style={{ zIndex: isSelected ? 25 : idx + 1 }}
-                                        className={`wallet-physical-card relative rounded-2xl p-4 shadow-xl border border-white/15 transition-all duration-300 cursor-pointer ${
-                                          !isFirst ? "-mt-10" : ""
+                                        className={`wallet-physical-card relative rounded-2xl p-3.5 shadow-xl border border-white/15 transition-all duration-300 cursor-pointer ${
+                                          !isFirst ? "-mt-12" : ""
                                         } ${
                                           isSelected
                                             ? "scale-[1.02] ring-2 ring-[#0A84FF]/60 shadow-[0_10px_25px_rgba(10,132,255,0.25)] -translate-y-1"
@@ -7101,7 +7103,7 @@ export default function CoindexApp() {
                                         } bg-gradient-to-br ${cardGradient}`}
                                       >
                                         {/* Cabeçalho do Cartão */}
-                                        <div className="flex items-center justify-between text-white mb-3">
+                                        <div className="flex items-center justify-between text-white mb-2">
                                           <div className="flex items-center gap-2 min-w-0">
                                             <span className="font-bold text-sm tracking-tight truncate">{card.name}</span>
                                             {card.brand && (
@@ -7136,7 +7138,7 @@ export default function CoindexApp() {
                                         </div>
 
                                         {/* Rodapé do Cartão */}
-                                        <div className="mt-3 pt-2 border-t border-white/15 flex items-center justify-between text-[11px] text-white/80 font-mono">
+                                        <div className="mt-2 pt-1.5 border-t border-white/15 flex items-center justify-between text-[11px] text-white/80 font-mono">
                                           <span>Fecha dia {card.closingDay || "—"} • Vence dia {card.dueDay || "—"}</span>
                                           {exposure.used > 0 && (
                                             <button
@@ -7159,22 +7161,22 @@ export default function CoindexApp() {
                             </div>
 
                             {/* PARTE INFERIOR: Barras de Limites Compactas (Estilo Linear / Mercury) */}
-                            <div className="pt-2 border-t border-white/10 space-y-3">
+                            <div className="pt-2 border-t border-white/10 space-y-2.5">
                               {/* Pílulas Consolidadas */}
                               <div className={`grid grid-cols-3 gap-2 text-xs text-center ${moneyBlur}`}>
-                                <div className="p-2 rounded-xl bg-slate-950/70 border border-white/10">
+                                <div className="py-1.5 px-2.5 rounded-xl bg-slate-950/70 border border-white/10">
                                   <span className="text-[10px] text-slate-400 block">Limite Total</span>
                                   <strong className="text-xs sm:text-sm font-bold text-white block mt-0.5 tabular-nums">
                                     {formatBRL(bankLimitsAnalytics.globalTotalLimit)}
                                   </strong>
                                 </div>
-                                <div className="p-2 rounded-xl bg-slate-950/70 border border-emerald-500/20">
+                                <div className="py-1.5 px-2.5 rounded-xl bg-slate-950/70 border border-emerald-500/20">
                                   <span className="text-[10px] text-emerald-400/80 block">Disponível</span>
                                   <strong className="text-xs sm:text-sm font-bold text-emerald-400 block mt-0.5 tabular-nums">
                                     {formatBRL(bankLimitsAnalytics.globalTotalDisponivel)}
                                   </strong>
                                 </div>
-                                <div className="p-2 rounded-xl bg-slate-950/70 border border-indigo-500/20">
+                                <div className="py-1.5 px-2.5 rounded-xl bg-slate-950/70 border border-indigo-500/20">
                                   <span className="text-[10px] text-indigo-300 block">% Usado</span>
                                   <strong className="text-xs sm:text-sm font-bold text-indigo-300 block mt-0.5 tabular-nums">
                                     {bankLimitsAnalytics.globalTotalLimit > 0
@@ -7184,15 +7186,15 @@ export default function CoindexApp() {
                                 </div>
                               </div>
 
-                              {/* Lista de Barras de Progresso */}
-                              <div className="space-y-2 max-h-44 overflow-y-auto pr-1 text-xs">
+                              {/* Lista de Barras de Progresso Slim */}
+                              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 text-xs">
                                 {bankLimitsAnalytics.banks.map((b) => {
                                   const usedPct = b.totalLimit > 0 ? Math.min(100, Math.round((b.usado / b.totalLimit) * 100)) : 0;
                                   const barColor =
                                     usedPct >= 80 ? "bg-[#FF453A]" : usedPct >= 50 ? "bg-[#FF9F0A]" : "bg-[#30D158]";
 
                                   return (
-                                    <div key={b.id} className="p-2 rounded-xl bg-slate-950/50 border border-white/5 space-y-1">
+                                    <div key={b.id} className="py-1.5 px-2.5 rounded-xl bg-slate-950/50 border border-white/5 space-y-1">
                                       <div className="flex items-center justify-between">
                                         <span className="font-medium text-slate-200 text-xs flex items-center gap-1.5 truncate">
                                           {b.logoUrl ? (
@@ -7273,7 +7275,7 @@ export default function CoindexApp() {
                                   </div>
                                 </div>
 
-                                <div className="h-60 select-none">
+                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("cashflow_recents", 175)}px` }}>
                                   <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={cashflow6MData} barGap={4} barSize={12} accessibilityLayer={false} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                       <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.12)" />
