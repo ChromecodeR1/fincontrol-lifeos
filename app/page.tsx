@@ -523,18 +523,50 @@ export default function CoindexApp() {
     } catch {}
   }, []);
 
-  const toggleCupertinoTheme = useCallback((theme: "light" | "dark") => {
-    setCupertinoTheme(theme);
-    try {
-      localStorage.setItem("coindex_cupertino_theme", theme);
-      document.documentElement.setAttribute("data-theme", theme);
-      if (theme === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-    } catch {}
-  }, []);
+  const toggleCupertinoTheme = useCallback((theme: "light" | "dark", e?: React.MouseEvent) => {
+    if (theme === cupertinoTheme) return;
+
+    const applyTheme = () => {
+      setCupertinoTheme(theme);
+      try {
+        localStorage.setItem("coindex_cupertino_theme", theme);
+        document.documentElement.setAttribute("data-theme", theme);
+        if (theme === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      } catch {}
+    };
+
+    if (typeof document !== "undefined" && "startViewTransition" in document) {
+      const x = e ? e.clientX : window.innerWidth / 2;
+      const y = e ? e.clientY : 0;
+      const endRadius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+      const transition = (document as unknown as { startViewTransition: (cb: () => void) => { ready?: Promise<void> } }).startViewTransition(() => {
+        applyTheme();
+      });
+      transition.ready?.then(() => {
+        document.documentElement.animate(
+          {
+            clipPath: [
+              `circle(0px at ${x}px ${y}px)`,
+              `circle(${endRadius}px at ${x}px ${y}px)`
+            ]
+          },
+          {
+            duration: 550,
+            easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+            pseudoElement: "::view-transition-new(root)"
+          }
+        );
+      }).catch(() => {
+        applyTheme();
+      });
+    } else {
+      applyTheme();
+    }
+  }, [cupertinoTheme]);
 
   const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -2025,6 +2057,51 @@ export default function CoindexApp() {
       isPositive
     };
   }, [filteredPatrimonyChartData, patrimonyEvolution.saldoFinal]);
+
+  // SPRINT 34: Telemetria Patrimonial da Central Analítica (4 Métricas Executivas)
+  const patrimonyTelemetry = useMemo(() => {
+    const data = (filteredPatrimonyChartData && filteredPatrimonyChartData.length > 0)
+      ? filteredPatrimonyChartData
+      : (patrimonyEvolution.data || []);
+    const monthsCount = Math.max(1, data.length);
+    const totalAportesFiltered = data.reduce((acc, d) => acc + (Number((d as unknown as { aportado?: number }).aportado) || 0), 0);
+    const avgAporte = Math.round(totalAportesFiltered / monthsCount);
+
+    let bestMonth = {
+      label: (data[data.length - 1] as unknown as { label?: string })?.label || "N/D",
+      amount: 0
+    };
+    for (const item of data) {
+      const row = item as unknown as { label?: string; aportado?: number };
+      const val = Number(row.aportado) || 0;
+      if (val > bestMonth.amount) {
+        bestMonth = { label: row.label || "N/D", amount: val };
+      }
+    }
+
+    const totalYield = yieldMode === "liquido"
+      ? (patrimonyEvolution.netYieldEstimated || 0)
+      : (patrimonyEvolution.grossYieldAccumulated || 0);
+    const calculatedAvgYield = Math.round(totalYield / monthsCount);
+    const cdiEffAnnual = ((marketRates?.cdiAnnualRate || 12.15) * ((patrimonyEvolution.appliedCdiPercentage || 115) / 100)) / 100;
+    const currentVal = patrimonyStats.currentValue;
+    const avgYieldMonth = calculatedAvgYield > 0 ? calculatedAvgYield : Math.round((currentVal * cdiEffAnnual) / 12);
+
+    const monthlyRate = Math.pow(1 + cdiEffAnnual, 1 / 12) - 1;
+    const aporteFuture = avgAporte > 0 ? avgAporte : 0;
+    let projected = currentVal;
+    for (let i = 0; i < 12; i++) {
+      projected = (projected + aporteFuture) * (1 + monthlyRate);
+    }
+    const projected12M = Math.round(projected);
+
+    return {
+      avgAporte,
+      bestMonth,
+      avgYieldMonth,
+      projected12M
+    };
+  }, [filteredPatrimonyChartData, patrimonyEvolution, yieldMode, marketRates, patrimonyStats.currentValue]);
 
   // UPDATE 2: Meses distintos no período e limite acumulado proporcional
   const filterMonthsCount = useMemo(() => {
@@ -5496,7 +5573,7 @@ export default function CoindexApp() {
                 <div className="flex items-center p-1 rounded-xl bg-slate-900/80 border border-white/10 text-xs">
                   <button
                     type="button"
-                    onClick={() => toggleCupertinoTheme("light")}
+                    onClick={(e) => toggleCupertinoTheme("light", e)}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
                       cupertinoTheme === "light"
                         ? "bg-white text-slate-900 shadow-sm"
@@ -5509,7 +5586,7 @@ export default function CoindexApp() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => toggleCupertinoTheme("dark")}
+                    onClick={(e) => toggleCupertinoTheme("dark", e)}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
                       cupertinoTheme === "dark"
                         ? "bg-slate-800 text-white shadow-sm"
@@ -5554,7 +5631,7 @@ export default function CoindexApp() {
         {/* CORPO PRINCIPAL */}
         <main ref={mainScrollRef} className="max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24">
           {activeTab === "dashboard" ? (
-            <div className="space-y-6">
+            <div key="tab-dashboard" className="space-y-6 animate-cupertino-in">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-semibold text-white tracking-tight">Painel Executivo Coindex</h2>
@@ -5661,7 +5738,7 @@ export default function CoindexApp() {
 
                 <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${moneyBlur}`}>
                   {/* Card 1: Entradas */}
-                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
@@ -5699,7 +5776,7 @@ export default function CoindexApp() {
                   </div>
 
                   {/* Card 2: Saídas & Despesas */}
-                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
@@ -5737,7 +5814,7 @@ export default function CoindexApp() {
                   </div>
 
                   {/* Card 3: Aportes Brutos */}
-                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
@@ -5771,7 +5848,7 @@ export default function CoindexApp() {
                   </div>
 
                   {/* Card 4: Saldo Livre Líquido */}
-                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
@@ -5827,7 +5904,7 @@ export default function CoindexApp() {
               </div>
 
               {/* GRID UNIFICADO 100% ORDENÁVEL (SPRINT 32) */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
                 {effectiveDashboardLayout
                   .filter((w) => w.visible !== false && w.id !== "kpis")
                   .map((widget) => {
@@ -5915,9 +5992,6 @@ export default function CoindexApp() {
                         onDragStartCard={handleDragStartWidget}
                         onDragEnterCard={handleDragEnterWidget}
                         onDragEndCard={handleDragEndWidget}
-                        onMoveLeft={() => handleMoveWidget(widget.id, "left")}
-                        onMoveRight={() => handleMoveWidget(widget.id, "right")}
-                        onMoveToTop={() => handleMoveToTop(widget.id)}
                         isDragging={draggingWidgetId === widget.id}
                         isDropTarget={dragOverWidgetId === widget.id}
                         className="glass-card"
@@ -6035,7 +6109,7 @@ export default function CoindexApp() {
 
                         {/* WIDGET 2: CENTRAL ANALÍTICA MULTI-VIEW (Patrimônio, Ritmo/Pace e Projeção 6M) */}
                         {(widget.id === "patrimony" || widget.id === "patrimony_chart") && (
-                          <div className="space-y-4">
+                          <div className="space-y-4 flex-1 flex flex-col justify-between">
                             {/* Segmented Control de 3 Visões Analíticas Estilo Copilot Money */}
                             <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/5">
                               <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-xs">
@@ -6118,7 +6192,7 @@ export default function CoindexApp() {
 
                             {/* ABA 1: VISÃO PATRIMÔNIO ACUMULADO */}
                             {patrimonyCardView === "patrimony" && (
-                              <div className="space-y-3">
+                              <div key="patrimony-view" className="space-y-3 flex-1 flex flex-col justify-between animate-cupertino-in">
                                 {patrimonyEvolution.hasDeficit && (
                                   <div className="px-3.5 py-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between gap-2 shadow-[0_0_15px_rgba(244,63,94,0.15)] animate-pulse">
                                     <div className="flex items-center gap-2">
@@ -6235,7 +6309,7 @@ export default function CoindexApp() {
                                   </div>
                                 )}
 
-                                <div className={`${chartHeightClass} select-none transition-all duration-300`}>
+                                <div className="flex-1 min-h-[260px] w-full select-none transition-all duration-300">
                                   <ResponsiveContainer width="100%" height="100%">
                                     {effectiveChartType === "line" ? (
                                       <LineChart
@@ -6401,7 +6475,7 @@ export default function CoindexApp() {
 
                             {/* ABA 2: CURVA DE RITMO DE GASTOS DIÁRIA (PACE) */}
                             {patrimonyCardView === "pace" && (
-                              <div className="space-y-3">
+                              <div key="pace-view" className="space-y-3 flex-1 flex flex-col justify-between animate-cupertino-in">
                                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                                   <div>
                                     <span className="text-slate-400 block text-[11px]">Gasto Real até Hoje:</span>
@@ -6427,7 +6501,7 @@ export default function CoindexApp() {
                                   </span>
                                 </div>
 
-                                <div className={`${chartHeightClass} select-none transition-all duration-300`}>
+                                <div className="flex-1 min-h-[260px] w-full select-none transition-all duration-300">
                                   <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart
                                       data={paceChartData.data}
@@ -6487,7 +6561,7 @@ export default function CoindexApp() {
 
                             {/* ABA 3: PROJEÇÃO 6 MESES DE COMPROMETIMENTO FUTURO */}
                             {patrimonyCardView === "forecast" && (
-                              <div className="space-y-3">
+                              <div key="forecast-view" className="space-y-3 flex-1 flex flex-col justify-between animate-cupertino-in">
                                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                                   <div>
                                     <span className="text-slate-400 block text-[11px]">Comprometimento Médio Futuro:</span>
@@ -6509,7 +6583,7 @@ export default function CoindexApp() {
                                   )}
                                 </div>
 
-                                <div className={`${chartHeightClass} select-none transition-all duration-300`}>
+                                <div className="flex-1 min-h-[260px] w-full select-none transition-all duration-300">
                                   <ResponsiveContainer width="100%" height="100%">
                                     <BarChart
                                       data={forecast6MData.months}
@@ -6541,6 +6615,37 @@ export default function CoindexApp() {
                                 </div>
                               </div>
                             )}
+
+                            {/* SPRINT 34: Faixa Executiva de Telemetria Patrimonial (4 Métricas Compactas) */}
+                            <div className="mt-auto pt-3.5 border-t border-[var(--cupertino-border)] grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
+                                <span className="text-[10px] text-slate-400 font-medium">Média de Aporte/Mês</span>
+                                <span className={`text-xs sm:text-sm font-semibold font-mono tabular-nums text-emerald-400 mt-0.5 ${moneyBlur}`}>
+                                  {formatBRL(patrimonyTelemetry.avgAporte)}
+                                </span>
+                              </div>
+                              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
+                                <span className="text-[10px] text-slate-400 font-medium">Melhor Mês da Série</span>
+                                <div className="flex items-baseline gap-1 mt-0.5 truncate">
+                                  <span className="text-[10px] sm:text-xs text-slate-300 font-semibold shrink-0">{patrimonyTelemetry.bestMonth.label}:</span>
+                                  <span className={`text-xs sm:text-sm font-semibold font-mono tabular-nums text-white truncate ${moneyBlur}`}>
+                                    {formatBRL(patrimonyTelemetry.bestMonth.amount)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
+                                <span className="text-[10px] text-slate-400 font-medium">Rendimento Médio CDI</span>
+                                <span className={`text-xs sm:text-sm font-semibold font-mono tabular-nums text-emerald-300 mt-0.5 ${moneyBlur}`}>
+                                  +{formatBRL(patrimonyTelemetry.avgYieldMonth)}/mês
+                                </span>
+                              </div>
+                              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
+                                <span className="text-[10px] text-slate-400 font-medium">Projeção 12 Meses</span>
+                                <span className={`text-xs sm:text-sm font-semibold font-mono tabular-nums text-[#64D2FF] mt-0.5 ${moneyBlur}`}>
+                                  {formatBRL(patrimonyTelemetry.projected12M)}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         )}
 
@@ -6642,37 +6747,44 @@ export default function CoindexApp() {
                                   </div>
                                 </div>
                               ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1 text-xs">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1 text-xs">
                                   {categoryChartData.map((cat) => {
                                     const pct = Math.round((cat.value / totalExpenses) * 100);
                                     return (
                                       <div
                                         key={cat.name}
                                         onClick={() => setSelectedCategoryDrillDown(cat.name)}
-                                        className="p-2 rounded-xl bg-slate-950/60 border border-white/5 space-y-1 cursor-pointer hover:bg-slate-900/90 hover:border-white/15 transition group"
-                                        title="Clique para ver detalhamento de lançamentos"
+                                        className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-1.5 cursor-pointer hover:bg-slate-900/90 hover:border-white/15 transition group cupertino-card-hover"
+                                        title={`Clique para ver detalhamento de ${cat.name}`}
                                       >
-                                        <div className="flex items-center justify-between gap-1">
-                                          <span className="font-semibold text-slate-200 flex items-center gap-1.5 truncate">
+                                        {/* Linha 1: Ícone + Nome Completo + Pílula com % */}
+                                        <div className="flex items-center justify-between gap-2 min-w-0">
+                                          <span className="font-semibold text-slate-200 flex items-center gap-1.5 min-w-0 truncate text-xs group-hover:text-white transition">
                                             <span
                                               className="w-2 h-2 rounded-full shrink-0 shadow-xs"
                                               style={{ backgroundColor: cat.color }}
                                             />
                                             {renderCategorySemanticIcon(cat.name, cat.color)}
-                                            <span className="truncate group-hover:text-white transition text-[11px]">
-                                              {cat.name}
-                                            </span>
+                                            <span className="truncate">{cat.name}</span>
                                           </span>
-                                          <span className={`font-bold text-white tabular-nums font-mono text-[11px] shrink-0 ${moneyBlur}`}>
-                                            {formatBRL(cat.value)}{" "}
-                                            <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
+                                          <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-md bg-white/5 text-slate-400 shrink-0">
+                                            {pct}%
                                           </span>
                                         </div>
-                                        <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                                          <div
-                                            className="h-full rounded-full transition-all duration-300"
-                                            style={{ width: `${pct}%`, backgroundColor: cat.color }}
-                                          />
+
+                                        {/* Linha 2: Valor R$ tabular e barra de progresso h-1.5 */}
+                                        <div className="space-y-1">
+                                          <div className="flex items-center justify-between text-xs font-mono font-bold">
+                                            <span className={`text-white tabular-nums ${moneyBlur}`}>
+                                              {formatBRL(cat.value)}
+                                            </span>
+                                          </div>
+                                          <div className="w-full h-1.5 bg-slate-900/80 rounded-full overflow-hidden">
+                                            <div
+                                              className="h-full rounded-full transition-all duration-300 progress-bar-apple"
+                                              style={{ width: `${pct}%`, backgroundColor: cat.color }}
+                                            />
+                                          </div>
                                         </div>
                                       </div>
                                     );
@@ -6762,7 +6874,7 @@ export default function CoindexApp() {
 
                             {/* SUB-ABA 1: FIXOS A LANÇAR */}
                             {radarActiveTab === "fixos" && (
-                              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                              <div key="radar-fixos" className="space-y-2 max-h-60 overflow-y-auto pr-1 animate-cupertino-in">
                                 {pendingRadarData.unlaunchedFixed.length === 0 ? (
                                   <div className="p-4 rounded-xl bg-slate-950/40 border border-emerald-500/20 text-center space-y-1">
                                     <CheckCircle2 className="w-6 h-6 text-[#30D158] mx-auto" />
@@ -6803,7 +6915,7 @@ export default function CoindexApp() {
 
                             {/* SUB-ABA 2: CONTAS PENDENTES */}
                             {radarActiveTab === "pendentes" && (
-                              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                              <div key="radar-pendentes" className="space-y-2 max-h-60 overflow-y-auto pr-1 animate-cupertino-in">
                                 {pendingRadarData.pendingTxs.length === 0 ? (
                                   <div className="p-4 rounded-xl bg-slate-950/40 border border-emerald-500/20 text-center space-y-1">
                                     <CheckCircle2 className="w-6 h-6 text-[#30D158] mx-auto" />
@@ -6853,7 +6965,7 @@ export default function CoindexApp() {
 
                             {/* SUB-ABA 3: FATURAS & CARTÕES */}
                             {radarActiveTab === "faturas" && (
-                              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                              <div key="radar-faturas" className="space-y-2 max-h-60 overflow-y-auto pr-1 animate-cupertino-in">
                                 {pendingRadarData.cardSchedules.map((item) => (
                                   <div
                                     key={item.card.id}
@@ -6882,7 +6994,7 @@ export default function CoindexApp() {
 
                             {/* SUB-ABA 4: SAÚDE FINANCEIRA (RADAR POLIGONAL 5 EIXOS) */}
                             {radarActiveTab === "saude" && (
-                              <div className="space-y-3">
+                              <div key="radar-saude" className="space-y-3 animate-cupertino-in">
                                 {/* Cabeçalho do Score */}
                                 <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-slate-950/70 border border-white/5">
                                   <div className="flex items-center gap-2">
@@ -6980,7 +7092,7 @@ export default function CoindexApp() {
                                         key={card.id}
                                         onClick={() => setSelectedWalletCardId(card.id)}
                                         style={{ zIndex: isSelected ? 25 : idx + 1 }}
-                                        className={`relative rounded-2xl p-4 shadow-xl border border-white/15 transition-all duration-300 cursor-pointer ${
+                                        className={`wallet-physical-card relative rounded-2xl p-4 shadow-xl border border-white/15 transition-all duration-300 cursor-pointer ${
                                           !isFirst ? "-mt-10" : ""
                                         } ${
                                           isSelected
@@ -7151,7 +7263,7 @@ export default function CoindexApp() {
 
                             {/* SUB-ABA 1: FLUXO MENSAL (6M) */}
                             {cashflowActiveTab === "fluxo" && (
-                              <div className="space-y-2">
+                              <div key="cashflow-fluxo" className="space-y-2 animate-cupertino-in">
                                 <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
                                   <span>Entradas, Saídas e Aportes (Últimos 6M)</span>
                                   <div className="flex items-center gap-3 font-mono text-[10px]">
@@ -7190,7 +7302,7 @@ export default function CoindexApp() {
 
                             {/* SUB-ABA 2: ATIVIDADES RECENTES */}
                             {cashflowActiveTab === "recentes" && (
-                              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                              <div key="cashflow-recentes" className="space-y-2 max-h-64 overflow-y-auto pr-1 animate-cupertino-in">
                                 {recentTransactions.length === 0 ? (
                                   <p className="text-slate-400 text-center py-6">Nenhuma atividade recente encontrada.</p>
                                 ) : (
@@ -7321,9 +7433,12 @@ export default function CoindexApp() {
               </div>
             </div>
           ) : activeTab === "spotify" ? (
-            <SpotifyModule ownerDisplayName={currentUser ?? ownerUsername ?? "Sabrino"} />
+            <div key="tab-spotify" className="animate-cupertino-in">
+              <SpotifyModule ownerDisplayName={currentUser ?? ownerUsername ?? "Sabrino"} />
+            </div>
           ) : (
-            <SecondaryTabs
+            <div key={`tab-${activeTab}`} className="animate-cupertino-in">
+              <SecondaryTabs
               activeTab={activeTab}
               moneyBlur={moneyBlur}
               currentUser={currentUser}
@@ -7472,6 +7587,7 @@ export default function CoindexApp() {
               logFilter={logFilter}
               setLogFilter={setLogFilter}
             />
+          </div>
           )}
         </main>
       </div>

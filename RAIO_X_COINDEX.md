@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.25.0`  
-> **Última Atualização:** 2 de Novembro de 2026 (Pós-Sprint 33 — Auditoria Técnica & Blindagem Matemática, Contábil, Tombstones de Sincronização e Paginação Supabase sem Alterações de UI)  
+> **Versão da Aplicação:** `0.26.0`  
+> **Última Atualização:** 2 de Novembro de 2026 (Pós-Sprint 34 — Remoção de Botões <, >, ⇈, Auto-Distribuição de Altura de Cards sem Espaços Vazios, Arquitetura Cupertino Light 2.0 com View Transitions API e Animações Apple Spring)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -599,6 +599,28 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
   - **Frente D (Dossier e Garantia de Zero Regressão Visual):**
     - 100% de preservação de todas as classes Tailwind, CSS, cores, componentes e estilos visuais.
     - Zero erros em `npx tsc --noEmit` e compilação de produção com sucesso.
+
+- **Sprint 34 (Remoção dos Botões `<`, `>` e `⇈`, Motor de Auto-Distribuição Inteligente de Altura dos Cards sem Espaços Vazios, Arquitetura Cupertino Light 2.0 e Animações Apple Spring Engine):**
+  - **Limpeza do Cabeçalho do `<ChartCard>`:** Remoção completa dos botões legados `<`, `>`, `⇈`. O cabeçalho agora contém estritamente: (1) `GripVertical` para reordenação livre via Drag-and-Drop, (2) botão de tamanho com rótulo real (`1/3`, `1/2`, `2/3`, `1/1`), e (3) engrenagem de configurações com menu portal desacoplado. O container de títulos foi flexibilizado com `min-w-0`, `overflow-hidden` e `text-ellipsis` evitando truncamento prematuro.
+  - **Auto-Distribuição Inteligente de Altura dos Cards (Grid Bento 100% Otimizado):**
+    - Contêiner de grade unificado configurado com `items-stretch` em `app/page.tsx`.
+    - Raiz do `<ChartCard>` padronizada com `h-full flex flex-col justify-between cupertino-card-hover`, garantindo que cards em uma mesma linha alinhem suas alturas perfeitamente.
+    - Container interno de conteúdo com `flex-1 flex flex-col justify-between`.
+  - **Central Analítica de Patrimônio & Caixa (2/3) com Faixa Executiva de Telemetria:**
+    - Área dos gráficos (Patrimônio, Ritmo/Pace e Projeção 6M) flexibilizada com `flex-1 min-h-[260px] w-full`.
+    - Adição no rodapé do card da **Faixa Executiva de Telemetria Patrimonial** com 4 métricas compactas: (1) `Média de Aporte/Mês`, (2) `Melhor Mês da Série` (R$ e mês), (3) `Rendimento Médio CDI` (+R$/mês), e (4) `Projeção 12 Meses` (capitalização composta futura).
+  - **Novo Layout de Categorias em 2 Linhas no Card de Despesas:**
+    - Substituição da linha única comprimida por layout vertical de 2 linhas:
+      - **Linha 1:** Ícone semântico + nome completo da categoria sem truncamento + pílula com `%` do total.
+      - **Linha 2:** Valor em R$ com números tabulares alinhados à esquerda + barra de progresso suave (`h-1.5`) com a cor da categoria (`.progress-bar-apple`).
+    - Grade com `gap-2.5` preenchendo 100% da coluna sem espaços ociosos.
+  - **Arquitetura Cupertino Light 2.0 com View Transitions API:**
+    - Criação da classe `.wallet-physical-card` no Apple Wallet Stack, blindando os gradientes de marca exclusivos dos cartões físicos virtuais (Nubank roxo, Inter laranja, BTG marinho) para nunca sofrerem clareamento no modo claro.
+    - Hierarquia de 4 superfícies Apple no tema claro: Nível 0 (`#F2F2F7`), Nível 1 (`#FFFFFF` nos cards bento), Nível 2 (`#F5F5F7` em inputs e subcards) e Nível 3 (menus flutuantes com 96% de opacidade e blur 20px).
+    - Alternância de tema via **View Transitions API** (`document.startViewTransition`) com expansão radial física a partir das coordenadas do clique do mouse (`clip-path: circle(...)`) em 550ms `cubic-bezier(0.22, 1, 0.36, 1)`.
+  - **Apple Spring Motion Engine:**
+    - Animação de entrada suave `@keyframes cupertinoFadeSlideUp` e classe `.animate-cupertino-in` com curva de aceleração de molas iOS (`cubic-bezier(0.16, 1, 0.3, 1)`) em todas as trocas de abas primárias, secundárias e sub-visões do dashboard.
+    - Classe `.cupertino-card-hover` adicionando elevação tátil (`translate-y(-2px)`) e halo translúcido nos 4 Slim KPI cards e em todos os cards do dashboard.
 
 ---
 

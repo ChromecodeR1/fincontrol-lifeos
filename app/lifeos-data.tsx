@@ -364,10 +364,23 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.25.0";
-export const PREVIOUS_VERSION = "0.9";
+export const APP_VERSION = "0.26.0";
+export const PREVIOUS_VERSION = "0.25.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.26.0",
+    date: "Nov/2026",
+    title: "Sprint 34: Auto-Distribuição de Altura, Arquitetura Cupertino Light 2.0 e Animações Apple Spring",
+    highlights: [
+      "Cabeçalho de Cards Limpo: Remoção dos botões legados (<, >, ⇈) mantendo GripVertical, botão de tamanho proporcional exato (1/3, 1/2, 2/3, 1/1) e engrenagem.",
+      "Motor de Auto-Distribuição Inteligente: Cards com items-stretch e flex vertical preenchem 100% da grade Bento sem espaços ociosos.",
+      "Central Analítica 2/3 com Faixa Executiva de Telemetria: 4 métricas compactas no rodapé (Média de Aporte, Melhor Mês, Rendimento Médio CDI e Projeção 12 Meses).",
+      "Novo Layout de Categorias em 2 Linhas: Ícone + Nome completo + % na linha 1, Valor R$ tabular + barra suave h-1.5 na linha 2, eliminando truncamentos.",
+      "Arquitetura Cupertino Light 2.0: 4 níveis de superfícies Apple, preservação dos cartões físicos virtuais (.wallet-physical-card) e View Transitions API com efeito circular circular wipe.",
+      "Apple Spring Motion Engine: Animações de entrada com física de molas (cubic-bezier(0.16, 1, 0.3, 1)) e elevação tátil cupertino-card-hover."
+    ]
+  },
   {
     version: "0.11.0",
     date: "Out/2026",

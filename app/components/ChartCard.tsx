@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { GripVertical, Settings, Columns2, RectangleHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
+import { GripVertical, Settings, Columns2, RectangleHorizontal } from "lucide-react";
 import ChartSettingsPopover, {
   ChartKind,
   ChartWidgetSettings,
@@ -48,9 +48,6 @@ export default function ChartCard({
   onDragStartCard,
   onDragEnterCard,
   onDragEndCard,
-  onMoveLeft,
-  onMoveRight,
-  onMoveToTop,
   isDragging = false,
   isDropTarget = false,
   headerExtra,
@@ -69,6 +66,18 @@ export default function ChartCard({
       : size === "two-thirds"
       ? "col-span-12 lg:col-span-8"
       : "col-span-12 lg:col-span-6";
+
+  const sizeLabel =
+    size === "third" ? "1/3" : size === "two-thirds" ? "2/3" : size === "full" ? "1/1" : "1/2";
+
+  const handleToggleSize = () => {
+    let nextSize: ChartWidgetSize = "half";
+    if (size === "half") nextSize = "full";
+    else if (size === "full") nextSize = "half";
+    else if (size === "third") nextSize = "half";
+    else if (size === "two-thirds") nextSize = "full";
+    onSizeChange(nextSize);
+  };
 
   return (
     <div
@@ -99,7 +108,7 @@ export default function ChartCard({
         setCanDrag(false);
         onDragEndCard();
       }}
-      className={`${spanClass} min-w-0 overflow-hidden relative rounded-2xl border transition-all duration-200 ${
+      className={`${spanClass} min-w-0 overflow-hidden relative rounded-2xl border cupertino-card-hover h-full flex flex-col justify-between ${
         isDropTarget
           ? "border-[#0A84FF] ring-2 ring-[#0A84FF] shadow-sm"
           : "border-slate-800/80"
@@ -107,54 +116,23 @@ export default function ChartCard({
         popoverOpen ? "z-[80] overflow-visible" : "z-10 focus-within:z-[80]"
       } bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm ${className}`}
     >
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {icon}
-            <h3 className="truncate text-sm font-semibold tracking-[-0.02em] text-slate-100">{title}</h3>
+            <h3 className="text-sm font-semibold tracking-[-0.02em] text-slate-100 whitespace-nowrap overflow-hidden text-ellipsis">
+              {title}
+            </h3>
           </div>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
+          {subtitle && <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">{subtitle}</p>}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           {headerExtra}
 
-          {/* Grupo de controles na ordem estrita: 1. Setas / Mover, 2. Tamanho, 3. Engrenagem */}
+          {/* Grupo de controles no canto superior direito: 1. GripVertical, 2. Tamanho real, 3. Engrenagem */}
           <div className="relative flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950/70 p-1">
-            {/* Setas de Reordenação Rápida [← | →] */}
-            {onMoveLeft && (
-              <button
-                type="button"
-                onClick={onMoveLeft}
-                title="Mover card para a esquerda / cima"
-                className="rounded p-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {onMoveRight && (
-              <button
-                type="button"
-                onClick={onMoveRight}
-                title="Mover card para a direita / baixo"
-                className="rounded p-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {/* Botão Rápido Enviar para o Topo "⇈" */}
-            {onMoveToTop && (
-              <button
-                type="button"
-                onClick={onMoveToTop}
-                title="Mover direto para o topo"
-                className="rounded p-1 text-[#0A84FF] transition hover:bg-slate-800 hover:text-white cursor-pointer font-bold text-xs"
-              >
-                ⇈
-              </button>
-            )}
-
-            {/* Ícone de Mover (arraste com mouse/touch) */}
+            {/* 1. Ícone de Mover (arraste nativo com mouse/touch) */}
             <button
               type="button"
               onMouseDown={() => setCanDrag(true)}
@@ -167,33 +145,28 @@ export default function ChartCard({
               <GripVertical className="h-4 w-4" />
             </button>
 
-            {/* 2. Controle de Tamanho (Meia largura vs Largura total) */}
+            {/* 2. Controle de Proporção de Largura com rótulo real (1/3, 1/2, 2/3 ou 1/1) */}
             <button
               type="button"
-              onClick={() => onSizeChange(size === "half" ? "full" : "half")}
-              title={size === "half" ? "Expandir para largura total (1/1)" : "Reduzir para meia largura (1/2)"}
-              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
+              onClick={handleToggleSize}
+              title={`Alternar proporção do card (atual: ${sizeLabel})`}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-mono font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white cursor-pointer"
             >
-              {size === "half" ? (
-                <>
-                  <Columns2 className="h-3.5 w-3.5" />
-                  <span>1/2</span>
-                </>
+              {size === "full" ? (
+                <RectangleHorizontal className="h-3.5 w-3.5 text-[#0A84FF]" />
               ) : (
-                <>
-                  <RectangleHorizontal className="h-3.5 w-3.5" />
-                  <span>1/1</span>
-                </>
+                <Columns2 className="h-3.5 w-3.5 text-slate-400" />
               )}
+              <span>{sizeLabel}</span>
             </button>
 
-            {/* 3. Engrenagem (Configurações por gráfico) */}
+            {/* 3. Engrenagem (Configurações deste gráfico) */}
             {chartKind !== "kpi" && (
               <button
                 ref={gearButtonRef}
                 type="button"
                 onClick={() => setPopoverOpen((prev) => !prev)}
-                title="Configurações deste gráfico"
+                title="Personalizar este gráfico"
                 className={`rounded p-1 transition cursor-pointer ${
                   popoverOpen
                     ? "bg-[#0A84FF] text-white shadow-sm"
@@ -220,7 +193,7 @@ export default function ChartCard({
         </div>
       </div>
 
-      <div>{children}</div>
+      <div className="flex-1 flex flex-col justify-between">{children}</div>
     </div>
   );
 }
