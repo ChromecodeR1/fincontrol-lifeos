@@ -25,6 +25,7 @@ interface ChartCardProps {
   onDragEndCard: () => void;
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
+  onMoveToTop?: () => void;
   isDragging?: boolean;
   isDropTarget?: boolean;
   headerExtra?: React.ReactNode;
@@ -49,6 +50,7 @@ export default function ChartCard({
   onDragEndCard,
   onMoveLeft,
   onMoveRight,
+  onMoveToTop,
   isDragging = false,
   isDropTarget = false,
   headerExtra,
@@ -99,7 +101,7 @@ export default function ChartCard({
       }}
       className={`${spanClass} min-w-0 overflow-hidden relative rounded-2xl border transition-all duration-200 ${
         isDropTarget
-          ? "border-[#0A84FF] ring-2 ring-[#0A84FF]/40 shadow-sm"
+          ? "border-[#0A84FF] ring-2 ring-[#0A84FF] shadow-sm"
           : "border-slate-800/80"
       } ${isDragging ? " scale-[0.99] opacity-60" : "opacity-100"} ${
         popoverOpen ? "z-[80] overflow-visible" : "z-10 focus-within:z-[80]"
@@ -138,6 +140,17 @@ export default function ChartCard({
                 className="rounded p-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
               >
                 <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {/* Botão Rápido Enviar para o Topo "⇈" */}
+            {onMoveToTop && (
+              <button
+                type="button"
+                onClick={onMoveToTop}
+                title="Mover direto para o topo"
+                className="rounded p-1 text-[#0A84FF] transition hover:bg-slate-800 hover:text-white cursor-pointer font-bold text-xs"
+              >
+                ⇈
               </button>
             )}
 

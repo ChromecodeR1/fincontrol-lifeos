@@ -82,12 +82,18 @@ export type ActiveTab =
   | "settings";
 export type DashboardWidgetId =
   | "thermometer"
+  | "thermometer_card"
+  | "patrimony"
+  | "wallet_limits"
+  | "expenses"
+  | "cashflow_recents"
+  | "pendencies"
+  | "benefits_strava"
   | "kpis"
   | "credit_chart"
   | "bank_limits_chart"
   | "patrimony_chart"
   | "category_chart"
-  | "benefits_strava"
   | "pending_radar"
   | "wallet_card"
   | "cashflow_recent"
@@ -95,6 +101,15 @@ export type DashboardWidgetId =
   | "auto_consumption"
   | "auto_fuel_monthly"
   | "auto_price_per_liter";
+
+export const ALL_DASHBOARD_WIDGET_IDS = [
+  "thermometer",
+  "patrimony",
+  "wallet_limits",
+  "expenses",
+  "cashflow_recents",
+  "pendencies"
+] as const;
 
 export interface DashboardWidgetConfig {
   id: DashboardWidgetId;
@@ -347,7 +362,7 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.23.0";
+export const APP_VERSION = "0.24.0";
 export const PREVIOUS_VERSION = "0.9";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
@@ -879,35 +894,42 @@ export const COLOR_PRESETS = [
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
   {
-    id: "patrimony_chart",
+    id: "thermometer",
+    title: "Termômetro de Gastos Pessoais & Cota Diária",
+    subtitle: "Consumo do teto mensal, cota diária livre e alocação 50/30/20",
+    visible: true,
+    size: "full"
+  },
+  {
+    id: "patrimony",
     title: "Central Analítica de Patrimônio & Caixa",
     subtitle: "Evolução patrimonial c/ CDI, curva de ritmo diário e projeção de 6 meses",
     visible: true,
     size: "two-thirds"
   },
   {
-    id: "wallet_card",
+    id: "wallet_limits",
     title: "Cartões & Limites (Apple Wallet)",
     subtitle: "Stack de cartões físicos, faturas abertas e limites bancários",
     visible: true,
     size: "third"
   },
   {
-    id: "category_chart",
+    id: "expenses",
     title: "Despesas Mensais & Categorias Compact",
     subtitle: "Donut 03 compacto, grid de categorias e drill-down de lançamentos",
     visible: true,
     size: "half"
   },
   {
-    id: "cashflow_recent",
+    id: "cashflow_recents",
     title: "Fluxo de Caixa & Atividades Recentes",
     subtitle: "Entradas vs Saídas últimos 6M e feed de lançamentos rápidos",
     visible: true,
     size: "half"
   },
   {
-    id: "pending_radar",
+    id: "pendencies",
     title: "Radar de Pendências & Saúde Financeira",
     subtitle: "Radar poligonal de 5 eixos, fixos a lançar e contas pendentes",
     visible: true,
@@ -921,6 +943,67 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
     size: "half"
   }
 ];
+
+export function normalizeDashboardLayout(layout: unknown): DashboardWidgetConfig[] {
+  const legacyMap: Record<string, DashboardWidgetId> = {
+    thermometer_card: "thermometer",
+    patrimony_chart: "patrimony",
+    wallet_card: "wallet_limits",
+    credit_chart: "wallet_limits",
+    bank_limits_chart: "wallet_limits",
+    category_chart: "expenses",
+    expenses_chart: "expenses",
+    cashflow_recent: "cashflow_recents",
+    pending_radar: "pendencies",
+    pendencies_radar: "pendencies"
+  };
+
+  const currentList = Array.isArray(layout) ? layout : DEFAULT_DASHBOARD_LAYOUT;
+  const result: DashboardWidgetConfig[] = [];
+  const seen = new Set<string>();
+
+  for (const item of currentList) {
+    if (!item || typeof item !== "object") continue;
+    const rawId = (item as { id?: string }).id;
+    if (!rawId || rawId === "kpis") continue;
+    const canonicalId = (legacyMap[rawId] || rawId) as DashboardWidgetId;
+
+    if (seen.has(canonicalId)) continue;
+    seen.add(canonicalId);
+
+    const defaultDef = DEFAULT_DASHBOARD_LAYOUT.find((d) => d.id === canonicalId);
+    if (!defaultDef && !ALL_DASHBOARD_WIDGET_IDS.includes(canonicalId as any) && canonicalId !== "benefits_strava") {
+      continue;
+    }
+
+    result.push({
+      id: canonicalId,
+      title: defaultDef?.title || (item as any).title || canonicalId,
+      subtitle: defaultDef?.subtitle || (item as any).subtitle || "",
+      visible: (item as any).visible !== false,
+      size: (item as any).size || defaultDef?.size || "half"
+    });
+  }
+
+  // Auto-cura: Assegura que todos os IDs obrigatórios de ALL_DASHBOARD_WIDGET_IDS estejam presentes
+  for (const reqId of ALL_DASHBOARD_WIDGET_IDS) {
+    if (!seen.has(reqId)) {
+      const def = DEFAULT_DASHBOARD_LAYOUT.find((d) => d.id === reqId);
+      if (def) {
+        result.push(def);
+        seen.add(reqId);
+      }
+    }
+  }
+
+  // Performance & Metas se ainda não estiver presente
+  if (!seen.has("benefits_strava")) {
+    const def = DEFAULT_DASHBOARD_LAYOUT.find((d) => d.id === "benefits_strava");
+    if (def) result.push(def);
+  }
+
+  return result;
+}
 
 export const DEFAULT_AUTO_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
   {

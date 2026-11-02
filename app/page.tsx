@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Wallet,
   TrendingUp,
@@ -116,6 +116,8 @@ import {
   DEFAULT_CATEGORY_COLORS,
   DEFAULT_CHART_THEME,
   DEFAULT_DASHBOARD_LAYOUT,
+  ALL_DASHBOARD_WIDGET_IDS,
+  normalizeDashboardLayout,
   getAutomaticStatus,
   BankItem,
   BankInstitution,
@@ -551,16 +553,6 @@ export default function CoindexApp() {
     });
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  // SPRINT 31: Navegação Linear Top-Nav Cockpit (02) vs Barra Lateral Retrátil
-  const [navLayoutMode, setNavLayoutMode] = useState<"topnav" | "sidebar">(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("coindex_nav_mode");
-        if (saved === "sidebar" || saved === "topnav") return saved;
-      } catch {}
-    }
-    return "topnav";
-  });
   const [selectedWalletCardId, setSelectedWalletCardId] = useState<string | null>(null);
   const [cashflowActiveTab, setCashflowActiveTab] = useState<"fluxo" | "recentes">("fluxo");
   const [selectedMonth, setSelectedMonth] = useState("2026-10");
@@ -753,6 +745,9 @@ export default function CoindexApp() {
   const [chartConfigs, setChartConfigs] = useState<Record<string, ChartWidgetSettings>>({});
   const [draggingWidgetId, setDraggingWidgetId] = useState<string | null>(null);
   const [dragOverWidgetId, setDragOverWidgetId] = useState<string | null>(null);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+  const dragMouseYRef = useRef<number | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
   const getWidgetSettings = (
     widgetId: string,
@@ -871,6 +866,82 @@ export default function CoindexApp() {
       return reordered;
     });
   };
+
+  // SPRINT 32: Botão Rápido Enviar para o Topo "⇈"
+  const handleMoveToTop = (widgetId: string) => {
+    setDashboardLayout((prev) => {
+      const currentIndex = prev.findIndex((w) => w.id === widgetId);
+      if (currentIndex <= 0) return prev;
+      const reordered = [...prev];
+      const [moved] = reordered.splice(currentIndex, 1);
+      reordered.unshift(moved);
+      try {
+        localStorage.setItem("coindex_dashboard_layout_v3", JSON.stringify(reordered));
+        localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(reordered));
+        if (currentUser) {
+          setUserItem("coindex_dashboard_layout_v3", JSON.stringify(reordered), currentUserId);
+          setUserItem("lifeos_dash_layout_v1", JSON.stringify(reordered), currentUserId);
+        }
+      } catch {}
+      if (currentUser) {
+        void updateUserSettingsInDb({ dashboardLayout: reordered });
+      }
+      return reordered;
+    });
+    notify("Card no Topo", "O card foi movido diretamente para a primeira posição.", "success", "CONFIG");
+  };
+
+  // SPRINT 32: Motor Edge Auto-Scroll 60fps durante Drag-and-Drop
+  useEffect(() => {
+    if (!draggingWidgetId) {
+      if (animFrameRef.current !== null) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      dragMouseYRef.current = null;
+      return;
+    }
+
+    const handleWindowDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      dragMouseYRef.current = e.clientY;
+    };
+
+    window.addEventListener("dragover", handleWindowDragOver, { passive: false });
+
+    const scrollLoop = () => {
+      const clientY = dragMouseYRef.current;
+      if (clientY !== null && typeof window !== "undefined") {
+        const topThreshold = 160;
+        const bottomThreshold = window.innerHeight - 160;
+
+        if (clientY < topThreshold) {
+          // Zona de Subida Automática (Topo)
+          const speed = Math.max(6, Math.round(((topThreshold - clientY) / topThreshold) * 28));
+          mainScrollRef.current?.scrollBy({ top: -speed, behavior: "auto" });
+          window.scrollBy({ top: -speed, behavior: "auto" });
+        } else if (clientY > bottomThreshold) {
+          // Zona de Descida Automática (Base)
+          const diff = clientY - bottomThreshold;
+          const speed = Math.max(6, Math.round((diff / 160) * 28));
+          mainScrollRef.current?.scrollBy({ top: speed, behavior: "auto" });
+          window.scrollBy({ top: speed, behavior: "auto" });
+        }
+      }
+      animFrameRef.current = requestAnimationFrame(scrollLoop);
+    };
+
+    animFrameRef.current = requestAnimationFrame(scrollLoop);
+
+    return () => {
+      window.removeEventListener("dragover", handleWindowDragOver);
+      if (animFrameRef.current !== null) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      dragMouseYRef.current = null;
+    };
+  }, [draggingWidgetId]);
 
   const applyZeroHandling = <T extends Record<string, unknown>>(
     rows: T[],
@@ -1221,9 +1292,7 @@ export default function CoindexApp() {
         const sStravaStats = localStorage.getItem("lifeos_strava_stats");
         if (sStravaStats) setStravaStats(JSON.parse(sStravaStats));
         const sLayout = localStorage.getItem("coindex_dashboard_layout_v3") || localStorage.getItem("lifeos_dash_layout_v1");
-        if (sLayout) setDashboardLayout(JSON.parse(sLayout));
-        const sNavMode = localStorage.getItem("coindex_nav_mode") as "topnav" | "sidebar" | null;
-        if (sNavMode && (sNavMode === "topnav" || sNavMode === "sidebar")) setNavLayoutMode(sNavMode);
+        if (sLayout) setDashboardLayout(normalizeDashboardLayout(JSON.parse(sLayout)));
         const sChartConfigs = localStorage.getItem("lifeos_chart_configs_v1");
         if (sChartConfigs) setChartConfigs(JSON.parse(sChartConfigs));
         const sAutoInmetro = localStorage.getItem("lifeos_auto_inmetro_v1");
@@ -1387,8 +1456,10 @@ export default function CoindexApp() {
           if (d.settings.annualRunGoalKm != null) setAnnualRunGoalKm(d.settings.annualRunGoalKm);
           if (d.settings.chartTheme) setChartTheme(d.settings.chartTheme);
           if (d.settings.dashboardLayout) {
-            setDashboardLayout(d.settings.dashboardLayout);
-            localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(d.settings.dashboardLayout));
+            const normalized = normalizeDashboardLayout(d.settings.dashboardLayout);
+            setDashboardLayout(normalized);
+            localStorage.setItem("coindex_dashboard_layout_v3", JSON.stringify(normalized));
+            localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(normalized));
           }
           if (d.settings.chartConfigs) {
             setChartConfigs(d.settings.chartConfigs);
@@ -2767,15 +2838,9 @@ export default function CoindexApp() {
       .slice(0, 5);
   }, [transactions]);
 
-  // Garante que o layout efetivo inclua novos widgets padrão mesmo em caches locais antigos
+  // SPRINT 32: Normalização e auto-cura completa do layout do Dashboard (Grid único 100% ordenável)
   const effectiveDashboardLayout = useMemo(() => {
-    const existingIds = new Set(dashboardLayout.map((w) => w.id));
-    const missingDefaults = DEFAULT_DASHBOARD_LAYOUT.filter(
-      (def) => !existingIds.has(def.id) && def.id !== "kpis"
-    );
-    const combined = [...dashboardLayout, ...missingDefaults];
-    // SPRINT 31: Remove os gráficos legados substituídos pelo wallet_card
-    return combined.filter((w) => w.id !== "credit_chart" && w.id !== "bank_limits_chart");
+    return normalizeDashboardLayout(dashboardLayout);
   }, [dashboardLayout]);
 
   const autoMetrics = useMemo(() => {
@@ -4844,8 +4909,10 @@ export default function CoindexApp() {
         if (s.chartTheme) setChartTheme(s.chartTheme as ChartThemeColors);
         if (s.themeMode) setThemeMode(s.themeMode as ThemeMode);
         if (s.dashboardLayout) {
-          setDashboardLayout(s.dashboardLayout as DashboardWidgetConfig[]);
-          setUserItem("lifeos_dash_layout_v1", JSON.stringify(s.dashboardLayout), currentUserId);
+          const normalized = normalizeDashboardLayout(s.dashboardLayout);
+          setDashboardLayout(normalized);
+          setUserItem("coindex_dashboard_layout_v3", JSON.stringify(normalized), currentUserId);
+          setUserItem("lifeos_dash_layout_v1", JSON.stringify(normalized), currentUserId);
         }
         if (s.chartConfigs) {
           setChartConfigs(s.chartConfigs as Record<string, ChartWidgetSettings>);
@@ -5081,43 +5148,29 @@ export default function CoindexApp() {
       </div>
 
       {/* BARRA LATERAL RETRÁTIL COM LOGO COINDEX E MÓDULO SPOTIFY */}
-      {navLayoutMode === "sidebar" && (
-        <aside
-          className={`fixed inset-y-0 left-0 z-40 bg-slate-950/95 border-r border-white/[0.08] backdrop-blur-2xl transition-all duration-200 flex flex-col justify-between ${
-            sidebarOpen ? "w-64" : "w-20"
-          }`}
-        >
-          <div className="p-4 space-y-6 overflow-y-auto">
-            <div className="flex items-center justify-between">
-              {sidebarOpen ? (
-                <CoindexLogoHorizontal size="sm" />
-              ) : (
-                <div className="mx-auto">
-                  <CoindexIcon className="w-9 h-9" />
-                </div>
-              )}
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNavLayoutMode("topnav");
-                    localStorage.setItem("coindex_nav_mode", "topnav");
-                  }}
-                  className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white transition cursor-pointer"
-                  title="Alternar para Barra Topo (Linear Cockpit)"
-                >
-                  <ArrowRightLeft className="w-4 h-4 text-[#0A84FF]" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white transition cursor-pointer"
-                  title={sidebarOpen ? "Recolher Menu Lateral" : "Expandir Menu Lateral"}
-                >
-                  {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                </button>
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 bg-slate-950/95 border-r border-white/[0.08] backdrop-blur-2xl transition-all duration-200 flex flex-col justify-between ${
+          sidebarOpen ? "w-64" : "w-20"
+        }`}
+      >
+        <div className="p-4 space-y-6 overflow-y-auto">
+          <div className="flex items-center justify-between">
+            {sidebarOpen ? (
+              <CoindexLogoHorizontal size="sm" />
+            ) : (
+              <div className="mx-auto">
+                <CoindexIcon className="w-9 h-9" />
               </div>
-            </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white transition cursor-pointer"
+              title={sidebarOpen ? "Recolher Menu Lateral" : "Expandir Menu Lateral"}
+            >
+              {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+          </div>
 
             {sidebarOpen && (
               <button
@@ -5219,295 +5272,15 @@ export default function CoindexApp() {
             </button>
           </div>
         </aside>
-      )}
 
       {/* CONTEÚDO PRINCIPAL */}
-      <div className={`flex-1 transition-all duration-200 ${navLayoutMode === "topnav" ? "ml-0 w-full" : sidebarOpen ? "ml-64" : "ml-20"}`}>
-        {/* CABEÇALHO TOPNAV OU SIDEBAR MODE */}
-        {navLayoutMode === "topnav" ? (
-          <header className="sticky top-0 z-40 border-b border-[var(--cupertino-border)] bg-[var(--cupertino-card)] backdrop-blur-2xl px-4 lg:px-6 h-14 flex items-center justify-between gap-3 shadow-xs">
-            {/* ESQUERDA: LOGO + NOME + TOGGLE PARA SIDEBAR */}
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2">
-                <CoindexIcon className="w-7 h-7" />
-                <span className="font-bold text-white tracking-tight text-sm hidden sm:inline">Coindex</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setNavLayoutMode("sidebar");
-                  localStorage.setItem("coindex_nav_mode", "sidebar");
-                }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer"
-                title="Alternar para Barra Lateral"
-              >
-                <ArrowRightLeft className="w-3.5 h-3.5 text-[#0A84FF]" />
-                <span className="hidden md:inline">⇄ Barra Lateral</span>
-              </button>
-            </div>
-
-            {/* CENTRO: PÍLULAS COMPACTAS DAS ABAS (DESKTOP) */}
-            <nav className="hidden lg:flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-xs shrink-0">
-              {[
-                { id: "dashboard", label: "Dashboard" },
-                { id: "status", label: "Status" },
-                { id: "transactions", label: "Lançamentos" },
-                { id: "receivables", label: "Recebíveis" },
-                { id: "cards", label: "Bancos" },
-                { id: "spotify", label: "Spotify" },
-                { id: "auto", label: "Veículos" },
-                { id: "bio", label: "Bio" },
-                { id: "brain", label: "Cérebro" },
-                { id: "settings", label: "Config" }
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id as ActiveTab)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                    activeTab === tab.id
-                      ? "bg-[#0A84FF] text-white shadow-sm"
-                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-
-            {/* DIREITA: ⌘K, MÊS, SYNC, TEMA, PRIVACIDADE, SINO, PERFIL, NOVO */}
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowCommandModal(true)}
-                className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white text-xs flex items-center gap-1.5 transition cursor-pointer"
-                title="Ação rápida (Ctrl+K)"
-              >
-                <Search className="w-3.5 h-3.5 text-indigo-400" />
-                <kbd className="hidden sm:inline px-1 py-0.2 rounded bg-slate-950 border border-white/10 text-[10px] font-mono text-slate-400">
-                  ⌘K
-                </kbd>
-              </button>
-
+      <div className={`flex-1 transition-all duration-200 ${sidebarOpen ? "ml-64" : "ml-20"}`}>
+        {/* CABEÇALHO PRINCIPAL */}
+        <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-slate-950/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2.5">
               <select
                 value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-white font-bold outline-none focus:border-indigo-500 transition cursor-pointer"
-              >
-                <option value="2026-10">Out/2026</option>
-                <option value="2026-09">Set/2026</option>
-                <option value="2026-08">Ago/2026</option>
-                <option value="2026-07">Jul/2026</option>
-                <option value="2026-06">Jun/2026</option>
-                <option value="2026-05">Mai/2026</option>
-                <option value="2026-04">Abr/2026</option>
-                <option value="2026-03">Mar/2026</option>
-                <option value="2026-02">Fev/2026</option>
-                <option value="2026-01">Jan/2026</option>
-                <option value="2025-12">Dez/2025</option>
-                <option value="2026-11">Nov/2026</option>
-                <option value="2026-12">Dez/2026</option>
-                <option value="ALL">Tudo</option>
-              </select>
-
-              <div
-                className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-mono font-medium backdrop-blur-md transition ${syncIndicator.color}`}
-                title={syncIndicator.timestamp ? `${syncIndicator.label} — ${syncIndicator.timestamp}` : syncIndicator.label}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${syncIndicator.dot}`} />
-                <span className="text-[11px]">{syncIndicator.label}</span>
-              </div>
-
-              {/* Alternador Claro / Escuro Cupertino */}
-              <div className="flex items-center p-0.5 rounded-xl bg-slate-900/80 border border-white/10 text-xs">
-                <button
-                  type="button"
-                  onClick={() => toggleCupertinoTheme("light")}
-                  className={`p-1.5 rounded-lg transition cursor-pointer ${
-                    cupertinoTheme === "light" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Tema Claro"
-                >
-                  <Sun className="w-3.5 h-3.5 text-amber-500" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleCupertinoTheme("dark")}
-                  className={`p-1.5 rounded-lg transition cursor-pointer ${
-                    cupertinoTheme === "dark" ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Tema Escuro"
-                >
-                  <Moon className="w-3.5 h-3.5 text-sky-400" />
-                </button>
-              </div>
-
-              {/* Modo Privacidade */}
-              <button
-                type="button"
-                onClick={togglePrivacyMode}
-                className={`p-2 rounded-xl border transition cursor-pointer ${
-                  privacyMode
-                    ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
-                    : "bg-slate-900 hover:bg-slate-800 border-white/10 text-slate-200"
-                }`}
-                title={privacyMode ? "Censurado" : "Visível"}
-              >
-                {privacyMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
-
-              {/* Sino de Notificações */}
-              <div className={`relative ${showBellDropdown ? "z-[9999]" : "z-40"}`}>
-                <button
-                  type="button"
-                  onClick={() => setShowBellDropdown((prev) => !prev)}
-                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition flex items-center justify-center cursor-pointer"
-                  title="Notificações"
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  {unreadNotifications.length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center shadow">
-                      {unreadNotifications.length}
-                    </span>
-                  )}
-                </button>
-
-                {showBellDropdown && (
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] p-4 z-[9999] text-xs space-y-3">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-                      <div>
-                        <strong className="text-white font-bold block">Central de Notificações</strong>
-                        <span className="text-[10px] text-slate-400">
-                          {unreadNotifications.length} pendente(s) • {viewedNotifications.length} visualizada(s)
-                        </span>
-                      </div>
-                      {unreadNotifications.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={handleMarkAllNotificationsViewed}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
-                        >
-                          <Check className="w-3 h-3" /> Visualizar todas
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-900 border border-white/5 text-[11px] font-bold">
-                      <button
-                        type="button"
-                        onClick={() => setBellViewMode("unread")}
-                        className={`py-1.5 rounded-lg transition cursor-pointer ${
-                          bellViewMode === "unread" ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        Pendentes ({unreadNotifications.length})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBellViewMode("viewed")}
-                        className={`py-1.5 rounded-lg transition cursor-pointer ${
-                          bellViewMode === "viewed" ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        Visualizadas ({viewedNotifications.length})
-                      </button>
-                    </div>
-
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                      {bellViewMode === "unread" ? (
-                        unreadNotifications.length === 0 ? (
-                          <p className="text-center text-slate-400 py-6">Nenhuma notificação nova no momento.</p>
-                        ) : (
-                          unreadNotifications.map((n) => (
-                            <div
-                              key={n.id}
-                              className="p-3 rounded-xl bg-slate-900/90 border border-white/10 flex items-start justify-between gap-2.5"
-                            >
-                              <div className="space-y-0.5">
-                                <strong
-                                  className={`block font-bold ${
-                                    n.severity === "warning" ? "text-amber-400" : "text-indigo-300"
-                                  }`}
-                                >
-                                  {n.title}
-                                </strong>
-                                <p className="text-[11px] text-slate-300 leading-snug">{n.detail}</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleMarkNotificationViewed(n.id)}
-                                className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold shrink-0 flex items-center gap-1 transition cursor-pointer"
-                              >
-                                <Eye className="w-3 h-3" /> Visualizar
-                              </button>
-                            </div>
-                          ))
-                        )
-                      ) : viewedNotifications.length === 0 ? (
-                        <p className="text-center text-slate-400 py-6">Nenhuma notificação visualizada ainda.</p>
-                      ) : (
-                        viewedNotifications.map((n) => (
-                          <div
-                            key={n.id}
-                            className="p-3 rounded-xl bg-slate-900/40 border border-white/5 flex items-start justify-between gap-2.5 opacity-70"
-                          >
-                            <div>
-                              <strong className="block font-bold text-slate-300">{n.title}</strong>
-                              <p className="text-[11px] text-slate-400">{n.detail}</p>
-                            </div>
-                            <span className="text-[10px] text-emerald-400 font-bold shrink-0">✓ Vista</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Avatar Perfil */}
-              <button
-                type="button"
-                onClick={() => setShowProfileModal(true)}
-                className="w-7 h-7 rounded-xl bg-slate-950 border border-indigo-500/30 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:border-indigo-400 transition"
-                title={`Perfil: ${currentUser}`}
-              >
-                {currentUserAvatar ? (
-                  <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
-                )}
-              </button>
-
-              {/* Botão + Novo */}
-              <button
-                type="button"
-                onClick={() => handleOpenNewTxModal()}
-                className="px-3 py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-semibold text-xs shadow-sm transition flex items-center gap-1 cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Novo</span>
-              </button>
-            </div>
-          </header>
-        ) : (
-          <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-slate-950/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
-            <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNavLayoutMode("topnav");
-                    localStorage.setItem("coindex_nav_mode", "topnav");
-                  }}
-                  className="min-h-[44px] px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
-                  title="Alternar para Modo Top-Nav Cockpit"
-                >
-                  <ArrowRightLeft className="w-3.5 h-3.5 text-[#0A84FF]" />
-                  <span className="hidden sm:inline">Barra Topo</span>
-                </button>
-
-                <select
-                  value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
                   className="min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-white font-bold outline-none focus:border-indigo-500 transition cursor-pointer"
                 >
@@ -5711,41 +5484,9 @@ export default function CoindexApp() {
               </div>
             </div>
           </header>
-        )}
-
-        {/* SUB-BARRA DE NAVEGAÇÃO MOBILE (TOP-NAV) */}
-        {navLayoutMode === "topnav" && (
-          <div className="lg:hidden px-4 py-2 bg-slate-950/90 border-b border-white/5 overflow-x-auto flex items-center gap-1.5 no-scrollbar sticky top-14 z-30 backdrop-blur-md">
-            {[
-              { id: "dashboard", label: "Dashboard" },
-              { id: "status", label: "Status" },
-              { id: "transactions", label: "Lançamentos" },
-              { id: "receivables", label: "Recebíveis" },
-              { id: "cards", label: "Bancos" },
-              { id: "spotify", label: "Spotify" },
-              { id: "auto", label: "Veículos" },
-              { id: "bio", label: "Bio" },
-              { id: "brain", label: "Cérebro" },
-              { id: "settings", label: "Config" }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id as ActiveTab)}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
-                  activeTab === tab.id
-                    ? "bg-[#0A84FF] text-white shadow-sm"
-                    : "text-slate-400 hover:text-white bg-slate-900/60"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* CORPO PRINCIPAL */}
-        <main className="max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24">
+        <main ref={mainScrollRef} className="max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24">
           {activeTab === "dashboard" ? (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -6019,27 +5760,27 @@ export default function CoindexApp() {
                 </div>
               </div>
 
-              {/* BENTO GRID 2.0 REORGANIZADO */}
-              <div className="grid grid-cols-12 gap-6">
+              {/* GRID UNIFICADO 100% ORDENÁVEL (SPRINT 32) */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
                 {effectiveDashboardLayout
                   .filter((w) => w.visible !== false && w.id !== "kpis")
                   .map((widget) => {
                     const defaultSize: ChartWidgetSize =
-                      widget.id === "patrimony_chart"
+                      widget.id === "patrimony" || widget.id === "patrimony_chart"
                         ? "two-thirds"
-                        : widget.id === "wallet_card"
+                        : widget.id === "wallet_limits" || widget.id === "wallet_card"
                         ? "third"
-                        : widget.id === "thermometer"
+                        : widget.id === "thermometer" || widget.id === "thermometer_card"
                         ? "full"
                         : "half";
                     const widgetSize: ChartWidgetSize = widget.size ?? defaultSize;
 
                     const chartKind: ChartKind =
-                      widget.id === "patrimony_chart"
+                      widget.id === "patrimony" || widget.id === "patrimony_chart"
                         ? "area"
-                        : widget.id === "category_chart"
+                        : widget.id === "expenses" || widget.id === "category_chart"
                         ? "pie"
-                        : widget.id === "cashflow_recent"
+                        : widget.id === "cashflow_recents" || widget.id === "cashflow_recent"
                         ? "bar"
                         : "kpi";
 
@@ -6056,14 +5797,18 @@ export default function CoindexApp() {
 
                     const effectiveChartType =
                       cfg.chartType ||
-                      (widget.id === "patrimony_chart" ? "area" : widget.id === "category_chart" ? "pie" : "bar");
+                      (widget.id === "patrimony" || widget.id === "patrimony_chart"
+                        ? "area"
+                        : widget.id === "expenses" || widget.id === "category_chart"
+                        ? "pie"
+                        : "bar");
 
                     const primaryColor =
                       cfg.color && cfg.color !== "auto"
                         ? cfg.color
-                        : widget.id === "patrimony_chart"
+                        : widget.id === "patrimony" || widget.id === "patrimony_chart"
                         ? "#0A84FF"
-                        : widget.id === "wallet_card"
+                        : widget.id === "wallet_limits" || widget.id === "wallet_card"
                         ? "#5E5CE6"
                         : "#30D158";
 
@@ -6087,9 +5832,13 @@ export default function CoindexApp() {
                         subtitle={widget.subtitle}
                         chartKind={chartKind}
                         hasMultipleSeries={
+                          widget.id === "patrimony" ||
                           widget.id === "patrimony_chart" ||
+                          widget.id === "wallet_limits" ||
                           widget.id === "wallet_card" ||
+                          widget.id === "expenses" ||
                           widget.id === "category_chart" ||
+                          widget.id === "cashflow_recents" ||
                           widget.id === "cashflow_recent"
                         }
                         size={widgetSize}
@@ -6102,12 +5851,13 @@ export default function CoindexApp() {
                         onDragEndCard={handleDragEndWidget}
                         onMoveLeft={() => handleMoveWidget(widget.id, "left")}
                         onMoveRight={() => handleMoveWidget(widget.id, "right")}
+                        onMoveToTop={() => handleMoveToTop(widget.id)}
                         isDragging={draggingWidgetId === widget.id}
                         isDropTarget={dragOverWidgetId === widget.id}
                         className="glass-card"
                       >
                         {/* WIDGET 1: TERMÔMETRO + COTA DIÁRIA + ALOCAÇÃO 50/30/20 */}
-                        {widget.id === "thermometer" && (
+                        {(widget.id === "thermometer" || widget.id === "thermometer_card") && (
                           <div className="space-y-4">
                             {/* Linha Superior: Status do Teto + Pílula Copilot de Cota Diária Livre */}
                             <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -6218,7 +5968,7 @@ export default function CoindexApp() {
                         )}
 
                         {/* WIDGET 2: CENTRAL ANALÍTICA MULTI-VIEW (Patrimônio, Ritmo/Pace e Projeção 6M) */}
-                        {widget.id === "patrimony_chart" && (
+                        {(widget.id === "patrimony" || widget.id === "patrimony_chart") && (
                           <div className="space-y-4">
                             {/* Segmented Control de 3 Visões Analíticas Estilo Copilot Money */}
                             <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/5">
@@ -6729,7 +6479,7 @@ export default function CoindexApp() {
                         )}
 
                         {/* WIDGET 3: PARA ONDE VAI O MEU DINHEIRO 2.0 COM DRILL-DOWN */}
-                        {widget.id === "category_chart" && (
+                        {(widget.id === "expenses" || widget.id === "category_chart") && (
                           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
                             {/* Donut Moderno com Rótulo Centralizado Total Gasto - col-span-12 lg:col-span-5 */}
                             <div className="relative h-[175px] sm:h-[185px] select-none flex items-center justify-center lg:col-span-5">
@@ -6868,7 +6618,7 @@ export default function CoindexApp() {
                         )}
 
                         {/* WIDGET 4: RADAR DE PENDÊNCIAS & SAÚDE FINANCEIRA */}
-                        {widget.id === "pending_radar" && (
+                        {(widget.id === "pendencies" || widget.id === "pending_radar") && (
                           <div className="space-y-3 text-xs">
                             {/* Abas Internas do Radar */}
                             <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/5">
@@ -7121,7 +6871,7 @@ export default function CoindexApp() {
                         )}
 
                         {/* WIDGET 5: CARTÕES & LIMITES (APPLE WALLET STACK + MERCURY/LINEAR BARS) */}
-                        {widget.id === "wallet_card" && (
+                        {(widget.id === "wallet_limits" || widget.id === "wallet_card") && (
                           <div className="space-y-4">
                             {/* PARTE SUPERIOR: Apple Wallet Card Stack */}
                             <div>
@@ -7293,7 +7043,7 @@ export default function CoindexApp() {
                         )}
 
                         {/* WIDGET 6: FLUXO DE CAIXA & ATIVIDADES RECENTES */}
-                        {widget.id === "cashflow_recent" && (
+                        {(widget.id === "cashflow_recents" || widget.id === "cashflow_recent") && (
                           <div className="space-y-3 text-xs">
                             {/* Sub-abas do Cashflow */}
                             <div className="flex items-center justify-between pb-2 border-b border-white/5">

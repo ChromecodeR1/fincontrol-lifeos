@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.23.0`  
-> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 31 — Reformulação Arquitetural do Dashboard & Interface: Fusão do Layout "02. Linear Top-Nav Cockpit" com "03. Apple Wallet Split-View", Unificação Compacta de Cartões/Limites, Radar Poligonal de Saúde Financeira e Universal Drag-and-Drop)  
+> **Versão da Aplicação:** `0.24.0`  
+> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 32 — Retorno Exclusivo da Sidebar Lateral Retrátil com Gaveta, Correção Definitiva do Drag-and-Drop no Card "Radar de Pendências & Saúde Financeira" em Grid Único e Motor de Auto-Scroll Contínuo 60fps ao Arrastar Cards)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -554,6 +554,31 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - Suporte a tamanhos bento balanceados: `"two-thirds"` (col-span-8), `"third"` (col-span-4), `"half"` (col-span-6) e `"full"` (col-span-12) com grid de 12 colunas no padrão Split-View (68% Esquerda / 32% Direita).
     - Controles de reordenação em dobro: arrastar e soltar nativo via HTML5 Drag and Drop com indicador visual translúcido + setas de reordenação instantânea `[← | →]` no cabeçalho de cada card.
     - Layout persistido no `localStorage` sob a chave `coindex_dashboard_layout_v3`, com higienização automática contra cartões legados órfãos.
+- **Sprint 32 — Retorno Exclusivo da Sidebar Lateral Retrátil com Gaveta, Correção Definitiva do Drag-and-Drop no Card "Radar de Pendências & Saúde Financeira" em Grid Único e Motor de Auto-Scroll Contínuo 60fps ao Arrastar Cards:**
+  - **Retorno Exclusivo da Sidebar Lateral com Gaveta (`app/page.tsx`):**
+    - Remoção completa do modo `navLayoutMode === "topnav"`, eliminando a barra de abas redundante no topo e os botões de alternância `⇄ Barra Topo` / `⇄ Barra Lateral`.
+    - Preservação exclusiva da Sidebar Lateral Esquerda Retrátil (`sidebarOpen` / `setSidebarOpen`), com gaveta recolhível mantendo alinhamento de ícones quando recolhida, menu e ações rápidas quando expandida, e rodapé com perfil e status de sincronização.
+    - Cabeçalho superior unificado com seletor de mês, status de sync em tempo real, sino de notificações (com central dropdown), alternador Cupertino claro/escuro, modo de privacidade por olho e botão `+ Novo Lançamento`.
+  - **Grid Unificado 100% Ordenável & Auto-Cura de Layout (`app/lifeos-data.tsx` e `app/page.tsx`):**
+    - Eliminação de qualquer divisão estática de colunas que isolasse cards do fluxo ordenável.
+    - Todos os cards do Dashboard passam a ser renderizados dentro de um **container único `<div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">`** iterando sobre o array `effectiveDashboardLayout`.
+    - Definição oficial de `ALL_DASHBOARD_WIDGET_IDS`:
+      * `"thermometer"` (Termômetro de Gastos Pessoais & Cota Diária)
+      * `"patrimony"` (Central Analítica de Patrimônio & Caixa c/ Rendimento CDI)
+      * `"wallet_limits"` (Cartões & Limites — Apple Wallet Stack)
+      * `"expenses"` (Despesas Mensais & Categorias Compact)
+      * `"cashflow_recents"` (Fluxo de Caixa & Atividades Recentes)
+      * `"pendencies"` (Radar de Pendências & Saúde Financeira)
+    - Função de auto-cura `normalizeDashboardLayout`: normaliza chaves legadas (`pending_radar`, `wallet_card`, `patrimony_chart`, etc.), higieniza duplicatas e injeta automaticamente qualquer ID faltante de `ALL_DASHBOARD_WIDGET_IDS` na hidratação inicial (`localStorage` e Supabase).
+    - O card `"Radar de Pendências & Saúde Financeira"` passa a ser envolvido pelo `<ChartCard>` padrão com `draggable={true}`, `onDragStart`, `onDragEnter`, `onDragEnd`, setas de navegação e botão para o topo.
+  - **Motor de Auto-Scroll Contínuo 60fps no Drag-and-Drop (`Edge Auto-Scroll`):**
+    - Injeção de `mainScrollRef` no elemento `<main>` do Dashboard.
+    - Listener global no `window` monitorando `clientY` durante o arraste (`draggingWidgetId !== null`).
+    - Loop de alta performance `requestAnimationFrame`:
+      * **Zona de Subida Automática (Topo):** Ativada quando `clientY < 160px`, rolando simultaneamente o container `<main>` e o `window` com velocidade proporcional `speed = Math.max(6, Math.round(((160 - clientY) / 160) * 28))`.
+      * **Zona de Descida Automática (Base):** Ativada quando `clientY > window.innerHeight - 160px`, rolando para baixo com aceleração proporcional.
+    - **Reordenação ao Vivo (`Live Reorder on DragEnter`):** Troca dinâmica e instantânea de posição dos cards no estado `dashboardLayout` durante o arraste, com destaque de anel `border-[#0A84FF] ring-2 ring-[#0A84FF]`, permitindo que o usuário visualize os cards trocando de lugar enquanto a página rola até o topo.
+    - **Botão Rápido "⇈" (Enviar para o Topo):** Novo controle no cabeçalho do `<ChartCard>` que move qualquer card diretamente para a primeira posição com 1 clique.
 
 ---
 
