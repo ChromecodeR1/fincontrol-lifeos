@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { GripVertical, Settings, Columns2, RectangleHorizontal } from "lucide-react";
+import { GripVertical, Settings, Columns2, RectangleHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
 import ChartSettingsPopover, {
   ChartKind,
   ChartWidgetSettings,
@@ -23,6 +23,8 @@ interface ChartCardProps {
   onDragStartCard: (id: string) => void;
   onDragEnterCard: (id: string) => void;
   onDragEndCard: () => void;
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
   isDragging?: boolean;
   isDropTarget?: boolean;
   headerExtra?: React.ReactNode;
@@ -45,6 +47,8 @@ export default function ChartCard({
   onDragStartCard,
   onDragEnterCard,
   onDragEndCard,
+  onMoveLeft,
+  onMoveRight,
   isDragging = false,
   isDropTarget = false,
   headerExtra,
@@ -55,7 +59,14 @@ export default function ChartCard({
   const [canDrag, setCanDrag] = useState(false);
   const gearButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const spanClass = size === "full" ? "col-span-12" : "col-span-12 lg:col-span-6";
+  const spanClass =
+    size === "full"
+      ? "col-span-12"
+      : size === "third"
+      ? "col-span-12 lg:col-span-4"
+      : size === "two-thirds"
+      ? "col-span-12 lg:col-span-8"
+      : "col-span-12 lg:col-span-6";
 
   return (
     <div
@@ -86,7 +97,7 @@ export default function ChartCard({
         setCanDrag(false);
         onDragEndCard();
       }}
-      className={`${spanClass} relative rounded-2xl border transition-all duration-200 ${
+      className={`${spanClass} min-w-0 overflow-hidden relative rounded-2xl border transition-all duration-200 ${
         isDropTarget
           ? "border-[#0A84FF] ring-2 ring-[#0A84FF]/40 shadow-sm"
           : "border-slate-800/80"
@@ -106,9 +117,31 @@ export default function ChartCard({
         <div className="flex items-center gap-1.5">
           {headerExtra}
 
-          {/* Grupo de controles na ordem estrita: 1. Mover, 2. Tamanho, 3. Engrenagem */}
+          {/* Grupo de controles na ordem estrita: 1. Setas / Mover, 2. Tamanho, 3. Engrenagem */}
           <div className="relative flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950/70 p-1">
-            {/* 1. Ícone de Mover (único ponto que inicia o arraste) */}
+            {/* Setas de Reordenação Rápida [← | →] */}
+            {onMoveLeft && (
+              <button
+                type="button"
+                onClick={onMoveLeft}
+                title="Mover card para a esquerda / cima"
+                className="rounded p-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onMoveRight && (
+              <button
+                type="button"
+                onClick={onMoveRight}
+                title="Mover card para a direita / baixo"
+                className="rounded p-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            )}
+
+            {/* Ícone de Mover (arraste com mouse/touch) */}
             <button
               type="button"
               onMouseDown={() => setCanDrag(true)}

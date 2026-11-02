@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.22.0`  
-> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 30 — Motor de Rendimento Automático de Investimentos via API Oficial do Banco Central do Brasil + Curva de Juros Acumulados CDI no Gráfico "Evolução do Meu Patrimônio")  
+> **Versão da Aplicação:** `0.23.0`  
+> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 31 — Reformulação Arquitetural do Dashboard & Interface: Fusão do Layout "02. Linear Top-Nav Cockpit" com "03. Apple Wallet Split-View", Unificação Compacta de Cartões/Limites, Radar Poligonal de Saúde Financeira e Universal Drag-and-Drop)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -534,6 +534,26 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
   - **Campo de Indexador no Modal de Lançamentos (`TransactionModal.tsx`):**
     - Quando selecionada a categoria `"Aporte"`, exibe seletor de rendimento com presets rápidos: `115% CDI (Turbo)`, `100% CDI`, `120% CDI` e `Personalizado % CDI`.
   - **Integridade Contábil Rigorosa:** O rendimento da Caixinha valoriza o patrimônio líquido acumulado, mas NUNCA infla as receitas operacionais do mês nem o Saldo Livre para Gastar da conta corrente enquanto não resgatado.
+- **Sprint 31 — Reformulação Arquitetural do Dashboard & Interface: Fusão do Layout "02. Linear Top-Nav Cockpit" com "03. Apple Wallet Split-View", Unificação Compacta de Cartões/Limites, Radar Poligonal de Saúde Financeira e Universal Drag-and-Drop:**
+  - **Navegação "02. Linear Top-Nav Cockpit" com Modo Alternável (`app/page.tsx`):**
+    - Implementação do estado persistido `navLayoutMode: "topnav" | "sidebar"` via `coindex_nav_mode` no `localStorage`.
+    - Modo `topnav` (Padrão inicial): Oculta a barra lateral vertical em desktop (`lg:hidden`), liberando 100% da largura útil da tela (`ml-0 w-full`), renderizando uma barra de comandos no topo ultra-elegante (`h-14`) com:
+      * Esquerda: Logo `CoindexIcon` + `Coindex` + botão de toggle de layout `"⇄ Barra Lateral"`.
+      * Centro: Pílulas horizontais segmentadas para todas as abas principais com destaque em Apple Blue (`#0A84FF`), além de sub-barra de abas com scroll suave para dispositivos móveis (`< lg`).
+      * Direita: Atalho de busca `⌘K`, seletor de mês compacto, pílula de status de sincronização (🟢), toggle de tema (☀️/🌙), modo privacidade (👁️), sino de notificações (🔔 com dropdown) e botão de ação rápida `+ Novo`.
+    - Modo `sidebar`: Mantém a barra vertical esquerda retrátil com botão `"⇄ Barra Topo"` para fácil transição entre modos de visualização.
+  - **Apple Wallet Stack & Limites Compactos (`wallet_card` em `app/page.tsx`):**
+    - Fusão definitiva dos gráficos legados `credit_chart` e `bank_limits_chart` em um único card bento ultra-compacto.
+    - Topo: Apple Wallet Stack com gradientes autênticos de cada emissor (Nubank purple, Inter orange, BTG navy, C6 carbon, XP graphite), microchip dourado, ícone contactless, empilhamento dinâmico (`-mt-10`), seleção por foco interativo (`selectedWalletCardId`), faturas atuais, limites e botão de pagamento.
+    - Base: Barras lineares compactas de limites bancários com resumo consolidado (Limite Total, Disponível, % Usado) e barras de progresso ultrafinas (`h-1.5`).
+  - **Novos Cards Analíticos dos Protótipos 02 e 03 (`app/page.tsx`):**
+    - `category_chart`: Donut minimalista centralizado (`h-[175px]`) acompanhado de Grid de Categorias em 2 colunas com ícones semânticos, valores tabulares, percentuais e barras de progresso `h-1.5`, com expansão e drill-down interativo em drawer/modal.
+    - `cashflow_recent`: Card híbrido com controle segmentado entre **Mini-Fluxo Mensal 6M** (barras agrupadas para Entradas, Saídas e Aportes) e **Feed de Lançamentos Recentes** (últimas 5 transações com badges de status clicáveis para alternância rápida entre Pago e Pendente).
+    - `pending_radar`: Evolução com a 4ª aba **"Saúde (Score)"** trazendo um gráfico poligonal `<RadarChart>` (Recharts) com 5 eixos vitais (Poupança, Margem Livre, Controle Fixos, Saúde Limites, Teto Pessoal), pontuação global de 0 a 100 e diagnóstico inteligente de otimização.
+  - **Universal Drag-and-Drop & Setas Rápidas de Reordenação (`app/components/ChartCard.tsx`):**
+    - Suporte a tamanhos bento balanceados: `"two-thirds"` (col-span-8), `"third"` (col-span-4), `"half"` (col-span-6) e `"full"` (col-span-12) com grid de 12 colunas no padrão Split-View (68% Esquerda / 32% Direita).
+    - Controles de reordenação em dobro: arrastar e soltar nativo via HTML5 Drag and Drop com indicador visual translúcido + setas de reordenação instantânea `[← | →]` no cabeçalho de cada card.
+    - Layout persistido no `localStorage` sob a chave `coindex_dashboard_layout_v3`, com higienização automática contra cartões legados órfãos.
 
 ---
 

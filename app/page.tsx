@@ -51,7 +51,9 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
-  CheckCheck
+  CheckCheck,
+  ArrowRightLeft,
+  ShieldCheck
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -70,7 +72,12 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ReferenceLine
+  ReferenceLine,
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis
 } from "recharts";
 import SecondaryTabs from "./SecondaryTabs";
 import CoindexAuthScreen from "./components/CoindexAuthScreen";
@@ -544,6 +551,18 @@ export default function CoindexApp() {
     });
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // SPRINT 31: Navegação Linear Top-Nav Cockpit (02) vs Barra Lateral Retrátil
+  const [navLayoutMode, setNavLayoutMode] = useState<"topnav" | "sidebar">(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("coindex_nav_mode");
+        if (saved === "sidebar" || saved === "topnav") return saved;
+      } catch {}
+    }
+    return "topnav";
+  });
+  const [selectedWalletCardId, setSelectedWalletCardId] = useState<string | null>(null);
+  const [cashflowActiveTab, setCashflowActiveTab] = useState<"fluxo" | "recentes">("fluxo");
   const [selectedMonth, setSelectedMonth] = useState("2026-10");
 
   // Data de referência estável para SSR/Prerender (Next.js 16)
@@ -659,7 +678,7 @@ export default function CoindexApp() {
   // SPRINT 29: Dashboard 2.0 States (Multi-View Patrimônio, Drill-Down Donut e Radar)
   const [patrimonyCardView, setPatrimonyCardView] = useState<"patrimony" | "pace" | "forecast">("patrimony");
   const [selectedCategoryDrillDown, setSelectedCategoryDrillDown] = useState<string | null>(null);
-  const [radarActiveTab, setRadarActiveTab] = useState<"fixos" | "pendentes" | "faturas">("fixos");
+  const [radarActiveTab, setRadarActiveTab] = useState<"fixos" | "pendentes" | "faturas" | "saude">("fixos");
 
   // Layout e Configurações dos Gráficos da Aba Meus Veículos (Requisitos 1 e 3)
   const [autoInmetroConfig, setAutoInmetroConfig] = useState<AutoInmetroConfig>(DEFAULT_AUTO_INMETRO_CONFIG);
@@ -771,9 +790,11 @@ export default function CoindexApp() {
     setDashboardLayout((prev) => {
       const updated = prev.map((w) => (w.id === widgetId ? { ...w, size: nextSize } : w));
       try {
+        localStorage.setItem("coindex_dashboard_layout_v3", JSON.stringify(updated));
         localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(updated));
         if (currentUser) {
-          setUserItem("lifeos_dash_layout_v1", JSON.stringify(updated), currentUser);
+          setUserItem("coindex_dashboard_layout_v3", JSON.stringify(updated), currentUserId);
+          setUserItem("lifeos_dash_layout_v1", JSON.stringify(updated), currentUserId);
         }
       } catch {
         // Ignora erro de quota local
@@ -810,7 +831,12 @@ export default function CoindexApp() {
     setDragOverWidgetId(null);
     setDashboardLayout((currentLayout) => {
       try {
+        localStorage.setItem("coindex_dashboard_layout_v3", JSON.stringify(currentLayout));
         localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(currentLayout));
+        if (currentUser) {
+          setUserItem("coindex_dashboard_layout_v3", JSON.stringify(currentLayout), currentUserId);
+          setUserItem("lifeos_dash_layout_v1", JSON.stringify(currentLayout), currentUserId);
+        }
       } catch {
         // Ignora erro local
       }
@@ -818,6 +844,31 @@ export default function CoindexApp() {
         void updateUserSettingsInDb({ dashboardLayout: currentLayout });
       }
       return currentLayout;
+    });
+  };
+
+  // SPRINT 31: Reordenação Rápida via Setas [← | →] em ChartCard
+  const handleMoveWidget = (widgetId: string, direction: "left" | "right") => {
+    setDashboardLayout((prev) => {
+      const currentIndex = prev.findIndex((w) => w.id === widgetId);
+      if (currentIndex === -1) return prev;
+      const targetIndex = direction === "left" ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const reordered = [...prev];
+      const [moved] = reordered.splice(currentIndex, 1);
+      reordered.splice(targetIndex, 0, moved);
+      try {
+        localStorage.setItem("coindex_dashboard_layout_v3", JSON.stringify(reordered));
+        localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(reordered));
+        if (currentUser) {
+          setUserItem("coindex_dashboard_layout_v3", JSON.stringify(reordered), currentUserId);
+          setUserItem("lifeos_dash_layout_v1", JSON.stringify(reordered), currentUserId);
+        }
+      } catch {}
+      if (currentUser) {
+        void updateUserSettingsInDb({ dashboardLayout: reordered });
+      }
+      return reordered;
     });
   };
 
@@ -1169,8 +1220,10 @@ export default function CoindexApp() {
         if (sStrava) setStravaConfig(JSON.parse(sStrava));
         const sStravaStats = localStorage.getItem("lifeos_strava_stats");
         if (sStravaStats) setStravaStats(JSON.parse(sStravaStats));
-        const sLayout = localStorage.getItem("lifeos_dash_layout_v1");
+        const sLayout = localStorage.getItem("coindex_dashboard_layout_v3") || localStorage.getItem("lifeos_dash_layout_v1");
         if (sLayout) setDashboardLayout(JSON.parse(sLayout));
+        const sNavMode = localStorage.getItem("coindex_nav_mode") as "topnav" | "sidebar" | null;
+        if (sNavMode && (sNavMode === "topnav" || sNavMode === "sidebar")) setNavLayoutMode(sNavMode);
         const sChartConfigs = localStorage.getItem("lifeos_chart_configs_v1");
         if (sChartConfigs) setChartConfigs(JSON.parse(sChartConfigs));
         const sAutoInmetro = localStorage.getItem("lifeos_auto_inmetro_v1");
@@ -1396,7 +1449,12 @@ export default function CoindexApp() {
 
   const resetDashboardLayout = () => {
     setDashboardLayout(DEFAULT_DASHBOARD_LAYOUT);
+    localStorage.setItem("coindex_dashboard_layout_v3", JSON.stringify(DEFAULT_DASHBOARD_LAYOUT));
     localStorage.setItem("lifeos_dash_layout_v1", JSON.stringify(DEFAULT_DASHBOARD_LAYOUT));
+    if (currentUser) {
+      setUserItem("coindex_dashboard_layout_v3", JSON.stringify(DEFAULT_DASHBOARD_LAYOUT), currentUserId);
+      setUserItem("lifeos_dash_layout_v1", JSON.stringify(DEFAULT_DASHBOARD_LAYOUT), currentUserId);
+    }
     updateUserSettingsInDb({ dashboardLayout: DEFAULT_DASHBOARD_LAYOUT });
     notify("Layout Restaurado", "A posição e tamanho padrão dos cards do Dashboard foram aplicados.", "info");
   };
@@ -2513,13 +2571,211 @@ export default function CoindexApp() {
     );
   }, [selectedMonth, banks, debtorMap, notify]);
 
+  // SPRINT 31: Helper de Gradiente das Marcas de Cartões Apple Wallet
+  const getCardGradient = useCallback((cardName: string, bankName?: string): string => {
+    const text = `${cardName} ${bankName || ""}`.toLowerCase();
+    if (text.includes("nubank") || text.includes("roxo") || text.includes("ultravioleta")) {
+      return "from-[#820AD1] via-[#5C069A] to-[#3B0463]";
+    }
+    if (text.includes("inter") || text.includes("laranja")) {
+      return "from-[#FF7A00] via-[#E05D00] to-[#B34500]";
+    }
+    if (text.includes("btg") || text.includes("pactual")) {
+      return "from-[#0C2340] via-[#103058] to-[#061424]";
+    }
+    if (text.includes("c6") || text.includes("carbon")) {
+      return "from-[#242424] via-[#1A1A1A] to-[#0F0F0F]";
+    }
+    if (text.includes("xp") || text.includes("infinite")) {
+      return "from-[#1F2421] via-[#2A2E2B] to-[#121413]";
+    }
+    if (text.includes("bradesco") || text.includes("elo")) {
+      return "from-[#CC092F] via-[#990623] to-[#660417]";
+    }
+    if (text.includes("itau") || text.includes("itaú") || text.includes("personnalite")) {
+      return "from-[#EC7000] via-[#C95A00] to-[#994400]";
+    }
+    if (text.includes("santander")) {
+      return "from-[#EC0000] via-[#B80000] to-[#850000]";
+    }
+    return "from-slate-800 via-slate-850 to-slate-900";
+  }, []);
+
+  // SPRINT 31: Radar Poligonal de 5 Eixos de Saúde Financeira (Score 0-100)
+  const financialHealthData = useMemo(() => {
+    const incomeBase =
+      monthSummary.income > 0 ? monthSummary.income : Math.max(1, staticStatusSummary.rendaBase || 6000);
+
+    // 1. Taxa de Poupança / Aportes (meta: >= 20%)
+    const poupancaRate = (monthSummary.aportes / incomeBase) * 100;
+    const scorePoupanca = Math.min(100, Math.max(0, Math.round((poupancaRate / 20) * 100)));
+
+    // 2. Margem Livre (meta: >= 20%)
+    const marginRate = (monthSummary.balance / incomeBase) * 100;
+    const scoreMargem =
+      marginRate >= 20
+        ? 100
+        : marginRate <= 0
+        ? Math.max(0, Math.round(50 + marginRate))
+        : Math.min(100, Math.max(0, Math.round((marginRate / 20) * 100)));
+
+    // 3. Controle de Fixos (meta: <= 50% da receita)
+    const pctFixed = allocation503020.pctFixed;
+    const scoreFixos = pctFixed <= 50 ? 100 : Math.max(0, Math.round(100 - (pctFixed - 50) * 2.5));
+
+    // 4. Saúde dos Limites (meta: >= 70% livre)
+    const totalLimit = bankLimitsAnalytics.globalTotalLimit;
+    const totalLivre = bankLimitsAnalytics.globalTotalDisponivel;
+    const livreRate = totalLimit > 0 ? (totalLivre / totalLimit) * 100 : 100;
+    const scoreLimites = livreRate >= 70 ? 100 : Math.min(100, Math.max(0, Math.round((livreRate / 70) * 100)));
+
+    // 5. Teto Pessoal (meta: <= 100%)
+    const personalPct = Math.round(
+      (monthSummary.personalSpent / Math.max(1, effectivePersonalBudgetLimit)) * 100
+    );
+    const scoreTeto =
+      personalPct <= 80
+        ? 100
+        : personalPct <= 100
+        ? Math.max(0, Math.round(100 - (personalPct - 80) * 2.5))
+        : Math.max(0, Math.round(50 - (personalPct - 100) * 2));
+
+    const overallScore = Math.round(
+      (scorePoupanca + scoreMargem + scoreFixos + scoreLimites + scoreTeto) / 5
+    );
+
+    const radarChartData = [
+      { subject: "Poupança", score: scorePoupanca, fullMark: 100 },
+      { subject: "Margem Livre", score: scoreMargem, fullMark: 100 },
+      { subject: "Controle Fixos", score: scoreFixos, fullMark: 100 },
+      { subject: "Saúde Limites", score: scoreLimites, fullMark: 100 },
+      { subject: "Teto Pessoal", score: scoreTeto, fullMark: 100 }
+    ];
+
+    const tips: string[] = [];
+    if (scorePoupanca < 70)
+      tips.push("Aumente seus aportes mensais para atingir a meta recomendada de 20% da receita.");
+    if (scoreMargem < 70)
+      tips.push("Sua margem de sobra está apertada. Reduza gastos variáveis para respirar melhor.");
+    if (scoreFixos < 70)
+      tips.push("Custos fixos acima de 50% da receita. Tente renegociar assinaturas e contas fixas.");
+    if (scoreLimites < 70)
+      tips.push("Uso de limites acima de 30%. Evite rotativo e antecipe pagamentos de faturas.");
+    if (scoreTeto < 70)
+      tips.push("Seus gastos pessoais ultrapassaram o teto estipulado para o mês.");
+
+    const statusLabel =
+      overallScore >= 85
+        ? "Excelente"
+        : overallScore >= 70
+        ? "Bom"
+        : overallScore >= 50
+        ? "Atenção"
+        : "Crítico";
+
+    const statusColor =
+      overallScore >= 85
+        ? "text-[#30D158]"
+        : overallScore >= 70
+        ? "text-[#0A84FF]"
+        : overallScore >= 50
+        ? "text-[#FF9F0A]"
+        : "text-[#FF453A]";
+
+    return {
+      overallScore,
+      statusLabel,
+      statusColor,
+      radarChartData,
+      tips,
+      metrics: {
+        poupancaRate,
+        marginRate,
+        pctFixed,
+        livreRate,
+        personalPct
+      }
+    };
+  }, [
+    monthSummary,
+    staticStatusSummary.rendaBase,
+    allocation503020.pctFixed,
+    bankLimitsAnalytics,
+    effectivePersonalBudgetLimit
+  ]);
+
+  // SPRINT 31: Fluxo de Caixa Mensal (Últimos 6 Meses)
+  const cashflow6MData = useMemo(() => {
+    const currentYear = currentCalendarDate.year;
+    const currentMonth = currentCalendarDate.month;
+    const monthNamesShort = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const list: Array<{
+      key: string;
+      label: string;
+      entradas: number;
+      saidas: number;
+      aportes: number;
+    }> = [];
+
+    for (let i = 5; i >= 0; i--) {
+      let y = currentYear;
+      let m = currentMonth - i;
+      while (m <= 0) {
+        m += 12;
+        y -= 1;
+      }
+      const key = `${y}-${String(m).padStart(2, "0")}`;
+      const label = `${monthNamesShort[m - 1]}/${String(y).slice(2)}`;
+
+      const txsInM = transactions.filter((t) => {
+        if (t.isSplitChild || isNeutralFlow(t)) return false;
+        const mKey = getTxMonthForRegime(t, accountingRegime);
+        return mKey === key;
+      });
+
+      let entradas = 0;
+      let saidas = 0;
+      let aportes = 0;
+
+      for (const t of txsInM) {
+        const flow = t.flowType || getFlowType(t.category);
+        const val = t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount;
+        if (flow === "INCOME") {
+          entradas = safeAdd(entradas, val);
+        } else if (flow === "INVESTMENT") {
+          aportes = safeAdd(aportes, val);
+        } else if (flow === "EXPENSE") {
+          saidas = safeAdd(saidas, val);
+        }
+      }
+
+      list.push({ key, label, entradas, saidas, aportes });
+    }
+
+    return list;
+  }, [currentCalendarDate, transactions, accountingRegime, getTxMonthForRegime, getFlowType]);
+
+  // SPRINT 31: Últimos 5 Lançamentos Recentes
+  const recentTransactions = useMemo(() => {
+    return [...transactions]
+      .filter((t) => !t.isSplitChild)
+      .sort((a, b) => {
+        const comp = compareDatesBR(b.date, a.date);
+        if (comp !== 0) return comp;
+        return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+      })
+      .slice(0, 5);
+  }, [transactions]);
+
   // Garante que o layout efetivo inclua novos widgets padrão mesmo em caches locais antigos
   const effectiveDashboardLayout = useMemo(() => {
     const existingIds = new Set(dashboardLayout.map((w) => w.id));
     const missingDefaults = DEFAULT_DASHBOARD_LAYOUT.filter(
       (def) => !existingIds.has(def.id) && def.id !== "kpis"
     );
-    return [...dashboardLayout, ...missingDefaults];
+    const combined = [...dashboardLayout, ...missingDefaults];
+    // SPRINT 31: Remove os gráficos legados substituídos pelo wallet_card
+    return combined.filter((w) => w.id !== "credit_chart" && w.id !== "bank_limits_chart");
   }, [dashboardLayout]);
 
   const autoMetrics = useMemo(() => {
@@ -4825,186 +5081,292 @@ export default function CoindexApp() {
       </div>
 
       {/* BARRA LATERAL RETRÁTIL COM LOGO COINDEX E MÓDULO SPOTIFY */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 bg-slate-950/95 border-r border-white/[0.08] backdrop-blur-2xl transition-all duration-200 flex flex-col justify-between ${
-          sidebarOpen ? "w-64" : "w-20"
-        }`}
-      >
-        <div className="p-4 space-y-6 overflow-y-auto">
-          <div className="flex items-center justify-between">
-            {sidebarOpen ? (
-              <CoindexLogoHorizontal size="sm" />
-            ) : (
-              <div className="mx-auto">
-                <CoindexIcon className="w-9 h-9" />
+      {navLayoutMode === "sidebar" && (
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 bg-slate-950/95 border-r border-white/[0.08] backdrop-blur-2xl transition-all duration-200 flex flex-col justify-between ${
+            sidebarOpen ? "w-64" : "w-20"
+          }`}
+        >
+          <div className="p-4 space-y-6 overflow-y-auto">
+            <div className="flex items-center justify-between">
+              {sidebarOpen ? (
+                <CoindexLogoHorizontal size="sm" />
+              ) : (
+                <div className="mx-auto">
+                  <CoindexIcon className="w-9 h-9" />
+                </div>
+              )}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNavLayoutMode("topnav");
+                    localStorage.setItem("coindex_nav_mode", "topnav");
+                  }}
+                  className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white transition cursor-pointer"
+                  title="Alternar para Barra Topo (Linear Cockpit)"
+                >
+                  <ArrowRightLeft className="w-4 h-4 text-[#0A84FF]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white transition cursor-pointer"
+                  title={sidebarOpen ? "Recolher Menu Lateral" : "Expandir Menu Lateral"}
+                >
+                  {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
               </div>
+            </div>
+
+            {sidebarOpen && (
+              <button
+                type="button"
+                onClick={() => setShowCommandModal(true)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-900 border border-white/[0.08] text-slate-400 hover:text-white text-xs flex items-center justify-between transition cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Search className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Ação rápida...</span>
+                </span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 border border-white/10 text-[10px] font-mono text-slate-400">
+                  Ctrl K
+                </kbd>
+              </button>
+            )}
+
+            <nav className="space-y-1.5 text-xs">
+              {[
+                { id: "dashboard", label: "Dashboard & BI", icon: <LayoutDashboard className="w-4 h-4" /> },
+                { id: "status", label: "Meu Status Atual", icon: <SlidersHorizontal className="w-4 h-4" /> },
+                { id: "transactions", label: "Lançamentos", icon: <Wallet className="w-4 h-4" /> },
+                { id: "receivables", label: "Valores a Receber", icon: <HandCoins className="w-4 h-4" /> },
+                { id: "cards", label: "Bancos", icon: <CreditCard className="w-4 h-4" /> },
+                { id: "spotify", label: "Spotify", icon: <SpotifyLogo size={16} /> },
+                { id: "auto", label: "Meus Veículos", icon: <Car className="w-4 h-4" /> },
+                { id: "bio", label: "Bio & Strava", icon: <Activity className="w-4 h-4" /> },
+                { id: "brain", label: "Segundo Cérebro", icon: <Brain className="w-4 h-4" /> },
+                { id: "settings", label: "Configurações", icon: <Settings className="w-4 h-4" /> }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as ActiveTab)}
+                  className={`w-full min-h-[44px] px-3.5 py-3 rounded-2xl font-medium flex items-center gap-3 transition-all duration-200 cursor-pointer ${
+                    activeTab === tab.id
+                      ? tab.id === "spotify"
+                        ? "bg-[#1DB954]/20 text-[#1DB954] ring-1 ring-[#1DB954]/40 shadow-sm"
+                        : "bg-[#0A84FF] text-white shadow-sm font-semibold rounded-2xl"
+                      : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
+                  }`}
+                  title={tab.label}
+                >
+                  {tab.icon}
+                  {sidebarOpen && <span className="truncate">{tab.label}</span>}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="p-4 border-t border-white/[0.08] space-y-3">
+            {sidebarOpen ? (
+              <div
+                onClick={() => setShowProfileModal(true)}
+                className="p-3 rounded-2xl bg-slate-900/90 hover:bg-slate-800/90 border border-white/[0.06] hover:border-indigo-500/30 flex items-center gap-3 cursor-pointer transition group"
+                title="Clique para editar seu perfil"
+              >
+                <div className="w-9 h-9 rounded-xl bg-slate-950 border border-indigo-500/30 overflow-hidden flex items-center justify-center shrink-0">
+                  {currentUserAvatar ? (
+                    <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserCheck className="w-4 h-4 text-indigo-400" />
+                  )}
+                </div>
+                <div className="overflow-hidden">
+                  <strong className="text-xs text-white block truncate group-hover:text-indigo-300 transition">
+                    {currentUser}
+                  </strong>
+                  <span className={`text-[10px] flex items-center gap-1.5 font-medium ${syncIndicator.color.split(" ")[0]}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${syncIndicator.dot}`} />
+                    <span>{syncIndicator.label}</span>
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(true)}
+                className="w-full flex justify-center p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.06] hover:border-indigo-500/30 transition group cursor-pointer"
+                title={`Perfil: ${currentUser} (Clique para editar)`}
+              >
+                <div className="w-8 h-8 rounded-lg bg-slate-950 border border-indigo-500/30 overflow-hidden flex items-center justify-center shrink-0">
+                  {currentUserAvatar ? (
+                    <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserCheck className="w-4 h-4 text-indigo-400" />
+                  )}
+                </div>
+              </button>
             )}
             <button
               type="button"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white transition"
-              title={sidebarOpen ? "Recolher Menu Lateral" : "Expandir Menu Lateral"}
+              onClick={handleLogout}
+              className="w-full py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+              title="Encerrar Sessão"
             >
-              {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              <LogOut className="w-4 h-4" />
+              {sidebarOpen && <span>Sair da Conta</span>}
             </button>
           </div>
-
-          {sidebarOpen && (
-            <button
-              type="button"
-              onClick={() => setShowCommandModal(true)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-900 border border-white/[0.08] text-slate-400 hover:text-white text-xs flex items-center justify-between transition"
-            >
-              <span className="flex items-center gap-2">
-                <Search className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Ação rápida...</span>
-              </span>
-              <kbd className="px-1.5 py-0.5 rounded bg-slate-950 border border-white/10 text-[10px] font-mono text-slate-400">
-                Ctrl K
-              </kbd>
-            </button>
-          )}
-
-          <nav className="space-y-1.5 text-xs">
-            {[
-              { id: "dashboard", label: "Dashboard & BI", icon: <LayoutDashboard className="w-4 h-4" /> },
-              { id: "status", label: "Meu Status Atual", icon: <SlidersHorizontal className="w-4 h-4" /> },
-              { id: "transactions", label: "Lançamentos", icon: <Wallet className="w-4 h-4" /> },
-              { id: "receivables", label: "Valores a Receber", icon: <HandCoins className="w-4 h-4" /> },
-              { id: "cards", label: "Bancos", icon: <CreditCard className="w-4 h-4" /> },
-              { id: "spotify", label: "Spotify", icon: <SpotifyLogo size={16} /> },
-              { id: "auto", label: "Meus Veículos", icon: <Car className="w-4 h-4" /> },
-              { id: "bio", label: "Bio & Strava", icon: <Activity className="w-4 h-4" /> },
-              { id: "brain", label: "Segundo Cérebro", icon: <Brain className="w-4 h-4" /> },
-              { id: "settings", label: "Configurações", icon: <Settings className="w-4 h-4" /> }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id as ActiveTab)}
-                className={`w-full min-h-[44px] px-3.5 py-3 rounded-2xl font-medium flex items-center gap-3 transition-all duration-200 ${
-                  activeTab === tab.id
-                    ? tab.id === "spotify"
-                      ? "bg-[#1DB954]/20 text-[#1DB954] ring-1 ring-[#1DB954]/40 shadow-sm"
-                      : "bg-[#0A84FF] text-white shadow-sm font-semibold rounded-2xl"
-                    : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
-                }`}
-                title={tab.label}
-              >
-                {tab.icon}
-                {sidebarOpen && <span className="truncate">{tab.label}</span>}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        <div className="p-4 border-t border-white/[0.08] space-y-3">
-          {sidebarOpen ? (
-            <div
-              onClick={() => setShowProfileModal(true)}
-              className="p-3 rounded-2xl bg-slate-900/90 hover:bg-slate-800/90 border border-white/[0.06] hover:border-indigo-500/30 flex items-center gap-3 cursor-pointer transition group"
-              title="Clique para editar seu perfil"
-            >
-              <div className="w-9 h-9 rounded-xl bg-slate-950 border border-indigo-500/30 overflow-hidden flex items-center justify-center shrink-0">
-                {currentUserAvatar ? (
-                  <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <UserCheck className="w-4 h-4 text-indigo-400" />
-                )}
-              </div>
-              <div className="overflow-hidden">
-                <strong className="text-xs text-white block truncate group-hover:text-indigo-300 transition">
-                  {currentUser}
-                </strong>
-                <span className={`text-[10px] flex items-center gap-1.5 font-medium ${syncIndicator.color.split(" ")[0]}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${syncIndicator.dot}`} />
-                  <span>{syncIndicator.label}</span>
-                </span>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowProfileModal(true)}
-              className="w-full flex justify-center p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.06] hover:border-indigo-500/30 transition group"
-              title={`Perfil: ${currentUser} (Clique para editar)`}
-            >
-              <div className="w-8 h-8 rounded-lg bg-slate-950 border border-indigo-500/30 overflow-hidden flex items-center justify-center shrink-0">
-                {currentUserAvatar ? (
-                  <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <UserCheck className="w-4 h-4 text-indigo-400" />
-                )}
-              </div>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold text-xs flex items-center justify-center gap-2 transition"
-            title="Encerrar Sessão"
-          >
-            <LogOut className="w-4 h-4" />
-            {sidebarOpen && <span>Sair da Conta</span>}
-          </button>
-        </div>
-      </aside>
+        </aside>
+      )}
 
       {/* CONTEÚDO PRINCIPAL */}
-      <div className={`flex-1 transition-all duration-200 ${sidebarOpen ? "ml-64" : "ml-20"}`}>
-        <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-slate-950/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2.5">
+      <div className={`flex-1 transition-all duration-200 ${navLayoutMode === "topnav" ? "ml-0 w-full" : sidebarOpen ? "ml-64" : "ml-20"}`}>
+        {/* CABEÇALHO TOPNAV OU SIDEBAR MODE */}
+        {navLayoutMode === "topnav" ? (
+          <header className="sticky top-0 z-40 border-b border-[var(--cupertino-border)] bg-[var(--cupertino-card)] backdrop-blur-2xl px-4 lg:px-6 h-14 flex items-center justify-between gap-3 shadow-xs">
+            {/* ESQUERDA: LOGO + NOME + TOGGLE PARA SIDEBAR */}
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <CoindexIcon className="w-7 h-7" />
+                <span className="font-bold text-white tracking-tight text-sm hidden sm:inline">Coindex</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setNavLayoutMode("sidebar");
+                  localStorage.setItem("coindex_nav_mode", "sidebar");
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer"
+                title="Alternar para Barra Lateral"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5 text-[#0A84FF]" />
+                <span className="hidden md:inline">⇄ Barra Lateral</span>
+              </button>
+            </div>
+
+            {/* CENTRO: PÍLULAS COMPACTAS DAS ABAS (DESKTOP) */}
+            <nav className="hidden lg:flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-xs shrink-0">
+              {[
+                { id: "dashboard", label: "Dashboard" },
+                { id: "status", label: "Status" },
+                { id: "transactions", label: "Lançamentos" },
+                { id: "receivables", label: "Recebíveis" },
+                { id: "cards", label: "Bancos" },
+                { id: "spotify", label: "Spotify" },
+                { id: "auto", label: "Veículos" },
+                { id: "bio", label: "Bio" },
+                { id: "brain", label: "Cérebro" },
+                { id: "settings", label: "Config" }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as ActiveTab)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    activeTab === tab.id
+                      ? "bg-[#0A84FF] text-white shadow-sm"
+                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+
+            {/* DIREITA: ⌘K, MÊS, SYNC, TEMA, PRIVACIDADE, SINO, PERFIL, NOVO */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowCommandModal(true)}
+                className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-white text-xs flex items-center gap-1.5 transition cursor-pointer"
+                title="Ação rápida (Ctrl+K)"
+              >
+                <Search className="w-3.5 h-3.5 text-indigo-400" />
+                <kbd className="hidden sm:inline px-1 py-0.2 rounded bg-slate-950 border border-white/10 text-[10px] font-mono text-slate-400">
+                  ⌘K
+                </kbd>
+              </button>
+
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-white font-bold outline-none focus:border-indigo-500 transition"
+                className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-white font-bold outline-none focus:border-indigo-500 transition cursor-pointer"
               >
-                <option value="2026-10">Outubro / 2026 (Atual)</option>
-                <option value="2026-09">Setembro / 2026</option>
-                <option value="2026-08">Agosto / 2026</option>
-                <option value="2026-07">Julho / 2026</option>
-                <option value="2026-06">Junho / 2026</option>
-                <option value="2026-05">Maio / 2026</option>
-                <option value="2026-04">Abril / 2026</option>
-                <option value="2026-03">Março / 2026</option>
-                <option value="2026-02">Fevereiro / 2026</option>
-                <option value="2026-01">Janeiro / 2026</option>
-                <option value="2025-12">Dezembro / 2025</option>
-                <option value="2026-11">Novembro / 2026 (Futuro)</option>
-                <option value="2026-12">Dezembro / 2026 (Futuro)</option>
-                <option value="ALL">Histórico Completo</option>
+                <option value="2026-10">Out/2026</option>
+                <option value="2026-09">Set/2026</option>
+                <option value="2026-08">Ago/2026</option>
+                <option value="2026-07">Jul/2026</option>
+                <option value="2026-06">Jun/2026</option>
+                <option value="2026-05">Mai/2026</option>
+                <option value="2026-04">Abr/2026</option>
+                <option value="2026-03">Mar/2026</option>
+                <option value="2026-02">Fev/2026</option>
+                <option value="2026-01">Jan/2026</option>
+                <option value="2025-12">Dez/2025</option>
+                <option value="2026-11">Nov/2026</option>
+                <option value="2026-12">Dez/2026</option>
+                <option value="ALL">Tudo</option>
               </select>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Indicador de Sincronização em Tempo Real (Sprint 22) */}
               <div
-                className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono font-medium backdrop-blur-md transition ${syncIndicator.color}`}
-                title={
-                  syncIndicator.timestamp
-                    ? `${syncIndicator.label} — Última sync: ${syncIndicator.timestamp}`
-                    : syncIndicator.label
-                }
+                className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-mono font-medium backdrop-blur-md transition ${syncIndicator.color}`}
+                title={syncIndicator.timestamp ? `${syncIndicator.label} — ${syncIndicator.timestamp}` : syncIndicator.label}
               >
-                <span className={`w-2 h-2 rounded-full ${syncIndicator.dot}`} />
-                <span>{syncIndicator.label}</span>
-                {syncIndicator.timestamp && (
-                  <span className="text-[10px] opacity-70">({syncIndicator.timestamp})</span>
-                )}
+                <span className={`w-1.5 h-1.5 rounded-full ${syncIndicator.dot}`} />
+                <span className="text-[11px]">{syncIndicator.label}</span>
               </div>
 
-              {/* SININHO DE NOTIFICAÇÕES */}
+              {/* Alternador Claro / Escuro Cupertino */}
+              <div className="flex items-center p-0.5 rounded-xl bg-slate-900/80 border border-white/10 text-xs">
+                <button
+                  type="button"
+                  onClick={() => toggleCupertinoTheme("light")}
+                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                    cupertinoTheme === "light" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Tema Claro"
+                >
+                  <Sun className="w-3.5 h-3.5 text-amber-500" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleCupertinoTheme("dark")}
+                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                    cupertinoTheme === "dark" ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Tema Escuro"
+                >
+                  <Moon className="w-3.5 h-3.5 text-sky-400" />
+                </button>
+              </div>
+
+              {/* Modo Privacidade */}
+              <button
+                type="button"
+                onClick={togglePrivacyMode}
+                className={`p-2 rounded-xl border transition cursor-pointer ${
+                  privacyMode
+                    ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
+                    : "bg-slate-900 hover:bg-slate-800 border-white/10 text-slate-200"
+                }`}
+                title={privacyMode ? "Censurado" : "Visível"}
+              >
+                {privacyMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+
+              {/* Sino de Notificações */}
               <div className={`relative ${showBellDropdown ? "z-[9999]" : "z-40"}`}>
                 <button
                   type="button"
                   onClick={() => setShowBellDropdown((prev) => !prev)}
-                  className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition flex items-center justify-center cursor-pointer"
+                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition flex items-center justify-center cursor-pointer"
                   title="Notificações"
                 >
-                  <Bell className="w-4 h-4" />
+                  <Bell className="w-3.5 h-3.5" />
                   {unreadNotifications.length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow">
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center shadow">
                       {unreadNotifications.length}
                     </span>
                   )}
@@ -5074,7 +5436,7 @@ export default function CoindexApp() {
                               <button
                                 type="button"
                                 onClick={() => handleMarkNotificationViewed(n.id)}
-                                className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold shrink-0 flex items-center gap-1 transition"
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold shrink-0 flex items-center gap-1 transition cursor-pointer"
                               >
                                 <Eye className="w-3 h-3" /> Visualizar
                               </button>
@@ -5102,64 +5464,285 @@ export default function CoindexApp() {
                 )}
               </div>
 
-              {/* SELETOR SEGMENTED CONTROL APPLE (CLARO / ESCURO) */}
-              <div className="flex items-center p-1 rounded-xl bg-slate-900/80 border border-white/10 text-xs">
-                <button
-                  type="button"
-                  onClick={() => toggleCupertinoTheme("light")}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
-                    cupertinoTheme === "light"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Tema Claro (Cupertino Light)"
-                >
-                  <Sun className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="hidden sm:inline">Claro</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleCupertinoTheme("dark")}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
-                    cupertinoTheme === "dark"
-                      ? "bg-slate-800 text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Tema Escuro (Cupertino Dark)"
-                >
-                  <Moon className="w-3.5 h-3.5 text-sky-400" />
-                  <span className="hidden sm:inline">Escuro</span>
-                </button>
-              </div>
-
-              {/* BOTÃO DE PRIVACIDADE SOMENTE COM O SÍMBOLO DO OLHO */}
+              {/* Avatar Perfil */}
               <button
                 type="button"
-                onClick={togglePrivacyMode}
-                className={`min-h-[44px] min-w-[44px] p-2.5 rounded-xl border transition flex items-center justify-center cursor-pointer ${
-                  privacyMode
-                    ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
-                    : "bg-slate-900 hover:bg-slate-800 border-white/10 text-slate-200"
-                }`}
-                title={
-                  privacyMode
-                    ? "Valores Censurados (Clique para visualizar)"
-                    : "Visualizando Normal (Clique para censurar)"
-                }
+                onClick={() => setShowProfileModal(true)}
+                className="w-7 h-7 rounded-xl bg-slate-950 border border-indigo-500/30 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:border-indigo-400 transition"
+                title={`Perfil: ${currentUser}`}
               >
-                {privacyMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {currentUserAvatar ? (
+                  <img src={currentUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
+                )}
               </button>
 
+              {/* Botão + Novo */}
               <button
                 type="button"
                 onClick={() => handleOpenNewTxModal()}
-                className="min-h-[44px] px-4 py-2.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-semibold text-xs shadow-sm transition flex items-center gap-1 cursor-pointer shrink-0"
               >
-                <Plus className="w-4 h-4" /> Novo Lançamento
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Novo</span>
               </button>
             </div>
+          </header>
+        ) : (
+          <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-slate-950/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
+            <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNavLayoutMode("topnav");
+                    localStorage.setItem("coindex_nav_mode", "topnav");
+                  }}
+                  className="min-h-[44px] px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+                  title="Alternar para Modo Top-Nav Cockpit"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-[#0A84FF]" />
+                  <span className="hidden sm:inline">Barra Topo</span>
+                </button>
+
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-white font-bold outline-none focus:border-indigo-500 transition cursor-pointer"
+                >
+                  <option value="2026-10">Outubro / 2026 (Atual)</option>
+                  <option value="2026-09">Setembro / 2026</option>
+                  <option value="2026-08">Agosto / 2026</option>
+                  <option value="2026-07">Julho / 2026</option>
+                  <option value="2026-06">Junho / 2026</option>
+                  <option value="2026-05">Maio / 2026</option>
+                  <option value="2026-04">Abril / 2026</option>
+                  <option value="2026-03">Março / 2026</option>
+                  <option value="2026-02">Fevereiro / 2026</option>
+                  <option value="2026-01">Janeiro / 2026</option>
+                  <option value="2025-12">Dezembro / 2025</option>
+                  <option value="2026-11">Novembro / 2026 (Futuro)</option>
+                  <option value="2026-12">Dezembro / 2026 (Futuro)</option>
+                  <option value="ALL">Histórico Completo</option>
+                </select>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Indicador de Sincronização em Tempo Real (Sprint 22) */}
+                <div
+                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono font-medium backdrop-blur-md transition ${syncIndicator.color}`}
+                  title={
+                    syncIndicator.timestamp
+                      ? `${syncIndicator.label} — Última sync: ${syncIndicator.timestamp}`
+                      : syncIndicator.label
+                  }
+                >
+                  <span className={`w-2 h-2 rounded-full ${syncIndicator.dot}`} />
+                  <span>{syncIndicator.label}</span>
+                  {syncIndicator.timestamp && (
+                    <span className="text-[10px] opacity-70">({syncIndicator.timestamp})</span>
+                  )}
+                </div>
+
+                {/* SININHO DE NOTIFICAÇÕES */}
+                <div className={`relative ${showBellDropdown ? "z-[9999]" : "z-40"}`}>
+                  <button
+                    type="button"
+                    onClick={() => setShowBellDropdown((prev) => !prev)}
+                    className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition flex items-center justify-center cursor-pointer"
+                    title="Notificações"
+                  >
+                    <Bell className="w-4 h-4" />
+                    {unreadNotifications.length > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow">
+                        {unreadNotifications.length}
+                      </span>
+                    )}
+                  </button>
+
+                  {showBellDropdown && (
+                    <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] p-4 z-[9999] text-xs space-y-3">
+                      <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                        <div>
+                          <strong className="text-white font-bold block">Central de Notificações</strong>
+                          <span className="text-[10px] text-slate-400">
+                            {unreadNotifications.length} pendente(s) • {viewedNotifications.length} visualizada(s)
+                          </span>
+                        </div>
+                        {unreadNotifications.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleMarkAllNotificationsViewed}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Check className="w-3 h-3" /> Visualizar todas
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-900 border border-white/5 text-[11px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setBellViewMode("unread")}
+                          className={`py-1.5 rounded-lg transition cursor-pointer ${
+                            bellViewMode === "unread" ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Pendentes ({unreadNotifications.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBellViewMode("viewed")}
+                          className={`py-1.5 rounded-lg transition cursor-pointer ${
+                            bellViewMode === "viewed" ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Visualizadas ({viewedNotifications.length})
+                        </button>
+                      </div>
+
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {bellViewMode === "unread" ? (
+                          unreadNotifications.length === 0 ? (
+                            <p className="text-center text-slate-400 py-6">Nenhuma notificação nova no momento.</p>
+                          ) : (
+                            unreadNotifications.map((n) => (
+                              <div
+                                key={n.id}
+                                className="p-3 rounded-xl bg-slate-900/90 border border-white/10 flex items-start justify-between gap-2.5"
+                              >
+                                <div className="space-y-0.5">
+                                  <strong
+                                    className={`block font-bold ${
+                                      n.severity === "warning" ? "text-amber-400" : "text-indigo-300"
+                                    }`}
+                                  >
+                                    {n.title}
+                                  </strong>
+                                  <p className="text-[11px] text-slate-300 leading-snug">{n.detail}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMarkNotificationViewed(n.id)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold shrink-0 flex items-center gap-1 transition"
+                                >
+                                  <Eye className="w-3 h-3" /> Visualizar
+                                </button>
+                              </div>
+                            ))
+                          )
+                        ) : viewedNotifications.length === 0 ? (
+                          <p className="text-center text-slate-400 py-6">Nenhuma notificação visualizada ainda.</p>
+                        ) : (
+                          viewedNotifications.map((n) => (
+                            <div
+                              key={n.id}
+                              className="p-3 rounded-xl bg-slate-900/40 border border-white/5 flex items-start justify-between gap-2.5 opacity-70"
+                            >
+                              <div>
+                                <strong className="block font-bold text-slate-300">{n.title}</strong>
+                                <p className="text-[11px] text-slate-400">{n.detail}</p>
+                              </div>
+                              <span className="text-[10px] text-emerald-400 font-bold shrink-0">✓ Vista</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* SELETOR SEGMENTED CONTROL APPLE (CLARO / ESCURO) */}
+                <div className="flex items-center p-1 rounded-xl bg-slate-900/80 border border-white/10 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => toggleCupertinoTheme("light")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
+                      cupertinoTheme === "light"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                    title="Tema Claro (Cupertino Light)"
+                  >
+                    <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="hidden sm:inline">Claro</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleCupertinoTheme("dark")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
+                      cupertinoTheme === "dark"
+                        ? "bg-slate-800 text-white shadow-sm"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                    title="Tema Escuro (Cupertino Dark)"
+                  >
+                    <Moon className="w-3.5 h-3.5 text-sky-400" />
+                    <span className="hidden sm:inline">Escuro</span>
+                  </button>
+                </div>
+
+                {/* BOTÃO DE PRIVACIDADE SOMENTE COM O SÍMBOLO DO OLHO */}
+                <button
+                  type="button"
+                  onClick={togglePrivacyMode}
+                  className={`min-h-[44px] min-w-[44px] p-2.5 rounded-xl border transition flex items-center justify-center cursor-pointer ${
+                    privacyMode
+                      ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
+                      : "bg-slate-900 hover:bg-slate-800 border-white/10 text-slate-200"
+                  }`}
+                  title={
+                    privacyMode
+                      ? "Valores Censurados (Clique para visualizar)"
+                      : "Visualizando Normal (Clique para censurar)"
+                  }
+                >
+                  {privacyMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenNewTxModal()}
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" /> Novo Lançamento
+                </button>
+              </div>
+            </div>
+          </header>
+        )}
+
+        {/* SUB-BARRA DE NAVEGAÇÃO MOBILE (TOP-NAV) */}
+        {navLayoutMode === "topnav" && (
+          <div className="lg:hidden px-4 py-2 bg-slate-950/90 border-b border-white/5 overflow-x-auto flex items-center gap-1.5 no-scrollbar sticky top-14 z-30 backdrop-blur-md">
+            {[
+              { id: "dashboard", label: "Dashboard" },
+              { id: "status", label: "Status" },
+              { id: "transactions", label: "Lançamentos" },
+              { id: "receivables", label: "Recebíveis" },
+              { id: "cards", label: "Bancos" },
+              { id: "spotify", label: "Spotify" },
+              { id: "auto", label: "Veículos" },
+              { id: "bio", label: "Bio" },
+              { id: "brain", label: "Cérebro" },
+              { id: "settings", label: "Config" }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as ActiveTab)}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                  activeTab === tab.id
+                    ? "bg-[#0A84FF] text-white shadow-sm"
+                    : "text-slate-400 hover:text-white bg-slate-900/60"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-        </header>
+        )}
 
         {/* CORPO PRINCIPAL */}
         <main className="max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24">
@@ -5442,7 +6025,13 @@ export default function CoindexApp() {
                   .filter((w) => w.visible !== false && w.id !== "kpis")
                   .map((widget) => {
                     const defaultSize: ChartWidgetSize =
-                      widget.id === "thermometer" ? "full" : "half";
+                      widget.id === "patrimony_chart"
+                        ? "two-thirds"
+                        : widget.id === "wallet_card"
+                        ? "third"
+                        : widget.id === "thermometer"
+                        ? "full"
+                        : "half";
                     const widgetSize: ChartWidgetSize = widget.size ?? defaultSize;
 
                     const chartKind: ChartKind =
@@ -5450,7 +6039,7 @@ export default function CoindexApp() {
                         ? "area"
                         : widget.id === "category_chart"
                         ? "pie"
-                        : widget.id === "credit_chart" || widget.id === "bank_limits_chart"
+                        : widget.id === "cashflow_recent"
                         ? "bar"
                         : "kpi";
 
@@ -5474,7 +6063,7 @@ export default function CoindexApp() {
                         ? cfg.color
                         : widget.id === "patrimony_chart"
                         ? "#0A84FF"
-                        : widget.id === "credit_chart"
+                        : widget.id === "wallet_card"
                         ? "#5E5CE6"
                         : "#30D158";
 
@@ -5499,9 +6088,9 @@ export default function CoindexApp() {
                         chartKind={chartKind}
                         hasMultipleSeries={
                           widget.id === "patrimony_chart" ||
-                          widget.id === "credit_chart" ||
-                          widget.id === "bank_limits_chart" ||
-                          widget.id === "category_chart"
+                          widget.id === "wallet_card" ||
+                          widget.id === "category_chart" ||
+                          widget.id === "cashflow_recent"
                         }
                         size={widgetSize}
                         onSizeChange={(nextSize) => handleUpdateWidgetSize(widget.id, nextSize)}
@@ -5511,6 +6100,8 @@ export default function CoindexApp() {
                         onDragStartCard={handleDragStartWidget}
                         onDragEnterCard={handleDragEnterWidget}
                         onDragEndCard={handleDragEndWidget}
+                        onMoveLeft={() => handleMoveWidget(widget.id, "left")}
+                        onMoveRight={() => handleMoveWidget(widget.id, "right")}
                         isDragging={draggingWidgetId === widget.id}
                         isDropTarget={dragOverWidgetId === widget.id}
                         className="glass-card"
@@ -6139,9 +6730,9 @@ export default function CoindexApp() {
 
                         {/* WIDGET 3: PARA ONDE VAI O MEU DINHEIRO 2.0 COM DRILL-DOWN */}
                         {widget.id === "category_chart" && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-                            {/* Donut Moderno com Rótulo Centralizado Total Gasto */}
-                            <div className={`relative ${chartHeightClass} select-none flex items-center justify-center`}>
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                            {/* Donut Moderno com Rótulo Centralizado Total Gasto - col-span-12 lg:col-span-5 */}
+                            <div className="relative h-[175px] sm:h-[185px] select-none flex items-center justify-center lg:col-span-5">
                               <ResponsiveContainer width="100%" height="100%">
                                 <PieChart accessibilityLayer={false}>
                                   <Pie
@@ -6150,8 +6741,8 @@ export default function CoindexApp() {
                                     nameKey="name"
                                     cx="50%"
                                     cy="50%"
-                                    innerRadius="68%"
-                                    outerRadius="90%"
+                                    innerRadius={50}
+                                    outerRadius={75}
                                     paddingAngle={4}
                                     cornerRadius={6}
                                     stroke="none"
@@ -6169,120 +6760,119 @@ export default function CoindexApp() {
                                 <span className="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">
                                   Total Gasto
                                 </span>
-                                <span className={`text-base sm:text-lg font-extrabold text-white font-mono tabular-nums ${moneyBlur}`}>
+                                <span className={`text-sm sm:text-base font-extrabold text-white font-mono tabular-nums ${moneyBlur}`}>
                                   {formatBRL(totalExpenses)}
                                 </span>
                               </div>
                             </div>
 
-                            {/* LADO DIREITO: LISTA OU DRILL-DOWN */}
-                            {selectedCategoryDrillDown && categoryDrillDownData ? (
-                              <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1 text-xs">
-                                <div className="flex items-center justify-between pb-1.5 border-b border-white/10">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedCategoryDrillDown(null)}
-                                    className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 flex items-center gap-1.5 transition cursor-pointer"
-                                  >
-                                    <ArrowLeft className="w-3.5 h-3.5 text-[#0A84FF]" /> Voltar
-                                  </button>
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                                      categoryDrillDownData.diffPercent >= 0
-                                        ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
-                                        : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-                                    }`}
-                                  >
-                                    {categoryDrillDownData.diffPercent >= 0
-                                      ? `+${categoryDrillDownData.diffPercent}%`
-                                      : `${categoryDrillDownData.diffPercent}%`}{" "}
-                                    vs. anterior
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center justify-between px-1">
-                                  <span className="font-bold text-white text-sm flex items-center gap-2">
-                                    {renderCategorySemanticIcon(selectedCategoryDrillDown, "#0A84FF")}
-                                    {selectedCategoryDrillDown}
-                                  </span>
-                                  <strong className={`text-white font-mono text-sm tabular-nums ${moneyBlur}`}>
-                                    {formatBRL(categoryDrillDownData.totalCurrent)}
-                                  </strong>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                  {categoryDrillDownData.txs.length === 0 ? (
-                                    <p className="text-slate-400 text-center py-4">Nenhum lançamento no período.</p>
-                                  ) : (
-                                    categoryDrillDownData.txs.map((tx) => (
-                                      <div
-                                        key={tx.id}
-                                        className="p-2 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between text-xs"
-                                      >
-                                        <div className="min-w-0 pr-2">
-                                          <span className="text-[10px] font-mono text-slate-400 block tabular-nums">
-                                            {formatDateBR(tx.date)} • {tx.paymentMethod}
-                                          </span>
-                                          <strong className="text-slate-200 block truncate">{tx.description}</strong>
-                                        </div>
-                                        <span className={`font-mono font-bold text-white shrink-0 tabular-nums ${moneyBlur}`}>
-                                          {formatBRL(tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount)}
-                                        </span>
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 text-xs">
-                                {categoryChartData.map((cat) => {
-                                  const pct = Math.round((cat.value / totalExpenses) * 100);
-                                  return (
-                                    <div
-                                      key={cat.name}
-                                      onClick={() => setSelectedCategoryDrillDown(cat.name)}
-                                      className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-1.5 cursor-pointer hover:bg-slate-900/90 hover:border-white/15 transition group"
-                                      title="Clique para ver detalhamento de lançamentos"
+                            {/* LADO DIREITO: GRID 2 COLUNAS DE CATEGORIAS OU DRILL-DOWN - col-span-12 lg:col-span-7 */}
+                            <div className="lg:col-span-7">
+                              {selectedCategoryDrillDown && categoryDrillDownData ? (
+                                <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1 text-xs">
+                                  <div className="flex items-center justify-between pb-1.5 border-b border-white/10">
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedCategoryDrillDown(null)}
+                                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 flex items-center gap-1.5 transition cursor-pointer"
                                     >
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-semibold text-slate-200 flex items-center gap-2">
-                                          <span
-                                            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
-                                            style={{ backgroundColor: cat.color }}
-                                          />
-                                          {renderCategorySemanticIcon(cat.name, cat.color)}
-                                          <span className="truncate max-w-[130px] group-hover:text-white transition">
-                                            {cat.name}
+                                      <ArrowLeft className="w-3.5 h-3.5 text-[#0A84FF]" /> Voltar
+                                    </button>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                                        categoryDrillDownData.diffPercent >= 0
+                                          ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                                          : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                      }`}
+                                    >
+                                      {categoryDrillDownData.diffPercent >= 0
+                                        ? `+${categoryDrillDownData.diffPercent}%`
+                                        : `${categoryDrillDownData.diffPercent}%`}{" "}
+                                      vs. anterior
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center justify-between px-1">
+                                    <span className="font-bold text-white text-sm flex items-center gap-2">
+                                      {renderCategorySemanticIcon(selectedCategoryDrillDown, "#0A84FF")}
+                                      {selectedCategoryDrillDown}
+                                    </span>
+                                    <strong className={`text-white font-mono text-sm tabular-nums ${moneyBlur}`}>
+                                      {formatBRL(categoryDrillDownData.totalCurrent)}
+                                    </strong>
+                                  </div>
+
+                                  <div className="space-y-1.5">
+                                    {categoryDrillDownData.txs.length === 0 ? (
+                                      <p className="text-slate-400 text-center py-4">Nenhum lançamento no período.</p>
+                                    ) : (
+                                      categoryDrillDownData.txs.map((tx) => (
+                                        <div
+                                          key={tx.id}
+                                          className="p-2 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between text-xs"
+                                        >
+                                          <div className="min-w-0 pr-2">
+                                            <span className="text-[10px] font-mono text-slate-400 block tabular-nums">
+                                              {formatDateBR(tx.date)} • {tx.paymentMethod}
+                                            </span>
+                                            <strong className="text-slate-200 block truncate">{tx.description}</strong>
+                                          </div>
+                                          <span className={`font-mono font-bold text-white shrink-0 tabular-nums ${moneyBlur}`}>
+                                            {formatBRL(tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount)}
                                           </span>
-                                        </span>
-                                        <div className="flex items-center gap-1.5">
-                                          <span className={`font-bold text-white tabular-nums font-mono ${moneyBlur}`}>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1 text-xs">
+                                  {categoryChartData.map((cat) => {
+                                    const pct = Math.round((cat.value / totalExpenses) * 100);
+                                    return (
+                                      <div
+                                        key={cat.name}
+                                        onClick={() => setSelectedCategoryDrillDown(cat.name)}
+                                        className="p-2 rounded-xl bg-slate-950/60 border border-white/5 space-y-1 cursor-pointer hover:bg-slate-900/90 hover:border-white/15 transition group"
+                                        title="Clique para ver detalhamento de lançamentos"
+                                      >
+                                        <div className="flex items-center justify-between gap-1">
+                                          <span className="font-semibold text-slate-200 flex items-center gap-1.5 truncate">
+                                            <span
+                                              className="w-2 h-2 rounded-full shrink-0 shadow-xs"
+                                              style={{ backgroundColor: cat.color }}
+                                            />
+                                            {renderCategorySemanticIcon(cat.name, cat.color)}
+                                            <span className="truncate group-hover:text-white transition text-[11px]">
+                                              {cat.name}
+                                            </span>
+                                          </span>
+                                          <span className={`font-bold text-white tabular-nums font-mono text-[11px] shrink-0 ${moneyBlur}`}>
                                             {formatBRL(cat.value)}{" "}
                                             <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
                                           </span>
-                                          <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-white transition" />
+                                        </div>
+                                        <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                          <div
+                                            className="h-full rounded-full transition-all duration-300"
+                                            style={{ width: `${pct}%`, backgroundColor: cat.color }}
+                                          />
                                         </div>
                                       </div>
-                                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                                        <div
-                                          className="h-full rounded-full transition-all duration-300"
-                                          style={{ width: `${pct}%`, backgroundColor: cat.color }}
-                                        />
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
 
-                        {/* WIDGET 4: RADAR DE PENDÊNCIAS & PRÓXIMOS VENCIMENTOS */}
+                        {/* WIDGET 4: RADAR DE PENDÊNCIAS & SAÚDE FINANCEIRA */}
                         {widget.id === "pending_radar" && (
                           <div className="space-y-3 text-xs">
                             {/* Abas Internas do Radar */}
-                            <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/5">
-                              <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
+                            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/5">
+                              <div className="flex flex-wrap items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
                                 <button
                                   type="button"
                                   onClick={() => setRadarActiveTab("fixos")}
@@ -6325,6 +6915,21 @@ export default function CoindexApp() {
                                   }`}
                                 >
                                   <span>Vencimentos Cartões</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRadarActiveTab("saude")}
+                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1 ${
+                                    radarActiveTab === "saude"
+                                      ? "bg-[#0A84FF] text-white shadow-sm"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  <ShieldCheck className="w-3.5 h-3.5" />
+                                  <span>Saúde (Score)</span>
+                                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${financialHealthData.statusColor}`}>
+                                    {financialHealthData.overallScore}
+                                  </span>
                                 </button>
                               </div>
 
@@ -6458,159 +7063,387 @@ export default function CoindexApp() {
                                 ))}
                               </div>
                             )}
-                          </div>
-                        )}
 
-                        {/* WIDGET 5: EXPOSIÇÃO & LIMITE DE CARTÕES */}
-                        {widget.id === "credit_chart" && (
-                          <div className={`${chartHeightClass} select-none transition-all duration-300`}>
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={creditChartData} barSize={28} accessibilityLayer={false}>
-                                {cfg.showGrid && (
-                                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                                )}
-                                <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                                <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => formatBRL(Number(v))} />
-                                <Tooltip content={<CustomCyberTooltip isCurrency={true} />} cursor={false} />
-                                {cfg.showLegend && <Legend wrapperStyle={{ fontSize: "11px" }} />}
-                                <Bar
-                                  dataKey="usado"
-                                  name="Fatura Aberta (R$)"
-                                  fill={primarySeriesColor(chartTheme.creditUsedBar)}
-                                  radius={[6, 6, 0, 0]}
-                                  label={
-                                    cfg.showDataLabels
-                                      ? { position: "top", fill: "#cbd5e1", fontSize: 10 }
-                                      : false
-                                  }
-                                />
-                                <Bar
-                                  dataKey="disponivel"
-                                  name="Limite Disponível (R$)"
-                                  fill={chartTheme.creditAvailableBar}
-                                  radius={[6, 6, 0, 0]}
-                                />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        )}
-
-                        {/* WIDGET 6: LIMITES BANCÁRIOS & RANKING */}
-                        {widget.id === "bank_limits_chart" && (
-                          <div className="space-y-4">
-                            {/* Resumo Consolidado de Limites Bancários */}
-                            <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs ${moneyBlur}`}>
-                              <div className="p-3 rounded-2xl bg-slate-950/70 border border-indigo-500/20">
-                                <span className="text-[10px] text-slate-400 block font-medium">Limite Total Geral</span>
-                                <strong className="text-base font-extrabold text-white block mt-0.5">
-                                  {formatBRL(bankLimitsAnalytics.globalTotalLimit)}
-                                </strong>
-                              </div>
-                              <div className="p-3 rounded-2xl bg-slate-950/70 border border-rose-500/20">
-                                <span className="text-[10px] text-slate-400 block font-medium">Total Usado / Faturas</span>
-                                <strong className="text-base font-extrabold text-rose-400 block mt-0.5">
-                                  {formatBRL(bankLimitsAnalytics.globalTotalUsado)}
-                                </strong>
-                              </div>
-                              <div className="p-3 rounded-2xl bg-slate-950/70 border border-emerald-500/20">
-                                <span className="text-[10px] text-slate-400 block font-medium">Disponível Geral</span>
-                                <strong className="text-base font-extrabold text-emerald-400 block mt-0.5">
-                                  {formatBRL(bankLimitsAnalytics.globalTotalDisponivel)}
-                                </strong>
-                              </div>
-                            </div>
-
-                            {/* Gráfico Recharts de Exposição por Banco */}
-                            <div className={`${chartHeightClass} select-none transition-all duration-300`}>
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={bankLimitsAnalytics.chartData} barSize={26} accessibilityLayer={false}>
-                                  {cfg.showGrid && (
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                                  )}
-                                  <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => formatBRL(Number(v))} />
-                                  <Tooltip content={<CustomCyberTooltip isCurrency={true} moneyBlur={moneyBlur} />} cursor={false} />
-                                  {cfg.showLegend && <Legend wrapperStyle={{ fontSize: "11px" }} />}
-                                  <Bar
-                                    dataKey="usado"
-                                    name="Limite Usado (R$)"
-                                    fill={primarySeriesColor(chartTheme.creditUsedBar)}
-                                    radius={[6, 6, 0, 0]}
-                                    label={
-                                      cfg.showDataLabels
-                                        ? { position: "top", fill: "#cbd5e1", fontSize: 10 }
-                                        : false
-                                    }
-                                  />
-                                  <Bar
-                                    dataKey="disponivel"
-                                    name="Limite Disponível (R$)"
-                                    fill={chartTheme.creditAvailableBar}
-                                    radius={[6, 6, 0, 0]}
-                                  />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-
-                            {/* Ranking dos Bancos (Maior para Menor Limite - Requisito 7) */}
-                            <div className="space-y-2 pt-1">
-                              <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-                                <span className="font-bold flex items-center gap-1.5 text-indigo-300">
-                                  <Landmark className="w-3.5 h-3.5" /> Ranking Bancário por Limite
-                                </span>
-                                <span>{bankLimitsAnalytics.banks.length} instituição(ões)</span>
-                              </div>
-                              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                                {bankLimitsAnalytics.banks.map((b, idx) => (
-                                  <div
-                                    key={b.id}
-                                    className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between gap-3 text-xs hover:border-white/10 transition"
-                                  >
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                      <span
-                                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-extrabold shrink-0 ${
-                                          idx === 0
-                                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                                            : idx === 1
-                                            ? "bg-slate-400/20 text-slate-200 border border-slate-400/40"
-                                            : idx === 2
-                                            ? "bg-amber-700/20 text-amber-400 border border-amber-700/40"
-                                            : "bg-slate-800 text-slate-400"
-                                        }`}
-                                      >
-                                        #{idx + 1}
-                                      </span>
-                                      {b.logoUrl ? (
-                                        <img
-                                          src={b.logoUrl}
-                                          alt={b.name}
-                                          className="w-6 h-6 rounded-lg object-cover border border-white/10"
-                                        />
-                                      ) : (
-                                        <div className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-300 font-bold flex items-center justify-center text-[11px]">
-                                          {b.name.charAt(0)}
-                                        </div>
-                                      )}
-                                      <div className="truncate">
-                                        <strong className="text-white font-bold block truncate">{b.name}</strong>
-                                        <span className="text-[10px] text-slate-400 block truncate">{b.limitType}</span>
-                                      </div>
-                                    </div>
-
-                                    <div className="text-right shrink-0">
-                                      <span className={`font-mono font-bold text-white block ${moneyBlur}`}>
-                                        {formatBRL(b.totalLimit)}
-                                      </span>
-                                      <div className="flex items-center justify-end gap-1.5 text-[10px] font-mono tabular-nums">
-                                        <span className={`text-rose-400 ${moneyBlur}`}>U: {formatBRL(b.usado)}</span>
-                                        <span className="text-slate-400">•</span>
-                                        <span className={`text-emerald-400 ${moneyBlur}`}>D: {formatBRL(b.disponivel)}</span>
-                                      </div>
+                            {/* SUB-ABA 4: SAÚDE FINANCEIRA (RADAR POLIGONAL 5 EIXOS) */}
+                            {radarActiveTab === "saude" && (
+                              <div className="space-y-3">
+                                {/* Cabeçalho do Score */}
+                                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-slate-950/70 border border-white/5">
+                                  <div className="flex items-center gap-2">
+                                    <ShieldCheck className="w-5 h-5 text-[#0A84FF]" />
+                                    <div>
+                                      <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Score de Saúde Financeira</span>
+                                      <strong className="text-sm font-bold text-white flex items-center gap-1.5">
+                                        <span className={`text-base font-extrabold ${financialHealthData.statusColor}`}>{financialHealthData.overallScore}</span>
+                                        <span className="text-slate-400 text-xs">/ 100</span>
+                                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${financialHealthData.statusColor} bg-white/5 border border-white/10`}>
+                                          {financialHealthData.statusLabel}
+                                        </span>
+                                      </strong>
                                     </div>
                                   </div>
-                                ))}
+                                  <div className="text-right text-[11px] text-slate-400">
+                                    <span>5 eixos avaliados</span>
+                                  </div>
+                                </div>
+
+                                {/* Gráfico Radar Poligonal Recharts */}
+                                <div className="h-56 select-none flex items-center justify-center">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <RadarChart cx="50%" cy="50%" outerRadius="72%" data={financialHealthData.radarChartData}>
+                                      <PolarGrid stroke="rgba(255, 255, 255, 0.12)" />
+                                      <PolarAngleAxis dataKey="subject" tick={{ fill: "#94a3b8", fontSize: 10 }} />
+                                      <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                                      <Radar name="Score" dataKey="score" stroke="#0A84FF" fill="#0A84FF" fillOpacity={0.35} />
+                                    </RadarChart>
+                                  </ResponsiveContainer>
+                                </div>
+
+                                {/* Dicas de Otimização */}
+                                {financialHealthData.tips.length > 0 ? (
+                                  <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
+                                    {financialHealthData.tips.map((tip, idx) => (
+                                      <div key={idx} className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[11px] flex items-start gap-2">
+                                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                                        <span>{tip}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] flex items-center justify-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4 text-[#30D158]" />
+                                    <span>Excelente! Todos os 5 indicadores de saúde financeira estão dentro da meta.</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* WIDGET 5: CARTÕES & LIMITES (APPLE WALLET STACK + MERCURY/LINEAR BARS) */}
+                        {widget.id === "wallet_card" && (
+                          <div className="space-y-4">
+                            {/* PARTE SUPERIOR: Apple Wallet Card Stack */}
+                            <div>
+                              <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/5 text-xs">
+                                <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                                  <CreditCard className="w-3.5 h-3.5 text-[#0A84FF]" /> Meus Cartões ({cards.length})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveTab("cards")}
+                                  className="text-[11px] text-[#0A84FF] hover:underline cursor-pointer"
+                                >
+                                  Gerenciar
+                                </button>
+                              </div>
+
+                              {cards.length === 0 ? (
+                                <div className="p-6 rounded-2xl bg-slate-950/60 border border-white/10 text-center space-y-2">
+                                  <CreditCard className="w-8 h-8 text-slate-500 mx-auto" />
+                                  <p className="text-sm font-semibold text-white">Nenhum cartão cadastrado</p>
+                                  <p className="text-xs text-slate-400">Adicione seus cartões em Bancos & Cartões para visualizar o stack e faturas.</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTab("cards")}
+                                    className="mt-2 px-3 py-1.5 rounded-xl bg-[#0A84FF] text-white text-xs font-semibold cursor-pointer"
+                                  >
+                                    Adicionar Cartão
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="relative pt-1 pb-2">
+                                  {cards.map((card, idx) => {
+                                    const isSelected = selectedWalletCardId ? selectedWalletCardId === card.id : idx === 0;
+                                    const exposure = calculateCardExposure(card, transactions);
+                                    const cardGradient = getCardGradient(card.name, card.bankName);
+                                    const isFirst = idx === 0;
+
+                                    return (
+                                      <div
+                                        key={card.id}
+                                        onClick={() => setSelectedWalletCardId(card.id)}
+                                        style={{ zIndex: isSelected ? 25 : idx + 1 }}
+                                        className={`relative rounded-2xl p-4 shadow-xl border border-white/15 transition-all duration-300 cursor-pointer ${
+                                          !isFirst ? "-mt-10" : ""
+                                        } ${
+                                          isSelected
+                                            ? "scale-[1.02] ring-2 ring-[#0A84FF]/60 shadow-[0_10px_25px_rgba(10,132,255,0.25)] -translate-y-1"
+                                            : "hover:-translate-y-1.5 opacity-90 hover:opacity-100"
+                                        } bg-gradient-to-br ${cardGradient}`}
+                                      >
+                                        {/* Cabeçalho do Cartão */}
+                                        <div className="flex items-center justify-between text-white mb-3">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <span className="font-bold text-sm tracking-tight truncate">{card.name}</span>
+                                            {card.brand && (
+                                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/15 backdrop-blur-sm font-medium shrink-0">
+                                                {card.brand}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-1.5 text-white/80 shrink-0">
+                                            <Zap className="w-3.5 h-3.5" />
+                                            <span className="text-[10px] font-mono tracking-widest">••••</span>
+                                          </div>
+                                        </div>
+
+                                        {/* Valores do Cartão */}
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                          <div>
+                                            <span className="text-[10px] text-white/70 block uppercase tracking-wider">Fatura Atual</span>
+                                            <strong className={`text-base font-extrabold text-white block font-mono tabular-nums ${moneyBlur}`}>
+                                              {formatBRL(exposure.used)}
+                                            </strong>
+                                          </div>
+                                          <div className="text-right">
+                                            <span className="text-[10px] text-white/70 block uppercase tracking-wider">Disponível</span>
+                                            <strong className={`text-sm font-bold text-emerald-300 block font-mono tabular-nums ${moneyBlur}`}>
+                                              {formatBRL(exposure.available)}
+                                            </strong>
+                                            <span className={`text-[10px] text-white/60 block font-mono tabular-nums ${moneyBlur}`}>
+                                              Limite: {formatBRL(card.limit)}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        {/* Rodapé do Cartão */}
+                                        <div className="mt-3 pt-2 border-t border-white/15 flex items-center justify-between text-[11px] text-white/80 font-mono">
+                                          <span>Fecha dia {card.closingDay || "—"} • Vence dia {card.dueDay || "—"}</span>
+                                          {exposure.used > 0 && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handlePayCardInvoice(card.name, card.bankName || undefined);
+                                              }}
+                                              className="px-2 py-0.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-semibold text-[10px] transition cursor-pointer"
+                                            >
+                                              Pagar Fatura
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* PARTE INFERIOR: Barras de Limites Compactas (Estilo Linear / Mercury) */}
+                            <div className="pt-2 border-t border-white/10 space-y-3">
+                              {/* Pílulas Consolidadas */}
+                              <div className={`grid grid-cols-3 gap-2 text-xs text-center ${moneyBlur}`}>
+                                <div className="p-2 rounded-xl bg-slate-950/70 border border-white/10">
+                                  <span className="text-[10px] text-slate-400 block">Limite Total</span>
+                                  <strong className="text-xs sm:text-sm font-bold text-white block mt-0.5 tabular-nums">
+                                    {formatBRL(bankLimitsAnalytics.globalTotalLimit)}
+                                  </strong>
+                                </div>
+                                <div className="p-2 rounded-xl bg-slate-950/70 border border-emerald-500/20">
+                                  <span className="text-[10px] text-emerald-400/80 block">Disponível</span>
+                                  <strong className="text-xs sm:text-sm font-bold text-emerald-400 block mt-0.5 tabular-nums">
+                                    {formatBRL(bankLimitsAnalytics.globalTotalDisponivel)}
+                                  </strong>
+                                </div>
+                                <div className="p-2 rounded-xl bg-slate-950/70 border border-indigo-500/20">
+                                  <span className="text-[10px] text-indigo-300 block">% Usado</span>
+                                  <strong className="text-xs sm:text-sm font-bold text-indigo-300 block mt-0.5 tabular-nums">
+                                    {bankLimitsAnalytics.globalTotalLimit > 0
+                                      ? Math.round((bankLimitsAnalytics.globalTotalUsado / bankLimitsAnalytics.globalTotalLimit) * 100)
+                                      : 0}%
+                                  </strong>
+                                </div>
+                              </div>
+
+                              {/* Lista de Barras de Progresso */}
+                              <div className="space-y-2 max-h-44 overflow-y-auto pr-1 text-xs">
+                                {bankLimitsAnalytics.banks.map((b) => {
+                                  const usedPct = b.totalLimit > 0 ? Math.min(100, Math.round((b.usado / b.totalLimit) * 100)) : 0;
+                                  const barColor =
+                                    usedPct >= 80 ? "bg-[#FF453A]" : usedPct >= 50 ? "bg-[#FF9F0A]" : "bg-[#30D158]";
+
+                                  return (
+                                    <div key={b.id} className="p-2 rounded-xl bg-slate-950/50 border border-white/5 space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-medium text-slate-200 text-xs flex items-center gap-1.5 truncate">
+                                          {b.logoUrl ? (
+                                            <img src={b.logoUrl} alt={b.name} className="w-3.5 h-3.5 rounded object-cover" />
+                                          ) : (
+                                            <Landmark className="w-3.5 h-3.5 text-slate-400" />
+                                          )}
+                                          <span className="truncate">{b.name}</span>
+                                        </span>
+                                        <span className={`text-[11px] font-mono tabular-nums text-slate-300 ${moneyBlur}`}>
+                                          <strong className="text-white">{formatBRL(b.usado)}</strong> / {formatBRL(b.totalLimit)} ({usedPct}%)
+                                        </span>
+                                      </div>
+                                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                          style={{ width: `${usedPct}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
+                          </div>
+                        )}
+
+                        {/* WIDGET 6: FLUXO DE CAIXA & ATIVIDADES RECENTES */}
+                        {widget.id === "cashflow_recent" && (
+                          <div className="space-y-3 text-xs">
+                            {/* Sub-abas do Cashflow */}
+                            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                              <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setCashflowActiveTab("fluxo")}
+                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                                    cashflowActiveTab === "fluxo"
+                                      ? "bg-[#0A84FF] text-white shadow-sm"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  <TrendingUp className="w-3.5 h-3.5" />
+                                  <span>Fluxo Mensal (6M)</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setCashflowActiveTab("recentes")}
+                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                                    cashflowActiveTab === "recentes"
+                                      ? "bg-[#0A84FF] text-white shadow-sm"
+                                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                                  }`}
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
+                                  <span>Atividades Recentes</span>
+                                </button>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab("transactions")}
+                                className="text-[11px] text-[#0A84FF] hover:underline cursor-pointer"
+                              >
+                                Ver Todos
+                              </button>
+                            </div>
+
+                            {/* SUB-ABA 1: FLUXO MENSAL (6M) */}
+                            {cashflowActiveTab === "fluxo" && (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                                  <span>Entradas, Saídas e Aportes (Últimos 6M)</span>
+                                  <div className="flex items-center gap-3 font-mono text-[10px]">
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#30D158]" /> Entradas</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#FF453A]" /> Saídas</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#0A84FF]" /> Aportes</span>
+                                  </div>
+                                </div>
+
+                                <div className="h-60 select-none">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={cashflow6MData} barGap={4} barSize={12} accessibilityLayer={false} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.12)" />
+                                      <XAxis dataKey="label" stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} />
+                                      <YAxis
+                                        stroke="#64748b"
+                                        fontSize={11}
+                                        width={55}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tickFormatter={(v) => {
+                                          const num = Number(v) || 0;
+                                          if (num >= 1000) return `R$ ${(num / 1000).toFixed(0)}k`;
+                                          return `R$ ${num}`;
+                                        }}
+                                      />
+                                      <Tooltip content={<CustomCyberTooltip isCurrency={true} moneyBlur={moneyBlur} />} cursor={false} />
+                                      <Bar dataKey="entradas" name="Entradas (R$)" fill="#30D158" radius={[4, 4, 0, 0]} />
+                                      <Bar dataKey="saidas" name="Saídas (R$)" fill="#FF453A" radius={[4, 4, 0, 0]} />
+                                      <Bar dataKey="aportes" name="Aportes (R$)" fill="#0A84FF" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* SUB-ABA 2: ATIVIDADES RECENTES */}
+                            {cashflowActiveTab === "recentes" && (
+                              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                {recentTransactions.length === 0 ? (
+                                  <p className="text-slate-400 text-center py-6">Nenhuma atividade recente encontrada.</p>
+                                ) : (
+                                  recentTransactions.map((tx) => {
+                                    const flow = tx.flowType || getFlowType(tx.category);
+                                    const isIncome = flow === "INCOME";
+                                    const isInvest = flow === "INVESTMENT";
+                                    const isPaid = tx.status === "Pago";
+
+                                    return (
+                                      <div
+                                        key={tx.id}
+                                        className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between gap-3 hover:border-white/15 transition text-xs"
+                                      >
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                          <div
+                                            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                              isIncome
+                                                ? "bg-[#30D158]/15 text-[#30D158]"
+                                                : isInvest
+                                                ? "bg-[#0A84FF]/15 text-[#0A84FF]"
+                                                : "bg-[#FF453A]/15 text-[#FF453A]"
+                                            }`}
+                                          >
+                                            {renderCategorySemanticIcon(tx.category, isIncome ? "#30D158" : isInvest ? "#0A84FF" : "#FF453A")}
+                                          </div>
+                                          <div className="min-w-0">
+                                            <strong className="text-white block truncate">{tx.description}</strong>
+                                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                                              <span>{formatDateBR(tx.date)}</span>
+                                              <span>•</span>
+                                              <span className="truncate">{tx.category}</span>
+                                              <span>•</span>
+                                              <span className="text-slate-300">{tx.paymentMethod}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span
+                                            className={`font-mono font-bold tabular-nums text-xs sm:text-sm ${
+                                              isIncome
+                                                ? "text-[#30D158]"
+                                                : isInvest
+                                                ? "text-[#0A84FF]"
+                                                : "text-[#FF453A]"
+                                            } ${moneyBlur}`}
+                                          >
+                                            {isIncome ? "+" : "-"}{formatBRL(tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount)}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleToggleStatus(tx)}
+                                            title={isPaid ? "Status: Pago (Clique para marcar pendente)" : "Status: Pendente (Clique para marcar pago)"}
+                                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                                              isPaid
+                                                ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
+                                                : "bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25"
+                                            }`}
+                                          >
+                                            {isPaid ? "✓ Pago" : "⏳ Pendente"}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
 

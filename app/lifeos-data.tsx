@@ -89,6 +89,8 @@ export type DashboardWidgetId =
   | "category_chart"
   | "benefits_strava"
   | "pending_radar"
+  | "wallet_card"
+  | "cashflow_recent"
   | "auto_odometer"
   | "auto_consumption"
   | "auto_fuel_monthly"
@@ -99,7 +101,7 @@ export interface DashboardWidgetConfig {
   title: string;
   subtitle: string;
   visible: boolean;
-  size?: "half" | "full";
+  size?: "half" | "full" | "third" | "two-thirds";
 }
 
 export interface Transaction {
@@ -345,7 +347,7 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.11.0";
+export const APP_VERSION = "0.23.0";
 export const PREVIOUS_VERSION = "0.9";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
@@ -877,37 +879,37 @@ export const COLOR_PRESETS = [
 
 export const DEFAULT_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
   {
-    id: "thermometer",
-    title: "Termômetro de Orçamento & Cota Diária",
-    subtitle: "Consumo do teto pessoal, cota diária livre e alocação 50/30/20",
-    visible: true,
-    size: "full"
-  },
-  {
     id: "patrimony_chart",
     title: "Central Analítica de Patrimônio & Caixa",
-    subtitle: "Evolução patrimonial, curva de ritmo diário e projeção de 6 meses",
+    subtitle: "Evolução patrimonial c/ CDI, curva de ritmo diário e projeção de 6 meses",
+    visible: true,
+    size: "two-thirds"
+  },
+  {
+    id: "wallet_card",
+    title: "Cartões & Limites (Apple Wallet)",
+    subtitle: "Stack de cartões físicos, faturas abertas e limites bancários",
+    visible: true,
+    size: "third"
+  },
+  {
+    id: "category_chart",
+    title: "Despesas Mensais & Categorias Compact",
+    subtitle: "Donut 03 compacto, grid de categorias e drill-down de lançamentos",
     visible: true,
     size: "half"
   },
   {
-    id: "category_chart",
-    title: "Para Onde Vai o Meu Dinheiro 2.0",
-    subtitle: "Distribuição percentual e drill-down interativo por categoria",
+    id: "cashflow_recent",
+    title: "Fluxo de Caixa & Atividades Recentes",
+    subtitle: "Entradas vs Saídas últimos 6M e feed de lançamentos rápidos",
     visible: true,
     size: "half"
   },
   {
     id: "pending_radar",
-    title: "Radar de Pendências & Próximos Vencimentos",
-    subtitle: "Itens fixos a lançar, contas pendentes e faturas próximas",
-    visible: true,
-    size: "half"
-  },
-  {
-    id: "bank_limits_chart",
-    title: "Exposição de Cartões, Bancos & Limites",
-    subtitle: "Exposição total, ranking de limites e disponibilidade bancária",
+    title: "Radar de Pendências & Saúde Financeira",
+    subtitle: "Radar poligonal de 5 eixos, fixos a lançar e contas pendentes",
     visible: true,
     size: "half"
   },
@@ -951,7 +953,7 @@ export const DEFAULT_AUTO_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
   }
 ];
 
-export function renderCategorySemanticIcon(category: string, color: string) {
+export function renderCategorySemanticIcon(category: string, color: string = "currentColor") {
   const c = category.toLowerCase();
   const style = { color };
   if (c.includes("transferência") || c.includes("transferencia"))

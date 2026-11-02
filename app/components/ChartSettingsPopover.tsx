@@ -7,7 +7,7 @@ import { RotateCcw, Check } from "lucide-react";
 export type ChartLineCurve = "monotone" | "linear" | "step";
 export type ChartKind = "line" | "area" | "bar" | "pie" | "composed" | "kpi";
 export type ChartZeroHandling = "include" | "omit";
-export type ChartWidgetSize = "half" | "full";
+export type ChartWidgetSize = "half" | "full" | "third" | "two-thirds";
 export type ChartDisplayType = "area" | "line" | "bar";
 export type ChartHeightSetting = "compact" | "normal" | "tall";
 
