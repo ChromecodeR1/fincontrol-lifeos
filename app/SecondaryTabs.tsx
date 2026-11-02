@@ -36,6 +36,17 @@ import { TransactionsTableAdvanced } from "./TransactionsTableAdvanced";
 import { BanksTab } from "./components/BanksTab";
 import { VehiclesTab } from "./components/VehiclesTab";
 
+/**
+ * Formata ritmo/pace esportivo exato em min:seg /km (AUD-15).
+ */
+export function formatPace(timeInSeconds: number, km: number): string {
+  if (!km || km <= 0 || !timeInSeconds || timeInSeconds <= 0) return "—";
+  const totalSecPerKm = Math.round(timeInSeconds / km);
+  const mins = Math.floor(totalSecPerKm / 60);
+  const secs = totalSecPerKm % 60;
+  return `${mins}:${String(secs).padStart(2, "0")} /km`;
+}
+
 const DebtorInputCell = React.memo(function DebtorInputCell({
   txId,
   initialValue,

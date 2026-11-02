@@ -83,12 +83,68 @@ export function safeSub(
 }
 
 /**
+ * Formatador BRL estático reutilizável de alta performance (AUD-26)
+ */
+export const BRL_FORMATTER = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+/**
  * Formata um número ou valor monetário em padrão pt-BR de Real (R$).
  */
 export function formatBRL(val: number | string | null | undefined): string {
   const num = typeof val === "number" ? val : parseFloat(String(val || 0));
-  const safeNum = isNaN(num) ? 0 : num;
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(safeNum);
+  const safeNum = isNaN(num) || !isFinite(num) ? 0 : num;
+  return BRL_FORMATTER.format(safeNum);
+}
+
+/**
+ * Calcula dias restantes no mês corrente com piso de 1 dia para evitar divisão por zero (AUD-02).
+ * @param year Ano completo (ex: 2026)
+ * @param month Mês (1-12)
+ * @param currentDay Dia do mês (1-31)
+ */
+export function calculateRemainingDaysInMonth(year: number, month: number, currentDay: number): number {
+  const totalDays = new Date(year, month, 0).getDate();
+  return Math.max(1, totalDays - currentDay + 1);
+}
+
+/**
+ * Calcula a cota diária livre com proteção contra divisão por zero e overflow.
+ */
+export function calculateDailyFreeQuota(remainingBudget: number, remainingDays: number): number {
+  if (!Number.isFinite(remainingBudget) || remainingDays <= 0) return 0;
+  const quota = remainingBudget / remainingDays;
+  return Number.isFinite(quota) ? quota : 0;
+}
+
+/**
+ * Avalia expressões matemáticas básicas suportando separador de milhar brasileiro (AUD-03).
+ */
+export function evaluateMathExpression(input: string): string {
+  if (!input || !input.trim()) return "";
+  let expr = input.trim();
+  expr = expr.replace(/\s+/g, " ");
+  // Remove pontos de milhar pt-BR seguidos de 3 dígitos
+  expr = expr.replace(/\.(?=\d{3}(?:[.,+\-*/\s)]|$))/g, "").replace(/,/g, ".");
+
+  if (/^[0-9]+(\.[0-9]+)?$/.test(expr)) {
+    const n = parseFloat(expr);
+    return isNaN(n) ? input : n.toFixed(2);
+  }
+
+  if (!/^[0-9+\-*/.()\s]+$/.test(expr)) {
+    return input;
+  }
+
+  try {
+    const fn = new Function(`"use strict"; return (${expr});`);
+    const val = fn();
+    if (typeof val === "number" && !isNaN(val) && isFinite(val) && val >= 0) {
+      return val.toFixed(2);
+    }
+  } catch {
+    // Retorna original se inválido
+  }
+  return input;
 }
 
 /**

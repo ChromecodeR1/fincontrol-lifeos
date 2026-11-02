@@ -114,8 +114,13 @@ export function isBusinessDay(year: number, month: number, day: number): boolean
   return dow >= 1 && dow <= 5;
 }
 
-function isResgateCategory(category: string): boolean {
-  const lower = category.toLowerCase();
+export function isResgateCategory(category: string): boolean {
+  if (!category) return false;
+  const lower = category.toLowerCase().trim();
+  // Se for explicitamente aporte ou investimento ou caixinha pura, nunca é resgate
+  if (lower.startsWith("aporte") || lower.startsWith("investimento") || lower === "caixinha") {
+    return false;
+  }
   return lower.includes("resgate");
 }
 
@@ -208,14 +213,23 @@ export function calculatePortfolioCdiYield(
   const startParts = parseDateParts(earliestDateISO) || { year: 2025, month: 12, day: 9 };
   const endParts = parseDateParts(latestDateISO) || { year: 2026, month: 10, day: 31 };
 
-  // Fator diário padrão
-  const dailyRate = calculateDailyCdiFactor(cdiAnnual, defaultCdiPct);
+  // Buckets de capitalização por percentual de CDI com precisão flutuante (AUD-01)
+  interface YieldBucket {
+    cdiPercentage: number;
+    principal: number; // float em reais
+    yieldGross: number; // float em reais
+    yieldNet: number; // float em reais
+  }
 
-  // Estados acumuladores em centavos inteiros
-  let principalCents = toCents(initialReserveBalance);
-  let runningWithYieldCents = toCents(initialReserveBalance);
-  let grossYieldCents = 0;
-  let netYieldCents = 0;
+  const buckets = new Map<number, YieldBucket>();
+  if (initialReserveBalance > 0) {
+    buckets.set(defaultCdiPct, {
+      cdiPercentage: defaultCdiPct,
+      principal: initialReserveBalance,
+      yieldGross: 0,
+      yieldNet: 0
+    });
+  }
 
   // Mapa de agrupamento mensal de aportes e resgates brutos
   const monthAportesCents = new Map<string, number>();
@@ -238,7 +252,7 @@ export function calculatePortfolioCdiYield(
   let curDay = startParts.day;
   let daysElapsed = 0;
 
-  // Itera dia a dia cronologicamente calculando os rendimentos compostos
+  // Itera dia a dia cronologicamente calculando os rendimentos compostos com 8+ casas de precisão (AUD-01)
   while (
     curYear < endParts.year ||
     (curYear === endParts.year && curMonth < endParts.month) ||
@@ -247,31 +261,66 @@ export function calculatePortfolioCdiYield(
     const ymKey = `${curYear}-${String(curMonth).padStart(2, "0")}`;
     const dateKey = `${ymKey}-${String(curDay).padStart(2, "0")}`;
 
-    // Processa transações do dia
+    // Processa transações do dia por bucket
     const dailyTxs = txByDate.get(dateKey);
     if (dailyTxs && dailyTxs.length > 0) {
       for (const tx of dailyTxs) {
-        const amtCents = toCents(tx.amount);
+        const amt = typeof tx.amount === "number" ? Math.abs(tx.amount) : Math.abs(parseFloat(String(tx.amount || 0)));
+        if (isNaN(amt) || amt <= 0) continue;
+        const pct = tx.cdiPercentage ?? extractCdiPercentage(tx.description || tx.category, defaultCdiPct);
+
         if (isResgateCategory(tx.category)) {
-          principalCents = Math.max(0, principalCents - amtCents);
-          runningWithYieldCents = Math.max(0, runningWithYieldCents - amtCents);
+          let remainingToResgate = amt;
+          const sortedBuckets = Array.from(buckets.values()).sort((a, b) => (a.cdiPercentage === pct ? -1 : 1));
+          for (const b of sortedBuckets) {
+            if (remainingToResgate <= 0) break;
+            const bTotal = b.principal + b.yieldGross;
+            if (bTotal <= 0) continue;
+            const deduct = Math.min(bTotal, remainingToResgate);
+            if (b.principal >= deduct) {
+              b.principal -= deduct;
+            } else {
+              const fromYield = deduct - b.principal;
+              b.principal = 0;
+              b.yieldGross = Math.max(0, b.yieldGross - fromYield);
+              b.yieldNet = Math.max(0, b.yieldNet - fromYield * 0.85);
+            }
+            remainingToResgate -= deduct;
+          }
         } else {
-          principalCents += amtCents;
-          runningWithYieldCents += amtCents;
+          let b = buckets.get(pct);
+          if (!b) {
+            b = { cdiPercentage: pct, principal: 0, yieldGross: 0, yieldNet: 0 };
+            buckets.set(pct, b);
+          }
+          b.principal += amt;
         }
       }
     }
 
-    // Capitalização diária em dias úteis
+    // Capitalização diária em dias úteis com taxa de cada bucket
     daysElapsed++;
-    if (isBusinessDay(curYear, curMonth, curDay) && runningWithYieldCents > 0) {
-      const dayGrossCents = Math.round(runningWithYieldCents * dailyRate);
-      grossYieldCents += dayGrossCents;
-      runningWithYieldCents += dayGrossCents;
-
+    if (isBusinessDay(curYear, curMonth, curDay)) {
       const irRate = getRegressiveIRRate(daysElapsed);
-      const dayNetCents = Math.round(dayGrossCents * (1 - irRate));
-      netYieldCents += dayNetCents;
+      for (const b of buckets.values()) {
+        const balance = b.principal + b.yieldGross;
+        if (balance > 0) {
+          const dailyFactor = calculateDailyCdiFactor(cdiAnnual, b.cdiPercentage);
+          const dayGross = balance * dailyFactor;
+          b.yieldGross += dayGross;
+          b.yieldNet += dayGross * (1 - irRate);
+        }
+      }
+    }
+
+    // Consolida totais para o ponto mensal
+    let totalPrincipalFloat = 0;
+    let totalGrossYieldFloat = 0;
+    let totalNetYieldFloat = 0;
+    for (const b of buckets.values()) {
+      totalPrincipalFloat += b.principal;
+      totalGrossYieldFloat += b.yieldGross;
+      totalNetYieldFloat += b.yieldNet;
     }
 
     // Verifica se é o último dia do mês ou o último dia da simulação para salvar o ponto mensal
@@ -283,13 +332,13 @@ export function calculatePortfolioCdiYield(
     if (isLastDayOfMonth || isLastDayOfSim) {
       const aportadoMes = fromCents(monthAportesCents.get(ymKey) || 0);
       const resgatadoMes = fromCents(monthResgatesCents.get(ymKey) || 0);
-      const capitalPuro = fromCents(principalCents);
-      const rBruto = fromCents(grossYieldCents);
-      const rLiquido = fromCents(netYieldCents);
-      const adjCents = toCents(manualAdjustment);
+      const capitalPuro = Math.round(totalPrincipalFloat * 100) / 100;
+      const rBruto = Math.round(totalGrossYieldFloat * 100) / 100;
+      const rLiquido = Math.round(totalNetYieldFloat * 100) / 100;
+      const adjReais = typeof manualAdjustment === "number" ? manualAdjustment : 0;
 
-      const totalComRendimentoBruto = fromCents(principalCents + grossYieldCents + adjCents);
-      const totalComRendimentoLiquido = fromCents(principalCents + netYieldCents + adjCents);
+      const totalComRendimentoBruto = Math.round((totalPrincipalFloat + totalGrossYieldFloat + adjReais) * 100) / 100;
+      const totalComRendimentoLiquido = Math.round((totalPrincipalFloat + totalNetYieldFloat + adjReais) * 100) / 100;
 
       let activeAcumulado = totalComRendimentoBruto;
       if (yieldMode === "liquido") {
@@ -323,12 +372,21 @@ export function calculatePortfolioCdiYield(
     }
   }
 
-  const finalCapital = fromCents(principalCents);
-  const finalGross = fromCents(grossYieldCents);
-  const finalNet = fromCents(netYieldCents);
-  const adjCents = toCents(manualAdjustment);
-  const finalTotalBruto = fromCents(principalCents + grossYieldCents + adjCents);
-  const finalTotalLiquido = fromCents(principalCents + netYieldCents + adjCents);
+  let finalPrincipalFloat = 0;
+  let finalGrossYieldFloat = 0;
+  let finalNetYieldFloat = 0;
+  for (const b of buckets.values()) {
+    finalPrincipalFloat += b.principal;
+    finalGrossYieldFloat += b.yieldGross;
+    finalNetYieldFloat += b.yieldNet;
+  }
+
+  const finalCapital = Math.round(finalPrincipalFloat * 100) / 100;
+  const finalGross = Math.round(finalGrossYieldFloat * 100) / 100;
+  const finalNet = Math.round(finalNetYieldFloat * 100) / 100;
+  const adjReais = typeof manualAdjustment === "number" ? manualAdjustment : 0;
+  const finalTotalBruto = Math.round((finalPrincipalFloat + finalGrossYieldFloat + adjReais) * 100) / 100;
+  const finalTotalLiquido = Math.round((finalPrincipalFloat + finalNetYieldFloat + adjReais) * 100) / 100;
 
   let activeSaldoFinal = finalTotalBruto;
   if (yieldMode === "liquido") {

@@ -172,6 +172,8 @@ import {
   removeUserItem,
   recordTombstone,
   recordTombstones,
+  removeTombstone,
+  removeTombstones,
   getTombstones,
   isTombstoned,
   clearUserSessionStorage,
@@ -907,7 +909,21 @@ export default function CoindexApp() {
       dragMouseYRef.current = e.clientY;
     };
 
+    // Safety listeners para cancelar arrasto caso o usuário solte fora ou mude de foco (AUD-27)
+    const handleSafetyCancel = () => {
+      setDraggingWidgetId(null);
+      setDragOverWidgetId(null);
+      if (animFrameRef.current !== null) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      dragMouseYRef.current = null;
+    };
+
     window.addEventListener("dragover", handleWindowDragOver, { passive: false });
+    window.addEventListener("drop", handleSafetyCancel);
+    window.addEventListener("dragend", handleSafetyCancel);
+    window.addEventListener("blur", handleSafetyCancel);
 
     const scrollLoop = () => {
       const clientY = dragMouseYRef.current;
@@ -935,6 +951,9 @@ export default function CoindexApp() {
 
     return () => {
       window.removeEventListener("dragover", handleWindowDragOver);
+      window.removeEventListener("drop", handleSafetyCancel);
+      window.removeEventListener("dragend", handleSafetyCancel);
+      window.removeEventListener("blur", handleSafetyCancel);
       if (animFrameRef.current !== null) {
         cancelAnimationFrame(animFrameRef.current);
         animFrameRef.current = null;
@@ -1405,7 +1424,20 @@ export default function CoindexApp() {
           }));
           const finalTxs = migratedTxs;
 
-          setTransactions(finalTxs);
+          // Safe merge com o estado local preservando lançamentos recentes e respeitando tombstones (AUD-24)
+          setTransactions((prev) => {
+            const currentTombstones = getTombstones(res.userId || currentUserId);
+            const map = new Map<string, Transaction>();
+            finalTxs.forEach((t) => {
+              if (!currentTombstones.has(t.id)) map.set(t.id, t);
+            });
+            prev.forEach((pt) => {
+              if (!currentTombstones.has(pt.id) && !map.has(pt.id)) {
+                map.set(pt.id, pt);
+              }
+            });
+            return Array.from(map.values()).sort((a, b) => compareDatesBR(b.date, a.date));
+          });
           setUserItem("lifeos_txs_v8", JSON.stringify(finalTxs), res.userId || currentUserId);
 
           if (d.cards.length > 0) {
@@ -1562,7 +1594,7 @@ export default function CoindexApp() {
             mergedMap.set(ct.id, { ...ct, status: normalizeStatus(ct.status) });
           }
         });
-        currentTxs = Array.from(mergedMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+        currentTxs = Array.from(mergedMap.values()).sort((a, b) => compareDatesBR(b.date, a.date));
         setTransactions(currentTxs);
         localStorage.setItem("lifeos_txs_v8", JSON.stringify(currentTxs));
       }
@@ -2258,7 +2290,7 @@ export default function CoindexApp() {
     }
 
     const remainingFree = Math.max(0, effectivePersonalBudgetLimit - monthSummary.personalSpent);
-    const dailyBudget = remainingFree / remainingDays;
+    const dailyBudget = remainingDays > 0 && Number.isFinite(remainingFree / remainingDays) ? remainingFree / remainingDays : 0;
 
     return {
       remainingDays,
@@ -2299,9 +2331,9 @@ export default function CoindexApp() {
         ? monthSummary.income
         : Math.max(1, safeAdd(fixedTotal, variableTotal, investTotal));
 
-    const pctFixed = Math.round((fixedTotal / totalBase) * 100);
-    const pctVariable = Math.round((variableTotal / totalBase) * 100);
-    const pctInvest = Math.round((investTotal / totalBase) * 100);
+    const pctFixed = totalBase > 0 && Number.isFinite(fixedTotal / totalBase) ? Math.min(100, Math.max(0, Math.round((fixedTotal / totalBase) * 100))) : 0;
+    const pctVariable = totalBase > 0 && Number.isFinite(variableTotal / totalBase) ? Math.min(100, Math.max(0, Math.round((variableTotal / totalBase) * 100))) : 0;
+    const pctInvest = totalBase > 0 && Number.isFinite(investTotal / totalBase) ? Math.min(100, Math.max(0, Math.round((investTotal / totalBase) * 100))) : 0;
 
     return {
       fixedTotal,
@@ -2351,7 +2383,7 @@ export default function CoindexApp() {
           d = parseInt(parts[0], 10);
         }
       }
-      const amt = t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount;
+      const amt = t.isSplit && t.personalAmount != null ? t.personalAmount : (t.thirdPartyAmount != null ? Math.max(0, t.amount - t.thirdPartyAmount) : t.amount);
       spentByDay.set(d, (spentByDay.get(d) || 0) + amt);
     }
 
@@ -2453,13 +2485,27 @@ export default function CoindexApp() {
       const cardTotal = safeAdd(
         ...cardTxs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
       );
-      const totalCommitted = safeAdd(fixedMonthlyTotal, cardTotal);
+
+      // Deduplicação inteligente de custos fixos já lançados na fatura ou transações futuras (AUD-11)
+      const fixedTitles = new Set(activeFixedItems.map((s) => s.title.trim().toLowerCase()));
+      const fixedAlreadyInCard = safeAdd(
+        ...cardTxs
+          .filter(
+            (t) =>
+              t.costType === "Fixo" ||
+              fixedTitles.has((t.description || "").trim().toLowerCase()) ||
+              fixedTitles.has((t.category || "").trim().toLowerCase())
+          )
+          .map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+      );
+      const effectiveFixedMonthly = Math.max(0, safeSub(fixedMonthlyTotal, fixedAlreadyInCard));
+      const totalCommitted = safeAdd(effectiveFixedMonthly, cardTotal);
       const percentOfIncome = Math.round((totalCommitted / Math.max(1, baseIncome)) * 100);
 
       months.push({
         key,
         label,
-        fixedCosts: fixedMonthlyTotal,
+        fixedCosts: effectiveFixedMonthly,
         cardInstallments: cardTotal,
         totalCommitted,
         percentOfIncome
@@ -2677,41 +2723,43 @@ export default function CoindexApp() {
     const incomeBase =
       monthSummary.income > 0 ? monthSummary.income : Math.max(1, staticStatusSummary.rendaBase || 6000);
 
+    const safeScore = (v: number) => (Number.isFinite(v) ? Math.min(100, Math.max(0, Math.round(v))) : 0);
+
     // 1. Taxa de Poupança / Aportes (meta: >= 20%)
-    const poupancaRate = (monthSummary.aportes / incomeBase) * 100;
-    const scorePoupanca = Math.min(100, Math.max(0, Math.round((poupancaRate / 20) * 100)));
+    const poupancaRate = incomeBase > 0 && Number.isFinite((monthSummary.aportes / incomeBase) * 100) ? (monthSummary.aportes / incomeBase) * 100 : 0;
+    const scorePoupanca = safeScore((poupancaRate / 20) * 100);
 
     // 2. Margem Livre (meta: >= 20%)
-    const marginRate = (monthSummary.balance / incomeBase) * 100;
+    const marginRate = incomeBase > 0 && Number.isFinite((monthSummary.balance / incomeBase) * 100) ? (monthSummary.balance / incomeBase) * 100 : 0;
     const scoreMargem =
       marginRate >= 20
         ? 100
         : marginRate <= 0
-        ? Math.max(0, Math.round(50 + marginRate))
-        : Math.min(100, Math.max(0, Math.round((marginRate / 20) * 100)));
+        ? safeScore(50 + marginRate)
+        : safeScore((marginRate / 20) * 100);
 
     // 3. Controle de Fixos (meta: <= 50% da receita)
     const pctFixed = allocation503020.pctFixed;
-    const scoreFixos = pctFixed <= 50 ? 100 : Math.max(0, Math.round(100 - (pctFixed - 50) * 2.5));
+    const scoreFixos = pctFixed <= 50 ? 100 : safeScore(100 - (pctFixed - 50) * 2.5);
 
     // 4. Saúde dos Limites (meta: >= 70% livre)
     const totalLimit = bankLimitsAnalytics.globalTotalLimit;
     const totalLivre = bankLimitsAnalytics.globalTotalDisponivel;
-    const livreRate = totalLimit > 0 ? (totalLivre / totalLimit) * 100 : 100;
-    const scoreLimites = livreRate >= 70 ? 100 : Math.min(100, Math.max(0, Math.round((livreRate / 70) * 100)));
+    const livreRate = totalLimit > 0 && Number.isFinite((totalLivre / totalLimit) * 100) ? (totalLivre / totalLimit) * 100 : 100;
+    const scoreLimites = livreRate >= 70 ? 100 : safeScore((livreRate / 70) * 100);
 
     // 5. Teto Pessoal (meta: <= 100%)
-    const personalPct = Math.round(
+    const personalPct = safeScore(
       (monthSummary.personalSpent / Math.max(1, effectivePersonalBudgetLimit)) * 100
     );
     const scoreTeto =
       personalPct <= 80
         ? 100
         : personalPct <= 100
-        ? Math.max(0, Math.round(100 - (personalPct - 80) * 2.5))
-        : Math.max(0, Math.round(50 - (personalPct - 100) * 2));
+        ? safeScore(100 - (personalPct - 80) * 2.5)
+        : safeScore(50 - (personalPct - 100) * 2);
 
-    const overallScore = Math.round(
+    const overallScore = safeScore(
       (scorePoupanca + scoreMargem + scoreFixos + scoreLimites + scoreTeto) / 5
     );
 
@@ -2847,7 +2895,7 @@ export default function CoindexApp() {
     const autoCategories = new Set(categoriesCatalog.filter((c) => c.isAuto).map((c) => c.name));
     const autoTxs = transactions
       .filter((t) => autoCategories.has(t.category) || t.km != null)
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((a, b) => compareDatesBR(a.date, b.date));
 
     const kms = autoTxs.map((t) => t.km || 0).filter((k) => k > 0);
     const maxKm = kms.length ? Math.max(...kms) : 0;
@@ -2887,8 +2935,8 @@ export default function CoindexApp() {
 
     const totalAutoSpent = fuelTotal + maintenanceTotal;
     const totalTCO = fuelTotal + maintenanceTotal + ipvaTotal + licenciamentoTotal + seguroTotal + estacionamentoTotal;
-    const costPerKm = distanceDriven > 0 ? totalAutoSpent / distanceDriven : 0;
-    const tcoPerKm = distanceDriven > 0 ? totalTCO / distanceDriven : 0;
+    const costPerKm = distanceDriven > 0 && Number.isFinite(totalAutoSpent / distanceDriven) ? totalAutoSpent / distanceDriven : 0;
+    const tcoPerKm = distanceDriven > 0 && Number.isFinite(totalTCO / distanceDriven) ? totalTCO / distanceDriven : 0;
 
     return {
       autoTxs: autoTxs.slice().reverse(),
@@ -3687,9 +3735,18 @@ export default function CoindexApp() {
           "warning",
           "FINANCE",
           () => {
+            removeTombstone(id, currentUserId);
+            if (childId) {
+              removeTombstone(childId, currentUserId);
+            }
+            const cleanRestored = txsToRestore.map((t) => {
+              const c = { ...t };
+              delete c.deletedAt;
+              return c;
+            });
             setTransactions(previousTransactions);
             setUserItem("lifeos_txs_v8", JSON.stringify(previousTransactions), currentUserId);
-            upsertTransactionsInDb(txsToRestore, debtorMap);
+            upsertTransactionsInDb(cleanRestored, debtorMap);
             notify("Lançamento Restaurado!", `"${tx.description}" foi restaurado com sucesso.`, "success", "FINANCE");
           },
           "↩ Desfazer"
@@ -3717,9 +3774,15 @@ export default function CoindexApp() {
           "warning",
           "FINANCE",
           () => {
+            removeTombstones(Array.from(idsToDelete), currentUserId);
+            const cleanSeries = seriesList.map((t) => {
+              const c = { ...t };
+              delete c.deletedAt;
+              return c;
+            });
             setTransactions(previousTransactions);
             setUserItem("lifeos_txs_v8", JSON.stringify(previousTransactions), currentUserId);
-            upsertTransactionsInDb(seriesList, debtorMap);
+            upsertTransactionsInDb(cleanSeries, debtorMap);
             notify("Série Parcelada Restaurada!", `${seriesList.length} parcelas foram restauradas.`, "success", "FINANCE");
           },
           "↩ Desfazer"
@@ -3738,9 +3801,12 @@ export default function CoindexApp() {
           "warning",
           "FINANCE",
           () => {
+            removeTombstone(targetId, currentUserId);
+            const cleanDeleted = { ...deletedTx };
+            delete cleanDeleted.deletedAt;
             setTransactions(previousTransactions);
             setUserItem("lifeos_txs_v8", JSON.stringify(previousTransactions), currentUserId);
-            upsertTransactionsInDb([deletedTx], debtorMap);
+            upsertTransactionsInDb([cleanDeleted], debtorMap);
             notify("Parcela Restaurada!", `A parcela foi restaurada com sucesso.`, "success", "FINANCE");
           },
           "↩ Desfazer"

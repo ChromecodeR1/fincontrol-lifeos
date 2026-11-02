@@ -119,6 +119,45 @@ export function isTombstoned(id: string, userId?: string | null): boolean {
 }
 
 /**
+ * Remove um tombstone quando uma exclusão é desfeita pelo usuário (AUD-04 Undo Action).
+ * Suporta assinaturas flexíveis removeTombstone(id, userId) e removeTombstone(userId, id).
+ */
+export function removeTombstone(idOrUserId: string | null | undefined, maybeId?: string | null): void {
+  if (typeof window === "undefined" || !window.localStorage || !idOrUserId) return;
+
+  const tryRemove = (targetId: string, uId?: string | null): boolean => {
+    if (!targetId) return false;
+    const key = getUserStorageKey("tombstones_v1", uId);
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return false;
+      const set = new Set<string>(JSON.parse(raw));
+      if (set.has(targetId)) {
+        set.delete(targetId);
+        window.localStorage.setItem(key, JSON.stringify(Array.from(set)));
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  };
+
+  let removed = tryRemove(idOrUserId, maybeId);
+  if (!removed && maybeId) {
+    removed = tryRemove(maybeId, idOrUserId);
+  }
+}
+
+/**
+ * Remove múltiplos tombstones quando uma série ou lote excluído é desfeito.
+ */
+export function removeTombstones(ids: string[], userId?: string | null): void {
+  if (!ids || !ids.length) return;
+  ids.forEach((id) => removeTombstone(id, userId));
+}
+
+/**
  * Limpa todos os dados da sessão do usuário atual ao deslogar.
  */
 export function clearUserSessionStorage(userId?: string | null): void {

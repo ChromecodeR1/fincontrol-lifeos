@@ -128,6 +128,7 @@ export interface Transaction {
   costType: CostType;
   paymentMethod: PaymentMethod;
   cardUsed?: string;
+  cardName?: string;
   cardId?: string;
   bankAccount?: string;
   bankId?: string;
@@ -143,6 +144,7 @@ export interface Transaction {
   installmentGroupId?: string;
   installmentSeriesId?: string;
   invoiceMonth?: string;
+  invoiceCompetence?: string;
   cashMonth?: string;
   flowType?: FlowType;
   isInvoicePayment?: boolean;
@@ -362,7 +364,7 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.24.0";
+export const APP_VERSION = "0.25.0";
 export const PREVIOUS_VERSION = "0.9";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
@@ -418,7 +420,11 @@ export function sanitizeImageSource(src?: string): string | undefined {
 
 export function isResgateCategory(category?: string | null): boolean {
   if (!category) return false;
-  const lower = category.toLowerCase();
+  const lower = category.toLowerCase().trim();
+  // Se for explicitamente aporte ou investimento ou caixinha pura, nunca é resgate (AUD-17)
+  if (lower.startsWith("aporte") || lower.startsWith("investimento") || lower === "caixinha") {
+    return false;
+  }
   return lower.includes("resgate");
 }
 
@@ -466,7 +472,7 @@ export {
   isNeutralFlow
 };
 
-// Gerenciamento de Armazenamento por Usuário & Tombstones (Sprint 22)
+// Gerenciamento de Armazenamento por Usuário & Tombstones (Sprint 22 & 33)
 export {
   getUserStorageKey,
   getUserItem,
@@ -474,6 +480,8 @@ export {
   removeUserItem,
   recordTombstone,
   recordTombstones,
+  removeTombstone,
+  removeTombstones,
   getTombstones,
   isTombstoned,
   clearUserSessionStorage
@@ -1449,8 +1457,8 @@ export function evaluateMathExpression(input: string): string {
   if (!input || !input.trim()) return "";
   let expr = input.trim();
   expr = expr.replace(/\s+/g, " ");
-  expr = expr.replace(/(\d+)\.(\d{3})/g, "$1$2");
-  expr = expr.replace(/,/g, ".");
+  // Remove separadores de milhar pt-BR seguidos de 3 dígitos (AUD-03)
+  expr = expr.replace(/\.(?=\d{3}(?:[.,+\-*/\s)]|$))/g, "").replace(/,/g, ".");
   
   if (/^[0-9]+(\.[0-9]+)?$/.test(expr)) {
     const n = parseFloat(expr);
@@ -1534,11 +1542,12 @@ export function calculateCardExposure(
       t.status === "Pendente / Na Fatura"
   );
   const used = safeAdd(...pendingTxs.map((t) => t.amount));
-  const available = Math.max(0, safeSub(card.limit, used));
-  const usagePercent = Math.min(100, Math.round((used / Math.max(1, card.limit)) * 100));
+  const cardLimit = card.limit ?? 0;
+  const available = Math.max(0, safeSub(cardLimit, used));
+  const usagePercent = cardLimit > 0 ? Math.min(100, Math.max(0, Math.round((used / cardLimit) * 100))) : 0;
   return {
     cardName: card.name,
-    limit: card.limit,
+    limit: cardLimit,
     used,
     available,
     usagePercent
@@ -1561,9 +1570,9 @@ export function calculateBankExposure(
 ): BankExposure {
   const bankCards = cards.filter((c) => c.bankId === bank.id);
   const calcLimit =
-    bank.limit && bank.limit > 0
+    bank.limit != null && bank.limit >= 0
       ? bank.limit
-      : safeAdd(...bankCards.map((c) => c.limit));
+      : safeAdd(...bankCards.map((c) => c.limit ?? 0));
   const cardNames = new Set(bankCards.map((c) => c.name));
   const used = safeAdd(
     ...transactions

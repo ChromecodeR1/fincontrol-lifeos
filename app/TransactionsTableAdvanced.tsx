@@ -435,8 +435,8 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
     const sanitizeCell = (val: string | number | undefined | null) => {
       if (val === undefined || val === null) return "";
       let str = String(val);
-      // Blindagem contra CSV Injection / Injeção de Fórmulas no Excel (=, +, -, @)
-      if (/^[=+\-@]/.test(str)) {
+      // Blindagem contra CSV Injection / Injeção de Fórmulas no Excel (=, +, -, @, |) com whitespace padding (AUD-19)
+      if (/^[\s\t\r\n]*[=+\-@|]/.test(str)) {
         str = `'${str}`;
       }
       str = str.replace(/"/g, '""').replace(/;/g, ",");

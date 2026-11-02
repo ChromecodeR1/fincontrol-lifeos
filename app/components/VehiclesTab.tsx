@@ -44,6 +44,7 @@ import {
   ChartThemeColors,
   formatBRL,
   formatDateBR,
+  compareDatesBR,
   CustomCyberTooltip
 } from "@/app/lifeos-data";
 import ChartCard from "./ChartCard";
@@ -169,8 +170,8 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
     null
   );
 
-  // Consumo Real (km/l) por abastecimento consecutivo e comparação com INMETRO
-  const sortedFuelAsc = [...fuelTxs].sort((a, b) => a.date.localeCompare(b.date));
+  // Consumo Real (km/l) por abastecimento consecutivo e comparação com INMETRO (AUD-05 e AUD-08)
+  const sortedFuelAsc = [...fuelTxs].sort((a, b) => compareDatesBR(a.date, b.date));
   const fuelWithKmAndLiters = sortedFuelAsc.filter(
     (t: Transaction) => typeof t.km === "number" && t.km > 0 && typeof t.liters === "number" && t.liters > 0
   );
@@ -191,47 +192,65 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
     description: string;
   }> = [];
 
-  for (let i = 1; i < fuelWithKmAndLiters.length; i++) {
-    const prev = fuelWithKmAndLiters[i - 1];
-    const curr = fuelWithKmAndLiters[i];
-    const dist = (curr.km || 0) - (prev.km || 0);
-    const lit = curr.liters || 0;
-    if (dist > 0 && lit > 0) {
-      const kml = Number((dist / lit).toFixed(2));
-      const isEtanol =
-        curr.fuelType === "Etanol" ||
-        curr.description.toLowerCase().includes("etanol") ||
-        curr.description.toLowerCase().includes("álcool") ||
-        curr.category.toLowerCase().includes("etanol");
-      const ref = isEtanol ? inmetroCfg.ethanolKmPerLiter : inmetroCfg.gasolineKmPerLiter;
-      const pct = Math.round((kml / Math.max(0.1, ref)) * 100);
+  let accumulatedPartialLiters = 0;
+  let accumulatedPartialCost = 0;
+  let lastAnchorKm = fuelWithKmAndLiters.length > 0 ? (fuelWithKmAndLiters[0].km || 0) : 0;
 
-      let col = "#ef4444"; // Vermelho
-      let status = "Ruim";
-      if (pct >= inmetroCfg.greenThresholdPct) {
-        col = "#10b981"; // Verde
-        status = "Bom";
-      } else if (pct >= inmetroCfg.yellowThresholdPct) {
-        col = "#f59e0b"; // Amarelo
-        status = "Mediano";
+  for (let i = 1; i < fuelWithKmAndLiters.length; i++) {
+    const curr = fuelWithKmAndLiters[i];
+    const lit = curr.liters || 0;
+    const cost = curr.amount || 0;
+
+    const isPartial = curr.fullTank === false;
+    accumulatedPartialLiters += lit;
+    accumulatedPartialCost += cost;
+
+    // Se tanque cheio (padrão) ou for o último registro com dados, calcula o ciclo acumulado (AUD-08)
+    if (!isPartial || i === fuelWithKmAndLiters.length - 1) {
+      const dist = (curr.km || 0) - lastAnchorKm;
+      const totalPeriodLiters = accumulatedPartialLiters;
+
+      if (dist > 0 && totalPeriodLiters > 0) {
+        const kml = Number((dist / totalPeriodLiters).toFixed(2));
+        const isEtanol =
+          curr.fuelType === "Etanol" ||
+          curr.description.toLowerCase().includes("etanol") ||
+          curr.description.toLowerCase().includes("álcool") ||
+          curr.category.toLowerCase().includes("etanol");
+        const ref = isEtanol ? inmetroCfg.ethanolKmPerLiter : inmetroCfg.gasolineKmPerLiter;
+        const pct = Math.round((kml / Math.max(0.1, ref)) * 100);
+
+        let col = "#ef4444"; // Vermelho
+        let status = "Ruim";
+        if (pct >= inmetroCfg.greenThresholdPct) {
+          col = "#10b981"; // Verde
+          status = "Bom";
+        } else if (pct >= inmetroCfg.yellowThresholdPct) {
+          col = "#f59e0b"; // Amarelo
+          status = "Mediano";
+        }
+
+        const priceL = totalPeriodLiters > 0 ? Number((accumulatedPartialCost / totalPeriodLiters).toFixed(2)) : 0;
+        consumptionPoints.push({
+          date: curr.date,
+          label: formatDateBR(curr.date),
+          kmPerLiter: kml,
+          inmetroRef: ref,
+          fuelType: isEtanol ? "Etanol" : "Gasolina",
+          pricePerLiter: priceL,
+          color: col,
+          statusLabel: `${status} (${pct}% do INMETRO)`,
+          pctOfInmetro: pct,
+          distKm: dist,
+          liters: totalPeriodLiters,
+          totalAmount: accumulatedPartialCost,
+          description: curr.description
+        });
       }
 
-      const priceL = curr.amount > 0 ? Number((curr.amount / lit).toFixed(2)) : 0;
-      consumptionPoints.push({
-        date: curr.date,
-        label: formatDateBR(curr.date),
-        kmPerLiter: kml,
-        inmetroRef: ref,
-        fuelType: isEtanol ? "Etanol" : "Gasolina",
-        pricePerLiter: priceL,
-        color: col,
-        statusLabel: `${status} (${pct}% do INMETRO)`,
-        pctOfInmetro: pct,
-        distKm: dist,
-        liters: lit,
-        totalAmount: curr.amount,
-        description: curr.description
-      });
+      lastAnchorKm = curr.km || 0;
+      accumulatedPartialLiters = 0;
+      accumulatedPartialCost = 0;
     }
   }
 
@@ -834,7 +853,7 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
         const tankSavings = costDiffPerKm * tankKm;
 
         const totalTCO = autoMetrics.totalTCO ?? autoMetrics.totalAutoSpent;
-        const tcoPerKm = autoMetrics.tcoPerKm ?? autoMetrics.costPerKm;
+        const tcoPerKm = autoMetrics.tcoPerKm ?? (autoMetrics.distanceDriven > 0 && Number.isFinite(totalTCO / autoMetrics.distanceDriven) ? totalTCO / autoMetrics.distanceDriven : autoMetrics.costPerKm);
         const ipvaVal = Number(autoMetrics.ipvaTotal || 0);
         const licVal = Number(autoMetrics.licenciamentoTotal || 0);
         const seguroVal = Number(autoMetrics.seguroTotal || 0);

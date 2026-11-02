@@ -80,9 +80,18 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  let body: any;
   try {
-    const body = await request.json();
-    const { action, username, password } = body;
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { status: "error", message: "Corpo da requisição inválido ou JSON malformado." },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const { action, username, password } = body || {};
     const supabase = await createServerSupabase();
 
     // 1. LOGOUT

@@ -17,22 +17,17 @@ const FALLBACK_DAILY_FACTOR = Math.pow(1 + FALLBACK_CDI_ANNUAL / 100, 1 / 252) -
 
 export async function GET() {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4500);
-
-    // Série 4389: Taxa de juros - CDI anualizada base 252
+    // Série 4389: Taxa de juros - CDI anualizada base 252 com timeout resiliente de 4500ms (AUD-18)
     const res = await fetch(
       "https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados/ultimos/1?formato=json",
       {
-        signal: controller.signal,
+        signal: AbortSignal.timeout(4500),
         next: { revalidate: 3600 },
         headers: {
           Accept: "application/json"
         }
       }
     );
-
-    clearTimeout(timeoutId);
 
     if (!res.ok) {
       throw new Error(`BCB SGS respondeu com status ${res.status}`);

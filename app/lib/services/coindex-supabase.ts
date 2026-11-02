@@ -112,7 +112,12 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       supabase.from("payment_methods").select("*").eq("user_id", userId),
       supabase.from("credit_cards").select("*").eq("user_id", userId),
       supabase.from("wishlist_items").select("*").eq("user_id", userId),
-      supabase.from("transactions").select("*").eq("user_id", userId).order("tx_date", { ascending: false }),
+      supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("tx_date", { ascending: false })
+        .range(0, 999),
       supabase.from("static_status").select("*").eq("user_id", userId),
       supabase.from("bio_logs").select("*").eq("user_id", userId).order("log_date", { ascending: true }),
       supabase.from("personal_okrs").select("*").eq("user_id", userId),
@@ -121,7 +126,25 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       supabase.from("system_logs").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200)
     ]);
 
-    const txRows = (txsRes.data ?? []) as Array<Record<string, unknown>>;
+    let txRows = (txsRes.data ?? []) as Array<Record<string, unknown>>;
+    // Continua a busca paginada se a primeira página atingiu 1000 registros (AUD-14)
+    if (txRows.length === 1000) {
+      let page = 1;
+      const PAGE_SIZE = 1000;
+      while (true) {
+        const { data: pageData, error: pageErr } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", userId)
+          .order("tx_date", { ascending: false })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        if (pageErr || !pageData || pageData.length === 0) break;
+        txRows = txRows.concat(pageData as Array<Record<string, unknown>>);
+        if (pageData.length < PAGE_SIZE) break;
+        page++;
+      }
+    }
+
     const cardRows = (cardsRes.data ?? []) as Array<Record<string, unknown>>;
     const catRows = (catsRes.data ?? []) as Array<Record<string, unknown>>;
 
@@ -144,18 +167,36 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         costType: (r.cost_type as CostType) ?? "Variável",
         paymentMethod: String(r.payment_method ?? "PIX"),
         cardUsed: r.card_used ? String(r.card_used) : undefined,
+        cardName: r.card_used ? String(r.card_used) : undefined,
         bankAccount: (r as any).bank_account
           ? String((r as any).bank_account)
           : (String(r.payment_method) !== "Cartão de Crédito" && r.card_used ? String(r.card_used) : undefined),
         status: normalizeStatus(String(r.status ?? "Pendente")),
         km: r.km != null ? Number(r.km) : undefined,
         liters: r.liters != null ? Number(r.liters) : undefined,
+        fuelType: (r as any).fuel_type ? (String((r as any).fuel_type) as "Gasolina" | "Etanol") : undefined,
+        fullTank: (r as any).full_tank != null ? Boolean((r as any).full_tank) : undefined,
         debtor: r.debtor ? String(r.debtor) : undefined,
         paidAmount: r.paid_amount != null ? Number(r.paid_amount) : 0,
         installmentInfo: r.installment_info ? String(r.installment_info) : undefined,
         installmentGroupId: r.installment_group_id ? String(r.installment_group_id) : undefined,
+        installmentSeriesId: (r as any).installment_series_id ? String((r as any).installment_series_id) : undefined,
+        invoiceMonth: (r as any).invoice_month ? String((r as any).invoice_month) : undefined,
+        invoiceCompetence: (r as any).invoice_competence ?? ((r as any).invoice_month ? String((r as any).invoice_month) : undefined),
+        cashMonth: (r as any).cash_month ? String((r as any).cash_month) : undefined,
+        flowType: (r as any).flow_type ? ((r as any).flow_type as FlowType) : undefined,
+        isSplit: (r as any).is_split != null ? Boolean((r as any).is_split) : undefined,
+        thirdPartyAmount: (r as any).third_party_amount != null ? Number((r as any).third_party_amount) : undefined,
+        thirdPartyName: (r as any).third_party_name ? String((r as any).third_party_name) : undefined,
+        personalAmount: (r as any).personal_amount != null ? Number((r as any).personal_amount) : undefined,
+        linkedReceivableId: (r as any).linked_receivable_id ? String((r as any).linked_receivable_id) : undefined,
+        isSplitChild: (r as any).is_split_child != null ? Boolean((r as any).is_split_child) : undefined,
+        linkedSplitParentId: (r as any).linked_split_parent_id ? String((r as any).linked_split_parent_id) : undefined,
         wishlistId: r.wishlist_id ? String(r.wishlist_id) : undefined,
         iconUrl: r.icon_url ? String(r.icon_url) : undefined,
+        notes: (r as any).notes ? String((r as any).notes) : undefined,
+        indexer: (r as any).indexer ? String((r as any).indexer) : undefined,
+        cdiPercentage: (r as any).cdi_percentage != null ? Number((r as any).cdi_percentage) : undefined,
         updatedAt: r.updated_at ? String(r.updated_at) : new Date().toISOString(),
         deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
         rev: r.rev != null ? Number(r.rev) : undefined

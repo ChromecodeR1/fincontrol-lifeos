@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.24.0`  
-> **Última Atualização:** 1 de Novembro de 2026 (Pós-Sprint 32 — Retorno Exclusivo da Sidebar Lateral Retrátil com Gaveta, Correção Definitiva do Drag-and-Drop no Card "Radar de Pendências & Saúde Financeira" em Grid Único e Motor de Auto-Scroll Contínuo 60fps ao Arrastar Cards)  
+> **Versão da Aplicação:** `0.25.0`  
+> **Última Atualização:** 2 de Novembro de 2026 (Pós-Sprint 33 — Auditoria Técnica & Blindagem Matemática, Contábil, Tombstones de Sincronização e Paginação Supabase sem Alterações de UI)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -579,6 +579,26 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       * **Zona de Descida Automática (Base):** Ativada quando `clientY > window.innerHeight - 160px`, rolando para baixo com aceleração proporcional.
     - **Reordenação ao Vivo (`Live Reorder on DragEnter`):** Troca dinâmica e instantânea de posição dos cards no estado `dashboardLayout` durante o arraste, com destaque de anel `border-[#0A84FF] ring-2 ring-[#0A84FF]`, permitindo que o usuário visualize os cards trocando de lugar enquanto a página rola até o topo.
     - **Botão Rápido "⇈" (Enviar para o Topo):** Novo controle no cabeçalho do `<ChartCard>` que move qualquer card diretamente para a primeira posição com 1 clique.
+- **Sprint 33 — Auditoria Técnica & Blindagem Matemática, Contábil e de Sincronização (Frentes A, B, C e D — Zero Alterações Visuais de UI):**
+  - **Frente A (Cálculos Matemáticos, Finanças, Datas e Negócio):**
+    - **AUD-01 (Precisão PU de 8 Casas na Capitalização Diária CDI em `investment-yield.ts`):** O loop diário em dias úteis (`252 d.u.`) opera agora com agrupamento em buckets de percentual de CDI (`cdiPercentage`) mantendo o saldo e o rendimento composto em ponto flutuante de alta precisão IEEE 754, aplicando arredondamento para centavos apenas nas fronteiras mensais de geração dos pontos do gráfico e totais finais. Elimina perda de micro-centavos por truncamento cumulativo em saldos menores.
+    - **AUD-02 (Divisão Segura da Cota Diária Livre em `page.tsx` e `finance.ts`):** Proteção do cálculo de dias restantes com piso mínimo de 1 dia (`Math.max(1, totalDays - currentCalendarDate.day + 1)`), eliminando divisão por zero no último dia do mês e garantindo valor finito (`Number.isFinite`).
+    - **AUD-03 (Parser Mini-Calculadora com Separador de Milhar pt-BR em `finance.ts` e `lifeos-data.tsx`):** Expressão regular aprimorada `expr.replace(/\.(?=\d{3}(?:[.,+\-*/\s)]|$))/g, "").replace(/,/g, ".")` removendo pontos de milhar apenas quando seguidos de 3 dígitos, aceitando fórmulas complexas como `"1.234,56 + 2.500"`.
+    - **AUD-05 & AUD-13 (Ordenação Cronológica de Datas BR & Compatibilidade Bidirecional):** Substituição de `.localeCompare` lexicográfico em `DD-MM-YYYY` por `compareDatesBR(a, b)` (conversão para ISO `YYYY-MM-DD`) em `page.tsx` (linhas 1565 e 2850) e `VehiclesTab.tsx` (linha 173). Suporte bidirecional a `invoiceMonth ?? invoiceCompetence` e `cardUsed ?? cardName`.
+    - **AUD-08 (Consumo Real km/L com Abastecimentos Parciais Intermediários em `VehiclesTab.tsx`):** Implementação de acumulador de litros e custos para abastecimentos com `fullTank: false`, calculando `deltaKm / totalPeriodLiters` de forma exata ao completar o ciclo no próximo tanque cheio (`fullTank !== false`). Proteção de divisão por zero em `tcoPerKm`.
+    - **AUD-09, AUD-10, AUD-11, AUD-12, AUD-17, AUD-32 (Operadores Nulos, Rateio Pessoal e Deduplicação):** Substituição de `||` por `??` onde `0` é valor numérico válido (`limit`, `balance`, `personalAmount`). Subtração estrita de parcelas de terceiros nos lançamentos divididos (`isSplit`) e exclusão de filhos (`isSplitChild`) em visões operacionais. Deduplicação inteligente de custos fixos já faturados na Projeção 6M. Proteção finita com `Number.isFinite` no Radar de Saúde Financeira e Alocação 50/30/20. Blindagem de `isResgateCategory` para nunca classificar "Aporte" ou "Caixinha" como resgate.
+  - **Frente B (Persistência, Sincronização, Integrações e Segurança):**
+    - **AUD-04 (Tombstone Undo Resiliente em `user-storage.ts` e `lifeos-data.tsx`):** Exportação de `removeTombstone` e `removeTombstones` com suporte a chamadas flexíveis. Nas ações de "↩ Desfazer" de exclusões de lançamentos ou séries de parcelas no Toast, o tombstone é imediatamente removido do namespace do usuário e a marcação `deletedAt` é expurgada do objeto restaurado.
+    - **AUD-14, AUD-21, AUD-22, AUD-24 (Paginação PostgREST 1.000 Linhas no Supabase & Safe Merge):** Implementação de loop paginado automático de 1.000 em 1.000 registros via `.range(page * 1000, (page + 1) * 1000 - 1)` em `fetchAllCoindexData`, ultrapassando o limite padrão silencioso do PostgREST. Coerção numérica segura com `Number()` e filtragem estrita de `!deleted_at`. Safe merge reativo na hidratação preservando lançamentos locais offline e respeitando tombstones.
+    - **AUD-15 (Pace Exato Strava/Bio):** Função padronizada `formatPace(timeInSeconds, km)` gerando `"M:SS /km"` com arredondamento preciso de segundos `Math.round(timeInSeconds / km)`.
+    - **AUD-18 & AUD-19 (Timeout AbortSignal e Blindagem de Fórmulas CSV):** Timeout estrito de 4500ms via `AbortSignal.timeout(4500)` na rota oficial do Banco Central (`/api/market-rates`). Regex avançada contra CSV/DDE Formula Injection (`/^[\s\t\r\n]*[=+\-@|]/`) na exportação de planilhas.
+  - **Frente C (Next.js 16, TypeScript, Performance e Estabilidade):**
+    - **AUD-26 (Instância Estática BRL_FORMATTER):** Formatador `BRL_FORMATTER` reutilizável em `finance.ts` eliminando instanciações repetitivas de `Intl.NumberFormat`.
+    - **AUD-27 (Cancelamento Seguro do Drag-and-Drop em Edge Auto-Scroll):** Listeners de segurança no `window` para eventos de `"drop"`, `"dragend"` e `"blur"`, cancelando o loop de `requestAnimationFrame` e zerando referências de arraste em caso de soltura externa.
+    - **AUD-28 (Tratamento Robusto de JSON em `/api/auth`):** Proteção com bloco `try/catch` ao parsear `request.json()` na rota de autenticação, retornando HTTP 400 com mensagem amigável para payloads malformados.
+  - **Frente D (Dossier e Garantia de Zero Regressão Visual):**
+    - 100% de preservação de todas as classes Tailwind, CSS, cores, componentes e estilos visuais.
+    - Zero erros em `npx tsc --noEmit` e compilação de produção com sucesso.
 
 ---
 
