@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import {
   ActiveTab, Transaction, CreditCardItem, BankItem, BankInstitution, StaticStatusItem, WishlistItem,
-  BioLog, StravaStats, BrainNote, PersonalOKR, CustomAlertRule, ChartThemeColors,
+  BioLog, StravaStats, StravaActivity, BrainNote, PersonalOKR, CustomAlertRule, ChartThemeColors,
   CategoryCatalogItem, SystemLogEntry, ThemeMode, FlowType, APP_VERSION,
   formatBRL, sanitizeText, compressImageFileToBase64, renderCategorySemanticIcon,
   CustomCyberTooltip, ThemeSegmentedControl, buildWhatsAppChargeText,
@@ -150,6 +150,9 @@ export interface SecondaryTabsProps {
   chartTheme: ChartThemeColors;
   updateChartThemeColor: (k: keyof ChartThemeColors, c: string) => void;
   stravaStats: StravaStats;
+  stravaActivities?: StravaActivity[];
+  stravaScopeMode?: "detailed" | "read_only" | null;
+  stravaOauthUrl?: string;
   isSyncingStrava: boolean;
   syncStravaFromApi: () => void;
   bioLogs: BioLog[];
@@ -243,7 +246,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     notify, editingCardId, setEditingCardId, newCard, setNewCard, handleSaveCard, handleDeleteCard,
     handlePayCardInvoice, wishlist, editingWishId, setEditingWishId, newWish, setNewWish,
     handleSaveWish, handleIncrementWish, handleDeleteWish, personalBudgetLimit, autoMetrics,
-    chartTheme, updateChartThemeColor, stravaStats, isSyncingStrava, syncStravaFromApi,
+    chartTheme, updateChartThemeColor, stravaStats, stravaActivities = [], stravaScopeMode, stravaOauthUrl, isSyncingStrava, syncStravaFromApi,
     bioLogs, editingBioId, setEditingBioId, newBio, setNewBio, handleSaveBioLog, handleDeleteBioLog,
     okrs, saveOkrs, newOkr, setNewOkr, handleAddOkr, notes, selectedNoteTag, setSelectedNoteTag,
     editingNoteId, setEditingNoteId, newNote, setNewNote, handleSaveNote, handleDeleteNote, handleToggleNoteCompleted,
@@ -917,13 +920,41 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               type="button"
               onClick={syncStravaFromApi}
               disabled={isSyncingStrava}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition"
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition cursor-pointer"
             >
               {isSyncingStrava ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
               <span>{isSyncingStrava ? "Sincronizando..." : "Atualizar pelo Strava"}</span>
             </button>
           </div>
         </div>
+
+        {stravaScopeMode === "read_only" && (
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-wrap items-center justify-between gap-3 text-xs animate-cupertino-in">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300">
+                <Flame className="w-4 h-4" />
+              </div>
+              <div>
+                <strong className="text-amber-200 block font-semibold">
+                  Modo Leitura Básico Ativo (Escopo: read)
+                </strong>
+                <p className="text-slate-300 text-[11px]">
+                  Os dados acumulados do ano estão sincronizados. Para carregar suas últimas 30 corridas detalhadas com altimetria e calorias, autorize o escopo completo:
+                </p>
+              </div>
+            </div>
+            {stravaOauthUrl && (
+              <button
+                type="button"
+                onClick={() => window.open(stravaOauthUrl, "strava_oauth", "width=600,height=750")}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer"
+              >
+                <span>🔓 Liberar Atividades Detalhadas (OAuth)</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 glass-card p-6 rounded-3xl border border-white/[0.08] space-y-4">
@@ -1002,6 +1033,108 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* SESSÃO 3: FEED DE CORRIDAS & ATIVIDADES STRAVA */}
+        <div className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 rounded-xl bg-orange-500/15 text-orange-400">
+                <Flame className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  Minhas Corridas & Treinos Recentes
+                  {stravaActivities && stravaActivities.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                      {stravaActivities.length} {stravaActivities.length === 1 ? "registro" : "registros"}
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-400">Telemetria oficial do Strava com pace por quilômetro, altimetria acumulada e estimativa calórica.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {stravaScopeMode === "read_only" && stravaOauthUrl && (
+                <button
+                  type="button"
+                  onClick={() => window.open(stravaOauthUrl, "strava_oauth", "width=600,height=750")}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <span>🔓 Liberar Atividades Detalhadas (OAuth)</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={syncStravaFromApi}
+                disabled={isSyncingStrava}
+                className="px-3.5 py-1.5 rounded-xl bg-orange-600/30 border border-orange-500/30 hover:bg-orange-600/50 text-orange-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                {isSyncingStrava ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                <span>{isSyncingStrava ? "Sincronizando..." : "Atualizar Feed"}</span>
+              </button>
+            </div>
+          </div>
+
+          {stravaActivities && stravaActivities.length > 0 ? (
+            <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-white/[0.08] bg-slate-950/60 text-slate-400">
+                    <th className="py-3 px-3">Data</th>
+                    <th className="py-3 px-3">Atividade</th>
+                    <th className="py-3 px-3">Tipo</th>
+                    <th className="py-3 px-3 text-right">Distância</th>
+                    <th className="py-3 px-3 text-right">Tempo</th>
+                    <th className="py-3 px-3 text-right">Pace Médio</th>
+                    <th className="py-3 px-3 text-right">Altimetria</th>
+                    <th className="py-3 px-3 text-right">Calorias</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.05]">
+                  {stravaActivities.map((act) => (
+                    <tr key={act.id} className="hover:bg-white/[0.03] transition">
+                      <td className="py-3 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap">
+                        {act.date}
+                      </td>
+                      <td className="py-3 px-3 font-semibold text-white">
+                        {act.name}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-300 border border-orange-500/30">
+                          {act.type}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right font-extrabold font-mono tabular-nums text-orange-400 whitespace-nowrap">
+                        {act.distanceKm} km
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-slate-300 whitespace-nowrap">
+                        {act.movingTimeMin} min
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-emerald-400 font-bold whitespace-nowrap">
+                        {act.pace}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-indigo-300 whitespace-nowrap">
+                        {act.elevationGain > 0 ? `+${act.elevationGain} m` : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-amber-300 whitespace-nowrap">
+                        {act.calories > 0 ? `${act.calories} kcal` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-8 text-center rounded-2xl bg-slate-950/40 border border-white/[0.05] space-y-3">
+              <Flame className="w-8 h-8 text-orange-500/40 mx-auto" />
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Nenhuma atividade sincronizada no feed ainda. Clique em <strong>&quot;Atualizar pelo Strava&quot;</strong> para consultar a API oficial.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1845,7 +1978,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                       {stravaSyncStatus?.state === "error" ? (
                         <><XCircle className="w-3.5 h-3.5 text-rose-400" /> Integração Inválida</>
                       ) : stravaSyncStatus?.state === "success" ? (
-                        <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Sincronizado</>
+                        <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Conectado / Sincronizado</>
                       ) : stravaConfig.refreshToken ? (
                         "Pronto p/ Sincronizar"
                       ) : (
@@ -1924,6 +2057,17 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                       <span>{stravaSyncStatus.message}</span>
                     </div>
                   </div>
+                )}
+
+                {stravaScopeMode === "read_only" && stravaOauthUrl && (
+                  <button
+                    type="button"
+                    onClick={() => window.open(stravaOauthUrl, "strava_oauth", "width=600,height=750")}
+                    className="w-full py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 text-amber-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  >
+                    <span>🔓 Liberar Atividades Detalhadas (OAuth)</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
                 )}
               </div>
 

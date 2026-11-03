@@ -95,6 +95,7 @@ import {
   WishlistItem,
   BioLog,
   StravaStats,
+  StravaActivity,
   BrainNote,
   PersonalOKR,
   CustomAlertRule,
@@ -1056,6 +1057,17 @@ export default function CoindexApp() {
     allTimeRuns: 195,
     lastSync: "Local"
   });
+  const [stravaActivities, setStravaActivities] = useState<StravaActivity[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const s = localStorage.getItem("lifeos_strava_activities");
+      return s ? JSON.parse(s) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [stravaScopeMode, setStravaScopeMode] = useState<"detailed" | "read_only" | null>(null);
+  const [stravaOauthUrl, setStravaOauthUrl] = useState<string>("");
   const [isSyncingStrava, setIsSyncingStrava] = useState(false);
   const [stravaSyncStatus, setStravaSyncStatus] = useState<{
     state: "idle" | "success" | "error";
@@ -1352,6 +1364,8 @@ export default function CoindexApp() {
         if (sStrava) setStravaConfig(JSON.parse(sStrava));
         const sStravaStats = localStorage.getItem("lifeos_strava_stats");
         if (sStravaStats) setStravaStats(JSON.parse(sStravaStats));
+        const sStravaAct = localStorage.getItem("lifeos_strava_activities");
+        if (sStravaAct) setStravaActivities(JSON.parse(sStravaAct));
         const sLayout = localStorage.getItem("coindex_dashboard_layout_v3") || localStorage.getItem("lifeos_dash_layout_v1");
         if (sLayout) setDashboardLayout(normalizeDashboardLayout(JSON.parse(sLayout)));
         const sChartConfigs = localStorage.getItem("lifeos_chart_configs_v1");
@@ -1775,18 +1789,24 @@ export default function CoindexApp() {
   }, [transactions, banks, wishlist, debtorMap, notify]);
 
   // Sincronização Manual do Strava via Backend Proxy (/api/strava) + Persistência no Supabase
-  const syncStravaFromApi = async () => {
+  const syncStravaFromApi = async (overrideConfig?: StravaCredentials) => {
     setIsSyncingStrava(true);
+    const activeConfig = overrideConfig || stravaConfig;
     try {
       const res = await fetch("/api/strava", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(stravaConfig)
+        body: JSON.stringify(activeConfig)
       });
 
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(`A rota /api/strava retornou status ${res.status} (não-JSON).`);
+      }
+
       const data = await res.json();
-      if (!res.ok || data.status === "error") {
-        const msg = data.message || "Falha ao sincronizar com o Strava.";
+      if (!res.ok || data.ok === false) {
+        const msg = data.error || data.message || "Falha ao sincronizar com o Strava.";
         setStravaSyncStatus({ state: "error", message: msg, timestamp: new Date().toLocaleTimeString("pt-BR") });
         notify("Integração Inválida", msg, "warning", "CONFIG");
         return;
@@ -1796,12 +1816,39 @@ export default function CoindexApp() {
       setStravaStats(updatedStats);
       localStorage.setItem("lifeos_strava_stats", JSON.stringify(updatedStats));
 
+      let updatedConfig = { ...activeConfig };
+      let configChanged = false;
+      if (data.newRefreshToken && data.newRefreshToken !== activeConfig.refreshToken) {
+        updatedConfig.refreshToken = data.newRefreshToken;
+        configChanged = true;
+      }
+      if (data.athlete?.id && (!updatedConfig.athleteId || updatedConfig.athleteId === "")) {
+        updatedConfig.athleteId = String(data.athlete.id);
+        configChanged = true;
+      }
+      if (configChanged) {
+        setStravaConfig(updatedConfig);
+        localStorage.setItem("lifeos_strava_config", JSON.stringify(updatedConfig));
+      }
+
+      if (data.activities && Array.isArray(data.activities)) {
+        setStravaActivities(data.activities);
+        localStorage.setItem("lifeos_strava_activities", JSON.stringify(data.activities));
+      }
+
+      if (data.scopeMode) {
+        setStravaScopeMode(data.scopeMode);
+      }
+      if (data.oauthUrl) {
+        setStravaOauthUrl(data.oauthUrl);
+      }
+
       await updateUserSettingsInDb({
-        stravaConfig,
+        stravaConfig: updatedConfig,
         stravaStats: updatedStats
       });
 
-      const okMsg = `Strava atualizado! ${updatedStats.ytdKm} km corridos no ano (${updatedStats.ytdRuns} treinos).`;
+      const okMsg = `Strava sincronizado! ${updatedStats.ytdKm} km corridos no ano (${updatedStats.ytdRuns} treinos).`;
       setStravaSyncStatus({ state: "success", message: okMsg, timestamp: new Date().toLocaleTimeString("pt-BR") });
       notify("Strava Sincronizado!", okMsg, "success", "CONFIG");
     } catch (err: unknown) {
@@ -1813,6 +1860,32 @@ export default function CoindexApp() {
       setIsSyncingStrava(false);
     }
   };
+
+  // Listener para Callback do Strava via OAuth2 (postMessage)
+  useEffect(() => {
+    const handleOAuthMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === "STRAVA_AUTH_SUCCESS") {
+        const { refreshToken, athleteId } = event.data;
+        if (refreshToken) {
+          setStravaConfig((prev) => {
+            const updated = {
+              ...prev,
+              refreshToken,
+              athleteId: athleteId ? String(athleteId) : prev.athleteId
+            };
+            localStorage.setItem("lifeos_strava_config", JSON.stringify(updated));
+            setTimeout(() => {
+              syncStravaFromApi(updated);
+            }, 300);
+            return updated;
+          });
+          notify("Autorização Concluída", "Strava conectado com permissões completas!", "success", "CONFIG");
+        }
+      }
+    };
+    window.addEventListener("message", handleOAuthMessage);
+    return () => window.removeEventListener("message", handleOAuthMessage);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -7501,6 +7574,9 @@ export default function CoindexApp() {
               chartTheme={chartTheme}
               updateChartThemeColor={updateChartThemeColor}
               stravaStats={stravaStats}
+              stravaActivities={stravaActivities}
+              stravaScopeMode={stravaScopeMode}
+              stravaOauthUrl={stravaOauthUrl}
               isSyncingStrava={isSyncingStrava}
               syncStravaFromApi={syncStravaFromApi}
               bioLogs={bioLogs}

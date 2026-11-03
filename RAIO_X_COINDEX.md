@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.27.0`  
-> **Última Atualização:** 2 de Novembro de 2026 (Pós-Sprint 35 — Correção da Opção de Altura dos Gráficos, Compactação Vertical dos Cards, Restauração da Paleta Escura Cupertino Midnight Slate e Correção dos 4 KPIs no Modo Claro)  
+> **Versão da Aplicação:** `0.28.0`  
+> **Última Atualização:** 2 de Novembro de 2026 (Pós-Sprint 36 — Criação da Rota Oficial /api/strava, Callback OAuth2 1-Clique com Suporte a Escopo Read e Blindagem de Sincronização na Aba Bio)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -646,6 +646,22 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - Títulos dos 4 KPIs com legibilidade ideal em `#475569` (`.kpi-title`), e valores contrastados: Entradas (`#15803D`), Saídas (`#DC2626`), Aportes (`#0066CC`) e Saldo Líquido (`#0284C7`).
     - **Bug 2 Solucionado:** Removidas caixas brancas intermediárias. O fundo uniforme da página à direita da sidebar permanece cinza-gelo `#F2F4F8` (`var(--cupertino-bg)`), enquanto apenas os cards individuais permanecem brancos `#FFFFFF`.
     - **Bug 3 Solucionado:** Controles segmentados inativos estilizados com fundo `#EEF2F6` e texto `#334155`, e botões ativos com fundo `#0A84FF` e texto `#FFFFFF` puro.
+- **Sprint 36 (Novembro de 2026 — Integração Strava API Oficial OAuth2, Suporte Dual de Escopo, Callback 1-Clique e Feed de Atividades na Aba Bio):**
+  - **Rota Oficial Backend (`app/api/strava/route.ts`):**
+    - Métodos `POST` e `GET` com suporte a timeouts controlados de 8000ms (`AbortSignal.timeout(8000)`).
+    - Validação de `{ clientId, clientSecret, refreshToken }` com parsing tolerante de fallback para variáveis de ambiente.
+    - Renovação automática de token no endpoint oficial Strava OAuth (`POST https://www.strava.com/oauth/token` com `grant_type: refresh_token`). Retorno com erro estruturado 401 caso chaves sejam recusadas.
+    - Consultas simultâneas em paralelo: Perfil do Atleta (`/athlete`), Estatísticas Consolidadas (`/athletes/{id}/stats`) e Feed de Atividades (`/athlete/activities?per_page=30`).
+    - **Algoritmo de Pace Sem Bug de :60:** Tratamento de arredondamento nos segundos para que `5:59.8` avance o minuto para `6:00/km` em vez do formato defeituoso `5:60/km`.
+    - **Modo Dual de Escopo (`detailed` vs `read_only`):** Caso o token do usuário tenha apenas escopo básico `read` (retornando 401/403 na listagem detalhada de corridas), o sistema não lança erro; constrói cards consolidados reais a partir de `recent_run_totals`, `ytd_run_totals` e `all_run_totals` e fornece a URL direta de autorização para o escopo completo `activity:read_all`.
+  - **Rota de Callback OAuth2 1-Clique (`app/api/strava/callback/route.ts`):**
+    - Recebe `code`, `state` e troca pelo `refresh_token` permanente com escopo completo via `grant_type: authorization_code`.
+    - Interface HTML autônoma estonteante com Design System Cupertino Midnight Slate, avatar do atleta, botão de cópia de token em 1 clique, integração por `postMessage` bidirecional com a aba do Coindex e auto-fechamento após 3,5 segundos.
+  - **Blindagem do Frontend (`app/page.tsx` e `app/SecondaryTabs.tsx`):**
+    - Validação estrita de `content-type: application/json` antes de efetuar parse do corpo retornado por `/api/strava`, impedindo que respostas 404/HTML de proxies quebrem a aplicação com syntax errors.
+    - Persistência imediata no `localStorage` e no Supabase (`stravaConfig`, `stravaStats` e `stravaActivities`).
+    - Novo componente e tabela de telemetria esportiva **"Minhas Corridas & Treinos Recentes"** na aba Bio, com data formatada, tipo, distância (km), duração (min), pace médio, altimetria (m) e calorias estimadas.
+    - Aviso de upgrade com botão **"🔓 Liberar Atividades Detalhadas (OAuth)"** acionável em popup sem recarregar a aplicação.
 
 ---
 

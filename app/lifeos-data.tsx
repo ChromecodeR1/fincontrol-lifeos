@@ -270,6 +270,18 @@ export interface StravaStats {
   lastSync: string;
 }
 
+export interface StravaActivity {
+  id: string;
+  name: string;
+  type: string;
+  date: string;
+  distanceKm: number;
+  movingTimeMin: number;
+  pace: string;
+  elevationGain: number;
+  calories: number;
+}
+
 export type BrainNotePriority = "Essencial" | "Planejado" | "Desejo";
 export type BrainNoteItemType = "note" | "wish";
 
@@ -364,10 +376,22 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.27.0";
-export const PREVIOUS_VERSION = "0.26.0";
+export const APP_VERSION = "0.28.0";
+export const PREVIOUS_VERSION = "0.27.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.28.0",
+    date: "Nov/2026",
+    title: "Sprint 36: Rota Oficial Strava OAuth2, Suporte a Escopo Read, Callback 1-Clique e Feed de Atividades",
+    highlights: [
+      "Rota Oficial /api/strava: Proxy backend com validação estrita, renovação automática de access token via Strava OAuth2 e busca paralela de perfil, estatísticas e atividades.",
+      "Compatibilidade Dual de Escopo: Suporte tanto a escopo básico (read) via dados consolidados em tempo real quanto a escopo completo (activity:read_all) com feed de corridas.",
+      "Cálculo de Pace Sem Bug de :60: Algoritmo de precisão para minutos e segundos por quilômetro (ex: 5:59/km -> 6:00/km em vez de 5:60/km).",
+      "Callback OAuth2 1-Clique (/api/strava/callback): Interface Cupertino Midnight com troca instantânea de authorization code, postMessage bidirecional e auto-fechamento.",
+      "Blindagem Frontend & Feed de Atividades: Verificação estrita de content-type application/json, salvamento imediato do token rotacionado e exibição do histórico de corridas na aba Bio."
+    ]
+  },
   {
     version: "0.27.0",
     date: "Nov/2026",
