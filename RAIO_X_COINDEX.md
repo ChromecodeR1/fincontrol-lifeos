@@ -662,6 +662,25 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - Persistência imediata no `localStorage` e no Supabase (`stravaConfig`, `stravaStats` e `stravaActivities`).
     - Novo componente e tabela de telemetria esportiva **"Minhas Corridas & Treinos Recentes"** na aba Bio, com data formatada, tipo, distância (km), duração (min), pace médio, altimetria (m) e calorias estimadas.
     - Aviso de upgrade com botão **"🔓 Liberar Atividades Detalhadas (OAuth)"** acionável em popup sem recarregar a aplicação.
+- **Sprint 37 (Novembro de 2026 — Ingestão Bancária CSV/OFX, Mobile PWA & Bottom Bar, Simulador "Posso Comprar?", Fluidez 120Hz e Cibersegurança Zero-Trust):**
+  - **Frente 1 (Rafael Albuquerque — Ingestão Bancária em `app/lib/domain/bank-ingest.ts` e `app/TransactionsTableAdvanced.tsx`):**
+    - Parser client-side determinístico para extratos `.csv` (Nubank, Inter, BTG, C6, genéricos) e `.ofx` padrão Open Financial Exchange.
+    - Geração de chave única `externalId` (`${date}_${toCents(amount)}_${normalizedDesc}`) para detecção e separação automática de transações novas vs. duplicadas.
+    - Motor inteligente de auto-categorização baseado em catálogo oficial (Uber, iFood, Combustível, Supermercado, Assinaturas, etc.).
+    - Botão `"📥 Importar Extrato (CSV/OFX)"` na barra superior com modal de drag-and-drop, preview detalhado e confirmação em lote em 1 clique.
+  - **Frente 2 (Bianca Takahashi — Mobile PWA & Bottom Bar em `public/manifest.json`, `app/layout.tsx`, `app/page.tsx` e `app/TransactionsTableAdvanced.tsx`):**
+    - Manifesto PWA oficial (`public/manifest.json`) com tema `#0B0E14` e modo standalone vinculado aos metadados Apple no `app/layout.tsx`.
+    - Cupertino Mobile Bottom Navigation Bar (`lg:hidden fixed bottom-0 left-0 right-0 z-50`) com backdrop-blur-2xl e 5 atalhos para polegar (`Dashboard`, `Lançamentos`, botão central elevado `+ Novo`, `Veículos` e `Cartões`).
+    - Visão responsiva em Cards Táteis Compactos (`md:hidden`) na tabela de lançamentos, mantendo a tabela completa em `hidden md:block`.
+  - **Frente 3 (Ícaro Vasconcelos — Simulador "Posso Comprar?" em `app/lib/domain/purchase-simulator.ts` e `app/SecondaryTabs.tsx`):**
+    - Motor preditivo puro calculando valor de parcelas (`1x` a `12x`), nova Cota Diária livre (`R$/dia`) com delta de redução e custo de oportunidade em 12 meses a `115% do CDI` na Caixinha Turbo.
+    - Painel interativo na aba Segundo Cérebro (`activeTab === "brain"`), permitindo carregar desejos de compra em 1 clique e receber veredito comportamental (`APROVADO TRANQUILO`, `ATENÇÃO AO TETO MENSAL`, `RECOMENDADO ADIAR`).
+  - **Frente 4 (Davi Kroner — Fluidez 120Hz em `app/TransactionsTableAdvanced.tsx` e `app/globals.css`):**
+    - Utilização de `useDeferredValue` do React para que a digitação nas buscas textuais ocorra a 120fps com latência zero de teclado.
+    - Otimização de renderização acelerada por GPU (`transform: translateZ(0)`, `backface-visibility: hidden`) e respeito estrito a `@media (prefers-reduced-motion: reduce)`.
+  - **Frente 5 (Letícia Varella — Cibersegurança Zero-Trust em `next.config.ts` e `supabase/migrations/0001_coindex_zero_trust_rls.sql`):**
+    - Headers de segurança HTTP estritos no `next.config.ts` (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Robots-Tag: noindex, nofollow`, `Permissions-Policy`).
+    - DDL e políticas documentadas de Row Level Security (RLS) estritas em todas as 9 tabelas do Supabase, com índices compostos por `(user_id, date)`.
 
 ---
 

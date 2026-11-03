@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useDeferredValue } from "react";
 import {
   Search,
   Filter,
   Download,
   Plus,
+  Upload,
   RotateCcw,
   ArrowUp,
   ArrowDown,
@@ -16,7 +17,10 @@ import {
   CreditCard,
   Pencil,
   Trash2,
-  ChevronDown
+  ChevronDown,
+  X,
+  FileText,
+  Check
 } from "lucide-react";
 import {
   Transaction,
@@ -29,6 +33,11 @@ import {
   renderCategorySemanticIcon,
   normalizeSearchText
 } from "./lifeos-data";
+import {
+  parseBankStatementFile,
+  BankIngestResult,
+  ParsedBankTransaction
+} from "./lib/domain/bank-ingest";
 
 export type TxSortKey = "date" | "description" | "category" | "costType" | "paymentMethod" | "km" | "status" | "amount";
 export type SortDirection = "asc" | "desc";
@@ -54,6 +63,7 @@ export interface TransactionsTableAdvancedProps {
   handleExportCSV: () => void;
   handleOpenNewTxModal?: () => void;
   onNewTransaction?: () => void;
+  onBatchImportTransactions?: (txs: Transaction[]) => void;
   handleToggleStatus: (tx: Transaction) => void;
   handleStartEditTransaction: (tx: Transaction) => void;
   handleDeleteTransaction: (id: string) => void;
@@ -289,11 +299,20 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
   handleExportCSV,
   handleOpenNewTxModal,
   onNewTransaction,
+  onBatchImportTransactions,
   handleToggleStatus,
   handleStartEditTransaction,
   handleDeleteTransaction,
   getFlowType
 }) => {
+  // SPRINT 37: Fluidez 120Hz via useDeferredValue no Input de Busca (Davi Kroner)
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  // SPRINT 37: Estados da Modal de Ingestão Bancária CSV/OFX (Rafael Albuquerque)
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [ingestResult, setIngestResult] = useState<BankIngestResult | null>(null);
+  const [isParsingFile, setIsParsingFile] = useState(false);
+
   // Configurações de ordenação e filtros
   const [sortConfig, setSortConfig] = useState<{ key: TxSortKey; dir: SortDirection } | null>({
     key: "date",
@@ -327,9 +346,61 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
     [filteredTransactions]
   );
 
-  // 1. Filtragem combinada por múltiplas colunas (com useMemo estrito)
+  // Leitura do arquivo de extrato (.csv ou .ofx)
+  const handleFileUpload = useCallback(async (file: File) => {
+    if (!file) return;
+    setIsParsingFile(true);
+    try {
+      const text = await file.text();
+      const res = parseBankStatementFile(text, file.name, filteredTransactions);
+      setIngestResult(res);
+    } catch (err) {
+      console.error("Erro ao analisar extrato bancário:", err);
+    } finally {
+      setIsParsingFile(false);
+    }
+  }, [filteredTransactions]);
+
+  // Confirmação da importação em lote
+  const handleConfirmBatchImport = useCallback(() => {
+    if (!ingestResult || !onBatchImportTransactions) return;
+    const toImport = ingestResult.transactions.filter((t) => t.selected);
+    if (toImport.length === 0) return;
+
+    const newTxs: Transaction[] = toImport.map((p) => ({
+      id: `tx-ingest-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      date: p.date,
+      description: p.description,
+      amount: p.amount,
+      category: p.category,
+      costType: p.costType,
+      paymentMethod: p.paymentMethod,
+      status: p.status,
+      flowType: p.flowType,
+      externalId: p.externalId,
+      notes: `Importado via Extrato (${ingestResult.bankName})`
+    }));
+
+    onBatchImportTransactions(newTxs);
+    setIsImportModalOpen(false);
+    setIngestResult(null);
+  }, [ingestResult, onBatchImportTransactions]);
+
+  // 1. Filtragem combinada por múltiplas colunas e busca diferida a 120fps
   const processedTxs = useMemo(() => {
+    const q = normalizeSearchText(deferredSearchQuery);
     let result = filteredTransactions.filter((tx) => {
+      // Busca textual a 120Hz sem bloquear a digitação
+      if (q) {
+        const desc = normalizeSearchText(tx.description);
+        const cat = normalizeSearchText(tx.category);
+        const meth = normalizeSearchText(tx.paymentMethod);
+        const debtor = normalizeSearchText(tx.debtor || "");
+        const brDate = normalizeSearchText(formatDateBR(tx.date));
+        if (!desc.includes(q) && !cat.includes(q) && !meth.includes(q) && !debtor.includes(q) && !brDate.includes(q)) {
+          return false;
+        }
+      }
       // Filtro rápido de situação
       if (txStatusFilter === "PAGO" && tx.status !== "Pago") return false;
       if (txStatusFilter === "PENDENTE" && (tx.status === "Pago" || tx.status === "Na Fatura")) return false;
@@ -596,10 +667,19 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
           <button
             type="button"
             onClick={exportTableCSV}
-            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-slate-200 font-bold flex items-center gap-1.5 transition"
+            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-slate-200 font-bold flex items-center gap-1.5 transition cursor-pointer"
             title="Exportar planilha compatível com Microsoft Excel"
           >
             <Download className="w-3.5 h-3.5 text-indigo-400" /> Exportar CSV
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsImportModalOpen(true)}
+            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-slate-200 font-bold flex items-center gap-1.5 transition cursor-pointer"
+            title="Importar extrato bancário em formato CSV ou OFX"
+          >
+            <Upload className="w-3.5 h-3.5 text-emerald-400" /> Importar Extrato (CSV/OFX)
           </button>
 
           <button
@@ -671,11 +751,142 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
         </div>
       )}
 
-      <div
-        className={`rounded-2xl border border-white/[0.06] transition-all relative ${
-          activeFilterPopover ? "z-[80] min-h-[380px] overflow-visible pb-20" : "z-10 overflow-x-auto"
-        }`}
-      >
+      {/* SPRINT 37: VISÃO RESPONSIVA EM CARDS TÁTEIS COMPACTOS (md:hidden - Bianca Takahashi) */}
+      <div className="md:hidden space-y-2.5">
+        {processedTxs.length === 0 ? (
+          <div className="p-8 text-center text-xs text-slate-400 glass-card rounded-2xl border border-white/[0.06]">
+            Nenhum lançamento encontrado para os filtros selecionados.
+          </div>
+        ) : (
+          visibleTxs.map((tx) => {
+            const flow = getFlowType(tx.category);
+            const inst = parseInstallmentInfo(tx);
+            const label = tx.installmentInfo || (inst.current && inst.total ? `${inst.current}/${inst.total}` : null);
+            const displayName = inst.isInstallment && label ? inst.baseDescription : tx.description;
+            const isIncome = flow === "INCOME";
+            const isInvestment = flow === "INVESTMENT";
+            const catColor = categoryColors[tx.category] || "#6366f1";
+
+            return (
+              <div
+                key={`mobile-${tx.id}`}
+                className="glass-card p-3.5 rounded-2xl border border-white/[0.08] space-y-2.5 shadow-sm active:scale-[0.99] transition-transform"
+              >
+                {/* Linha 1: Data + Categoria + Status */}
+                <div className="flex items-center justify-between text-xs gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono tabular-nums text-slate-400 text-[11px]">
+                      {formatDateBR(tx.date)}
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                      style={{
+                        backgroundColor: `${catColor}15`,
+                        color: catColor,
+                        border: `1px solid ${catColor}30`
+                      }}
+                    >
+                      {renderCategorySemanticIcon(tx.category)}
+                      <span className="truncate max-w-[120px]">{tx.category}</span>
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleStatus(tx)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 transition-all cursor-pointer ${
+                      tx.status === "Pago"
+                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                        : tx.status === "Na Fatura" || tx.status === "Pendente / Na Fatura"
+                        ? "bg-indigo-500/15 text-indigo-300 border-indigo-500/30"
+                        : "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                    }`}
+                  >
+                    {tx.status === "Pago" ? (
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <Clock className="w-3 h-3 text-amber-400" />
+                    )}
+                    <span>{tx.status}</span>
+                  </button>
+                </div>
+
+                {/* Linha 2: Descrição + Valor Tabular */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-0.5 flex-1 min-w-0">
+                    <strong className="text-white text-xs font-semibold block truncate">
+                      {displayName}
+                    </strong>
+                    {label && (
+                      <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30">
+                        {label}
+                      </span>
+                    )}
+                    {(tx.cardUsed || tx.bankAccount) && (
+                      <span className="text-[11px] text-slate-400 block truncate">
+                        {tx.cardUsed ? `💳 ${tx.cardUsed}` : `🏦 ${tx.bankAccount}`}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <strong
+                      className={`text-sm font-bold font-mono tabular-nums block ${
+                        isIncome
+                          ? "text-emerald-400"
+                          : isInvestment
+                          ? "text-blue-400"
+                          : "text-white"
+                      } ${moneyBlur}`}
+                    >
+                      {isIncome ? "+" : isInvestment ? "⚡ " : ""}
+                      {formatBRL(tx.amount)}
+                    </strong>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {tx.costType}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Linha 3: Método + Ações */}
+                <div className="flex items-center justify-between pt-1.5 border-t border-white/[0.05] text-[11px]">
+                  <span className="text-slate-400 truncate max-w-[150px]">
+                    {tx.paymentMethod}
+                    {tx.debtor && ` • Dev: ${tx.debtor}`}
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditTransaction(tx)}
+                      className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/25 transition cursor-pointer"
+                      title="Editar lançamento"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTransaction(tx.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                      title="Excluir lançamento"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* VISÃO DESKTOP EM TABELA COMPLETA (hidden md:block) */}
+      <div className="hidden md:block">
+        <div
+          className={`rounded-2xl border border-white/[0.06] transition-all relative ${
+            activeFilterPopover ? "z-[80] min-h-[380px] overflow-visible pb-20" : "z-10 overflow-x-auto"
+          }`}
+        >
         <table className="w-full text-left border-collapse text-xs">
           <thead className="relative z-30">
             <tr className="border-b border-white/[0.08] bg-slate-950/80 text-slate-400">
@@ -1175,6 +1386,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
           </tbody>
         </table>
       </div>
+      </div>
 
       {/* Controle de Renderização Progressiva (Virtual Windowing Controls) */}
       {processedTxs.length > visibleCount && (
@@ -1199,6 +1411,211 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
             >
               Exibir Todos ({processedTxs.length})
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* SPRINT 37: MODAL DE INGESTÃO BANCÁRIA CSV / OFX (Rafael Albuquerque) */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl glass-card rounded-3xl border border-white/10 shadow-2xl p-6 space-y-4 max-h-[90vh] flex flex-col animate-cupertino-in">
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-white">Importar Extrato Bancário</h3>
+                  <p className="text-xs text-slate-400">Parser automático para arquivos .OFX e .CSV de qualquer banco com auto-categorização</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setIngestResult(null);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Conteúdo: Dropzone ou Preview */}
+            {!ingestResult ? (
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleFileUpload(e.dataTransfer.files[0]);
+                  }
+                }}
+                className="border-2 border-dashed border-white/20 hover:border-emerald-500/50 rounded-2xl p-8 text-center space-y-3 bg-slate-950/40 transition-colors"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center mx-auto">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Arraste seu arquivo .OFX ou .CSV</h4>
+                  <p className="text-xs text-slate-400 mt-1">Compatível com Nubank, Inter, BTG Pactual, C6, Itaú, Bradesco e extratos padrão</p>
+                </div>
+                <div>
+                  <label className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold inline-flex items-center gap-2 cursor-pointer shadow-lg transition">
+                    <FileText className="w-4 h-4" />
+                    <span>{isParsingFile ? "Analisando Extrato..." : "Selecionar do Computador"}</span>
+                    <input
+                      type="file"
+                      accept=".csv,.ofx"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleFileUpload(e.target.files[0]);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+                {/* Resumo da Ingestão */}
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                      {ingestResult.bankName} ({ingestResult.format})
+                    </span>
+                    <span className="text-slate-300">
+                      <strong>{ingestResult.totalCount}</strong> linhas detectadas
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-emerald-400 font-bold">
+                      {ingestResult.newCount} novas
+                    </span>
+                    <span className="text-amber-400 font-bold">
+                      {ingestResult.duplicateCount} já existentes (duplicadas)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tabela de Preview */}
+                <div className="flex-1 overflow-y-auto rounded-2xl border border-white/10 max-h-72">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 bg-slate-950 z-10 border-b border-white/10 text-slate-400">
+                      <tr>
+                        <th className="p-2.5 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={ingestResult.transactions.length > 0 && ingestResult.transactions.every((t) => t.selected)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setIngestResult({
+                                ...ingestResult,
+                                transactions: ingestResult.transactions.map((t) => ({ ...t, selected: checked }))
+                              });
+                            }}
+                            className="accent-emerald-500 rounded"
+                          />
+                        </th>
+                        <th className="p-2.5">Status</th>
+                        <th className="p-2.5">Data</th>
+                        <th className="p-2.5">Descrição</th>
+                        <th className="p-2.5">Categoria</th>
+                        <th className="p-2.5 text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.05]">
+                      {ingestResult.transactions.map((t, idx) => (
+                        <tr key={t.id || idx} className="hover:bg-white/[0.02] transition">
+                          <td className="p-2.5 text-center">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(t.selected)}
+                              onChange={(e) => {
+                                const next = [...ingestResult.transactions];
+                                next[idx] = { ...next[idx], selected: e.target.checked };
+                                setIngestResult({ ...ingestResult, transactions: next });
+                              }}
+                              className="accent-emerald-500 rounded"
+                            />
+                          </td>
+                          <td className="p-2.5">
+                            {t.isDuplicate ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                Duplicada
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                Nova
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2.5 font-mono tabular-nums text-slate-300 whitespace-nowrap">
+                            {t.date}
+                          </td>
+                          <td className="p-2.5 font-medium text-white max-w-[200px] truncate" title={t.description}>
+                            {t.description}
+                          </td>
+                          <td className="p-2.5">
+                            <input
+                              type="text"
+                              value={t.category}
+                              onChange={(e) => {
+                                const next = [...ingestResult.transactions];
+                                next[idx] = { ...next[idx], category: e.target.value };
+                                setIngestResult({ ...ingestResult, transactions: next });
+                              }}
+                              className="px-2 py-1 rounded bg-slate-900 border border-white/10 text-xs text-white outline-none w-32"
+                            />
+                          </td>
+                          <td className={`p-2.5 text-right font-bold font-mono tabular-nums whitespace-nowrap ${
+                            t.flowType === "INCOME" ? "text-emerald-400" : "text-white"
+                          }`}>
+                            {t.flowType === "INCOME" ? "+" : "-"} {formatBRL(t.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Rodapé da Modal com Confirmação */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setIngestResult(null)}
+                    className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs text-slate-300 border border-white/10 font-semibold transition"
+                  >
+                    ← Trocar Arquivo
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsImportModalOpen(false);
+                        setIngestResult(null);
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmBatchImport}
+                      disabled={!ingestResult.transactions.some((t) => t.selected)}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Confirmar Importação ({ingestResult.transactions.filter((t) => t.selected).length})</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

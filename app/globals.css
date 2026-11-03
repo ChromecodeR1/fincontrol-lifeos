@@ -362,3 +362,16 @@ select:focus-visible {
   position: fixed !important;
   z-index: 9999 !important;
 }
+
+/* SPRINT 37: Otimização de GPU & Fluidez 120Hz (Davi Kroner) */
+.glass-card,
+.dashboard-root-wrapper,
+.card-elevation-context,
+.animate-cupertino-in {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+  -webkit-perspective: 1000px;
+}

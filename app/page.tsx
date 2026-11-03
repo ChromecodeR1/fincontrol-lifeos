@@ -53,7 +53,8 @@ import {
   Clock,
   CheckCheck,
   ArrowRightLeft,
-  ShieldCheck
+  ShieldCheck,
+  Table2
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -2847,6 +2848,22 @@ export default function CoindexApp() {
       "FINANCE"
     );
   }, [selectedMonth, banks, debtorMap, notify]);
+
+  // SPRINT 37: Importação em Lote de Extrato Bancário (Rafael Albuquerque)
+  const handleBatchImportTransactions = useCallback(
+    (newTxs: Transaction[]) => {
+      if (!newTxs || newTxs.length === 0) return;
+      setTransactions((prev) => [...newTxs, ...prev]);
+      void upsertTransactionsInDb(newTxs, debtorMap);
+      notify(
+        "Extrato Importado!",
+        `${newTxs.length} lançamentos adicionados com sucesso à sua base.`,
+        "success",
+        "FINANCE"
+      );
+    },
+    [debtorMap, notify]
+  );
 
   // SPRINT 31: Helper de Gradiente das Marcas de Cartões Apple Wallet
   const getCardGradient = useCallback((cardName: string, bankName?: string): string => {
@@ -7536,6 +7553,9 @@ export default function CoindexApp() {
               setSearchQuery={setSearchQuery}
               handleExportCSV={handleExportCSV}
               handleOpenNewTxModal={handleOpenNewTxModal}
+              onBatchImportTransactions={handleBatchImportTransactions}
+              dailyQuotaInfo={dailyQuotaInfo}
+              cdiAnnualRate={marketRates.cdiAnnualRate}
               getFlowType={getFlowType}
               banks={banks}
               editingBankId={editingBankId}
@@ -7669,6 +7689,67 @@ export default function CoindexApp() {
           )}
         </main>
       </div>
+
+      {/* SPRINT 37: CUPERTINO MOBILE BOTTOM BAR (Bianca Takahashi) */}
+      <nav
+        aria-label="Navegação Rápida Mobile"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0B0E14]/85 backdrop-blur-2xl border-t border-[var(--cupertino-border)] px-4 py-2 flex items-center justify-around shadow-[0_-8px_24px_rgba(0,0,0,0.5)]"
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom, 8px), 10px)" }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab("dashboard")}
+          className={`flex flex-col items-center gap-1 transition-colors ${
+            activeTab === "dashboard" ? "text-[#0A84FF] font-semibold" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Dashboard</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("transactions")}
+          className={`flex flex-col items-center gap-1 transition-colors ${
+            activeTab === "transactions" ? "text-[#0A84FF] font-semibold" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <Table2 className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Lançamentos</span>
+        </button>
+
+        {/* Botão Central Destacado + Novo */}
+        <button
+          type="button"
+          onClick={() => handleOpenNewTxModal()}
+          className="w-12 h-12 -mt-5 rounded-full bg-[#0A84FF] hover:bg-[#0070E0] text-white flex items-center justify-center shadow-lg shadow-[#0A84FF]/40 active:scale-95 transition-transform cursor-pointer border-2 border-[#0B0E14]"
+          title="Novo Lançamento"
+        >
+          <Plus className="w-6 h-6 stroke-[2.5]" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("auto")}
+          className={`flex flex-col items-center gap-1 transition-colors ${
+            activeTab === "auto" ? "text-[#0A84FF] font-semibold" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <Car className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Veículos</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("cards")}
+          className={`flex flex-col items-center gap-1 transition-colors ${
+            activeTab === "cards" ? "text-[#0A84FF] font-semibold" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <CreditCard className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Cartões</span>
+        </button>
+      </nav>
 
       {/* COMMAND PALETTE MODAL (CTRL + K) */}
       {showCommandModal && (

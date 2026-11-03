@@ -33,6 +33,7 @@ import {
   DEFAULT_CHART_WIDGET_SETTINGS
 } from "./components/ChartSettingsPopover";
 import { TransactionsTableAdvanced } from "./TransactionsTableAdvanced";
+import { simulatePurchaseImpact } from "./lib/domain/purchase-simulator";
 import { BanksTab } from "./components/BanksTab";
 import { VehiclesTab } from "./components/VehiclesTab";
 
@@ -106,6 +107,9 @@ export interface SecondaryTabsProps {
   setSearchQuery: (q: string) => void;
   handleExportCSV: () => void;
   handleOpenNewTxModal: (defaultCategory?: string) => void;
+  onBatchImportTransactions?: (txs: Transaction[]) => void;
+  dailyQuotaInfo?: { dailyBudget: number; remainingDays: number; remainingFree: number };
+  cdiAnnualRate?: number;
   getFlowType: (cat: string) => FlowType;
   banks: BankItem[];
   editingBankId: string | null;
@@ -239,7 +243,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     activeTab, moneyBlur, currentUser, currentUserAvatar, themeMode, changeThemeMode,
     setShowChangelogModal, staticStatus, editingStatusId, setEditingStatusId, newStatusItem,
     setNewStatusItem, handleSaveStaticStatus, saveStaticStatus, filteredTransactions, transactions,
-    searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, getFlowType,
+    searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, onBatchImportTransactions, dailyQuotaInfo, cdiAnnualRate, getFlowType,
     banks, editingBankId, setEditingBankId, newBank, setNewBank, handleSaveBank, handleDeleteBank,
     cards, categoryColors, handleToggleStatus, handleStartEditTransaction, handleDeleteTransaction,
     receivableItems, receivablesAnalytics, handleAssignDebtor, handlePartialPaymentReceivable,
@@ -272,6 +276,11 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   const [logSearch, setLogSearch] = useState("");
   const [showStravaSecrets, setShowStravaSecrets] = useState(false);
   const [isLaunchingFixed, setIsLaunchingFixed] = useState(false);
+
+  // SPRINT 37: Estados do Simulador "Posso Comprar?" (Ícaro Vasconcelos)
+  const [simulatedPrice, setSimulatedPrice] = useState<string>("350");
+  const [simulatedInstallments, setSimulatedInstallments] = useState<number>(1);
+  const [selectedSimulatedWishId, setSelectedSimulatedWishId] = useState<string | null>(null);
 
   // Estados de Edição de Métodos de Pagamento e Categorias (Requisito 4)
   const [editingMethodName, setEditingMethodName] = useState<string | null>(null);
@@ -538,6 +547,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         handleExportCSV={handleExportCSV}
         handleOpenNewTxModal={handleOpenNewTxModal}
         onNewTransaction={handleOpenNewTxModal}
+        onBatchImportTransactions={onBatchImportTransactions}
         handleToggleStatus={handleToggleStatus}
         handleStartEditTransaction={handleStartEditTransaction}
         handleDeleteTransaction={handleDeleteTransaction}
@@ -1376,6 +1386,185 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </div>
           </div>
         </div>
+
+        {/* SPRINT 37: SEÇÃO 2.5 — SIMULADOR PREDITIVO "POSSO COMPRAR?" (Ícaro Vasconcelos) */}
+        {(() => {
+          const remainingDays = dailyQuotaInfo?.remainingDays || 15;
+          const freeBalance = dailyQuotaInfo?.remainingFree || (personalBudgetLimit > 0 ? personalBudgetLimit * 0.4 : 1200);
+          const dailyQuota = dailyQuotaInfo?.dailyBudget || (personalBudgetLimit > 0 ? personalBudgetLimit / 30 : 65);
+          const cdiRate = cdiAnnualRate || 0.1215;
+          const parsedPrice = parseFloat(simulatedPrice) || 0;
+          const simResult = simulatePurchaseImpact({
+            itemPrice: parsedPrice,
+            installments: simulatedInstallments,
+            freeMonthlyBalance: freeBalance,
+            dailyQuota,
+            remainingDays,
+            cdiAnnualRate: cdiRate
+          });
+
+          return (
+            <div className="glass-card p-5 sm:p-6 rounded-3xl border border-amber-500/25 space-y-4 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                      🧠 Simulador Preditivo: Posso Comprar?
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        IA Comportamental
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Analise instantaneamente o impacto de qualquer compra sobre a sua Cota Diária e compare com o rendimento CDI.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-400">
+                    Cota Diária Base: <strong className="text-white font-mono tabular-nums">{formatBRL(dailyQuota)}/dia</strong> ({remainingDays} dias rest.)
+                  </span>
+                </div>
+              </div>
+
+              {/* Pílulas de Seleção Rápida a partir dos Desejos Cadastrados */}
+              {wishItems.filter((w) => !w.completed && w.price && w.price > 0).length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Carregar Desejo Cadastrado:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                    {wishItems
+                      .filter((w) => !w.completed && w.price && w.price > 0)
+                      .map((wish) => (
+                        <button
+                          key={`sim-wish-${wish.id}`}
+                          type="button"
+                          onClick={() => {
+                            setSimulatedPrice(String(wish.price || 0));
+                            setSelectedSimulatedWishId(wish.id);
+                          }}
+                          className={`px-2.5 py-1 rounded-xl text-xs font-medium border transition flex items-center gap-1.5 cursor-pointer ${
+                            selectedSimulatedWishId === wish.id
+                              ? "bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm"
+                              : "bg-slate-900/90 text-slate-300 hover:text-white border-white/10"
+                          }`}
+                        >
+                          <span>{wish.title}</span>
+                          <strong className="font-mono tabular-nums text-[11px]">
+                            {formatBRL(wish.price || 0)}
+                          </strong>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Controles de Entrada: Valor e Parcelamento */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-300">Valor do Item (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Ex: 350,00"
+                    value={simulatedPrice}
+                    onChange={(e) => {
+                      setSimulatedPrice(e.target.value);
+                      setSelectedSimulatedWishId(null);
+                    }}
+                    className={inputClass}
+                  />
+                </div>
+
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-[11px] font-bold text-slate-300">Condição de Pagamento</label>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[1, 2, 3, 6, 10, 12].map((num) => (
+                      <button
+                        key={`installment-${num}`}
+                        type="button"
+                        onClick={() => setSimulatedInstallments(num)}
+                        className={`flex-1 min-w-[55px] py-2 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                          simulatedInstallments === num
+                            ? "bg-[#0A84FF] text-white border-[#0A84FF] shadow-sm"
+                            : "bg-slate-900 text-slate-400 hover:text-white border-white/10"
+                        }`}
+                      >
+                        {num === 1 ? "1x (À vista)" : `${num}x`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Painel de Resultados: 3 Mini KPIs + Veredito */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
+                    {simulatedInstallments === 1 ? "Impacto à Vista" : "Parcela Mensal"}
+                  </span>
+                  <strong className="text-base font-extrabold font-mono tabular-nums text-white">
+                    {formatBRL(simResult.monthlyImpact)}
+                  </strong>
+                  <span className="text-[10px] text-slate-400 block">
+                    {simulatedInstallments > 1
+                      ? `${simResult.installments}x de ${formatBRL(simResult.installmentAmount)}`
+                      : "Pagamento único no mês"}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
+                    Nova Cota Diária
+                  </span>
+                  <strong className="text-base font-extrabold font-mono tabular-nums text-emerald-400">
+                    {formatBRL(simResult.newDailyQuota)} / dia
+                  </strong>
+                  <span className="text-[10px] text-rose-400 font-bold block">
+                    -{formatBRL(simResult.dailyQuotaReduction)}/dia de margem
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
+                    Custo de Oportunidade CDI
+                  </span>
+                  <strong className="text-base font-extrabold font-mono tabular-nums text-indigo-400">
+                    +{formatBRL(simResult.cdi12mOpportunityCost)}
+                  </strong>
+                  <span className="text-[10px] text-slate-400 block">
+                    Em 12M na Caixinha Turbo (115% CDI)
+                  </span>
+                </div>
+              </div>
+
+              {/* Veredito Comportamental da IA */}
+              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${simResult.verdictBadgeColor}`}>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md font-extrabold text-[11px] tracking-wide uppercase border bg-white/10">
+                      {simResult.verdict}
+                    </span>
+                    <span className="font-mono tabular-nums text-[11px] font-bold">
+                      Índice de Segurança: {simResult.verdictScore}/100
+                    </span>
+                  </div>
+                  <p className="text-slate-200 text-xs">
+                    {simResult.verdictMessage}
+                  </p>
+                  <p className="text-[11px] font-medium text-amber-200">
+                    💡 <strong>Dica da IA:</strong> {simResult.recommendation}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* SEÇÃO 3: MURAL DE ANOTAÇÕES, OBJETIVOS & LISTA DE DESEJOS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4 border-t border-white/[0.07]">

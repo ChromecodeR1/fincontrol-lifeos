@@ -164,6 +164,7 @@ export interface Transaction {
   notes?: string;
   indexer?: string;
   cdiPercentage?: number;
+  externalId?: string;
   deletedAt?: string;
   rev?: number;
 }
@@ -383,13 +384,15 @@ export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
     version: "0.28.0",
     date: "Nov/2026",
-    title: "Sprint 36: Rota Oficial Strava OAuth2, Suporte a Escopo Read, Callback 1-Clique e Feed de Atividades",
+    title: "Sprint 37: Ingestão Bancária CSV/OFX, Mobile PWA & Bottom Bar, Simulador Posso Comprar?, Fluidez 120Hz e Cibersegurança Zero-Trust",
     highlights: [
-      "Rota Oficial /api/strava: Proxy backend com validação estrita, renovação automática de access token via Strava OAuth2 e busca paralela de perfil, estatísticas e atividades.",
-      "Compatibilidade Dual de Escopo: Suporte tanto a escopo básico (read) via dados consolidados em tempo real quanto a escopo completo (activity:read_all) com feed de corridas.",
-      "Cálculo de Pace Sem Bug de :60: Algoritmo de precisão para minutos e segundos por quilômetro (ex: 5:59/km -> 6:00/km em vez de 5:60/km).",
-      "Callback OAuth2 1-Clique (/api/strava/callback): Interface Cupertino Midnight com troca instantânea de authorization code, postMessage bidirecional e auto-fechamento.",
-      "Blindagem Frontend & Feed de Atividades: Verificação estrita de content-type application/json, salvamento imediato do token rotacionado e exibição do histórico de corridas na aba Bio."
+      "Ingestão Bancária CSV/OFX: Parser client-side determinístico com deduplicação automática (externalId) e motor inteligente de auto-categorização por palavras-chave.",
+      "Modal de Importação de Extrato: Modal interativo com dropzone, separação clara entre novas transações e duplicadas e confirmação em lote em 1 clique.",
+      "Mobile PWA & Bottom Navigation Bar: Manifest standalone, suporte a PWA e barra de navegação inferior ergonômica com 5 atalhos para polegar e botão central + Novo destacado.",
+      "Visão Mobile em Cards Táteis: Interface responsiva (md:hidden) com cards compactos, badges de status interativas e botões de ação ágeis.",
+      "Simulador 'Posso Comprar?': Painel com IA comportamental calculando impacto na Cota Diária (R$/dia), custo de oportunidade a 115% CDI e veredito em 3 níveis.",
+      "Fluidez 120Hz & Otimização de GPU: useDeferredValue para buscas com latência zero e aceleração por hardware nos cards Bento Grid.",
+      "Cibersegurança Zero-Trust: Headers estritos (X-Frame-Options DENY, nosniff, strict-origin) e políticas documentadas de Row Level Security."
     ]
   },
   {

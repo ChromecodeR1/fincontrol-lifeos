@@ -4,10 +4,16 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Coindex — Personal Finance & BI",
   description: "Sistema financeiro pessoal, Business Intelligence patrimonial e telemetria automotiva estilo Apple Copilot Pure.",
+  manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",
     shortcut: "/icon.svg",
     apple: "/icon.svg"
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Coindex"
   }
 };
 
