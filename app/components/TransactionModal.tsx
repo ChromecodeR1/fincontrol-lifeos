@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Fuel, Wallet, X, Layers, Gauge, CreditCard, Loader2, ArrowLeftRight, Users, Sparkles, Plus, TrendingUp } from "lucide-react";
 import {
   BankItem,
@@ -289,275 +290,285 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+  const modalContent = (
+    <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 p-6 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] space-y-4 text-xs"
+        className="relative w-full max-w-lg max-h-[86dvh] flex flex-col overflow-hidden rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl my-auto text-xs"
       >
-        <div className="flex items-center justify-between border-b border-white/10 pb-3">
-          <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-            {formState.isTransfer ? (
-          <div className="space-y-3.5">
-            <div className="p-3.5 rounded-2xl bg-sky-950/50 border border-sky-500/30 text-sky-200 text-xs space-y-1">
-              <strong className="flex items-center gap-1.5 text-white">
-                <ArrowLeftRight className="w-4 h-4 text-sky-400" /> Transferência Neutra entre Contas Bancárias
-              </strong>
-              <p className="text-[11px] text-slate-300">
-                O valor é debitado da conta de origem e creditado na conta de destino sem inflar receitas ou despesas consolidadas do mês.
-              </p>
-            </div>
+        {/* Cabeçalho Fixo no Topo */}
+        <div className="shrink-0 px-5 pt-4 pb-3 border-b border-[var(--cupertino-border)] space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+              {formState.isTransfer ? (
+                <>
+                  <ArrowLeftRight className="w-4 h-4 text-sky-400" />
+                  <span>{editingTxId ? "Editar Transferência" : "Transferência entre Contas"}</span>
+                </>
+              ) : isPostoExpress ? (
+                <>
+                  <Fuel className="w-4 h-4 text-amber-400" />
+                  <span>{editingTxId ? "Editar Abastecimento" : "Posto Express (Abastecimento)"}</span>
+                </>
+              ) : (
+                <span>{editingTxId ? "Editar Lançamento" : "Novo Lançamento"}</span>
+              )}
+            </h3>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-slate-300 font-bold block mb-1">Conta de Origem (Sai de) *</label>
-                <select
-                  value={formState.sourceBank || formState.bankAccount || banks[0]?.name || ""}
-                  onChange={(e) => {
-                    const src = e.target.value;
-                    setFormState((prev) => ({
-                      ...prev,
-                      sourceBank: src,
-                      bankAccount: src,
-                      description: `Transferência: ${src} ➔ ${prev.destinationBank || banks[1]?.name || "Conta"}`
-                    }));
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-semibold outline-none focus:border-sky-500 transition"
-                >
-                  {banks.map((b) => (
-                    <option key={b.id} value={b.name}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-slate-300 font-bold block mb-1">Conta de Destino (Entra em) *</label>
-                <select
-                  value={formState.destinationBank || banks[1]?.name || banks[0]?.name || ""}
-                  onChange={(e) => {
-                    const dst = e.target.value;
-                    setFormState((prev) => ({
-                      ...prev,
-                      destinationBank: dst,
-                      description: `Transferência: ${prev.sourceBank || prev.bankAccount || banks[0]?.name || "Conta"} ➔ ${dst}`
-                    }));
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-semibold outline-none focus:border-sky-500 transition"
-                >
-                  {banks.map((b) => (
-                    <option key={b.id} value={b.name}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Alerta de Origem e Destino Iguais */}
-            {(formState.sourceBank || formState.bankAccount) === formState.destinationBank && (
-              <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-[11px] font-bold">
-                ⚠️ O banco de origem e o banco de destino não podem ser o mesmo! Selecione contas bancárias distintas.
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-slate-300 font-bold block text-xs">Data da Transferência *</label>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setFormState((prev) => ({ ...prev, date: todayBR() }))}
-                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
-                    >
-                      Hoje
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormState((prev) => ({ ...prev, date: getYesterdayBR() }))}
-                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
-                    >
-                      Ontem
-                    </button>
-                  </div>
+          {/* Aviso e Controle de Edição em Série para Compras Parceladas */}
+          {editingTxId && isEditingSeries && editingSeriesData && (
+            <div className="rounded-2xl p-3.5 bg-gradient-to-r from-violet-950/70 via-slate-900/90 to-indigo-950/70 border border-violet-500/40 space-y-2 shadow-lg shadow-violet-950/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-violet-400" />
+                  <span className="font-extrabold text-violet-200 text-xs">Compra Parcelada Detectada</span>
                 </div>
+                <span className="px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 font-mono text-[11px] tabular-nums font-bold">
+                  {editingSeriesData.series.length} parcelas na série
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Esta transação faz parte de uma série parcelada ({editingSeriesData.currentInstallment || "?"}/{editingSeriesData.totalInstallments || editingSeriesData.series.length}).
+              </p>
+              <label className="flex items-center gap-2.5 pt-1 cursor-pointer select-none">
                 <input
-                  type="date"
-                  required
-                  value={toSortableISO(formState.date) || formState.date}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, date: formatDateBR(e.target.value) }))}
+                  type="checkbox"
+                  checked={applyToAllSeries}
+                  onChange={(e) => setApplyToAllSeries(e.target.checked)}
+                  className="w-4 h-4 rounded border-violet-500/50 bg-slate-950 text-violet-500 focus:ring-violet-500 accent-violet-500 cursor-pointer"
+                />
+                <span className="font-bold text-white text-xs">
+                  Aplicar alterações em todas as parcelas desta série
+                </span>
+              </label>
+              {applyToAllSeries && (
+                <p className="text-[10px] text-slate-400 pl-6 leading-relaxed">
+                  A Categoria, Forma de Pagamento, Banco/Cartão e o Nome Base serão atualizados em todas as {editingSeriesData.series.length} parcelas. As datas de vencimento e os valores individuais de cada mês serão preservados.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Seletor de Modo: Padrão vs Posto Express vs Transferência */}
+          <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-950 border border-white/10">
+            <button
+              type="button"
+              onClick={() => {
+                setIsPostoExpress(false);
+                setFormState((prev) => ({
+                  ...prev,
+                  isTransfer: false,
+                  category: prev.category === "Transferência entre Contas" ? "Alimentação" : prev.category
+                }));
+              }}
+              className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center cursor-pointer ${
+                !isPostoExpress && !formState.isTransfer
+                  ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Wallet className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Padrão</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsPostoExpress(true);
+                setFormState((prev) => ({
+                  ...prev,
+                  isTransfer: false,
+                  category: "Gasolina/Combustível",
+                  description:
+                    !prev.description || prev.description.toLowerCase().includes("abastecimento")
+                      ? `Abastecimento ${expressFuelType === "Etanol" ? "Etanol" : "Gasolina Comum"}`
+                      : prev.description
+                }));
+              }}
+              className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center cursor-pointer ${
+                isPostoExpress && !formState.isTransfer
+                  ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Fuel className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Posto Express ⛽</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsPostoExpress(false);
+                const defaultSrc = formState.sourceBank || formState.bankAccount || banks[0]?.name || "Nubank";
+                const defaultDst = formState.destinationBank || (banks.find((b) => b.name !== defaultSrc)?.name || banks[1]?.name || banks[0]?.name || "Inter");
+                setFormState((prev) => ({
+                  ...prev,
+                  isTransfer: true,
+                  category: "Transferência entre Contas",
+                  paymentMethod: "PIX",
+                  costType: "Fixo",
+                  sourceBank: defaultSrc,
+                  bankAccount: defaultSrc,
+                  destinationBank: defaultDst,
+                  description: prev.description && !prev.description.includes("Transferência") ? prev.description : `Transferência: ${defaultSrc} ➔ ${defaultDst}`
+                }));
+              }}
+              className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center cursor-pointer ${
+                formState.isTransfer
+                  ? "bg-sky-600 text-white shadow-lg shadow-sky-600/30"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Transferência 🔄</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Formulário Interno com Rolagem Própria */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5 custom-scrollbar">
+          {formState.isTransfer ? (
+            <div className="space-y-3.5">
+              <div className="p-3.5 rounded-2xl bg-sky-950/50 border border-sky-500/30 text-sky-200 text-xs space-y-1">
+                <strong className="flex items-center gap-1.5 text-white">
+                  <ArrowLeftRight className="w-4 h-4 text-sky-400" /> Transferência Neutra entre Contas Bancárias
+                </strong>
+                <p className="text-[11px] text-slate-300">
+                  O valor é debitado da conta de origem e creditado na conta de destino sem inflar receitas ou despesas consolidadas do mês.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Conta de Origem (Sai de) *</label>
+                  <select
+                    value={formState.sourceBank || formState.bankAccount || banks[0]?.name || ""}
+                    onChange={(e) => {
+                      const src = e.target.value;
+                      setFormState((prev) => ({
+                        ...prev,
+                        sourceBank: src,
+                        bankAccount: src,
+                        description: `Transferência: ${src} ➔ ${prev.destinationBank || banks[1]?.name || "Conta"}`
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-semibold outline-none focus:border-sky-500 transition"
+                  >
+                    {banks.map((b) => (
+                      <option key={b.id} value={b.name}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Conta de Destino (Entra em) *</label>
+                  <select
+                    value={formState.destinationBank || banks[1]?.name || banks[0]?.name || ""}
+                    onChange={(e) => {
+                      const dst = e.target.value;
+                      setFormState((prev) => ({
+                        ...prev,
+                        destinationBank: dst,
+                        description: `Transferência: ${prev.sourceBank || prev.bankAccount || banks[0]?.name || "Conta"} ➔ ${dst}`
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-semibold outline-none focus:border-sky-500 transition"
+                  >
+                    {banks.map((b) => (
+                      <option key={b.id} value={b.name}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Alerta de Origem e Destino Iguais */}
+              {(formState.sourceBank || formState.bankAccount) === formState.destinationBank && (
+                <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-[11px] font-bold">
+                  ⚠️ O banco de origem e o banco de destino não podem ser o mesmo! Selecione contas bancárias distintas.
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-300 font-bold block text-xs">Data da Transferência *</label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setFormState((prev) => ({ ...prev, date: todayBR() }))}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                      >
+                        Hoje
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormState((prev) => ({ ...prev, date: getYesterdayBR() }))}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                      >
+                        Ontem
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="date"
+                    required
+                    value={toSortableISO(formState.date) || formState.date}
+                    onChange={(e) => setFormState((prev) => ({ ...prev, date: formatDateBR(e.target.value) }))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-sky-500 transition"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1 text-xs">Valor Transferido (R$) *</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    placeholder="0,00"
+                    value={formState.amount}
+                    onChange={(e) => setFormState((prev) => ({ ...prev, amount: e.target.value }))}
+                    onBlur={() => setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }));
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono tabular-nums text-base font-extrabold outline-none focus:border-sky-500 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">Descrição</label>
+                <input
+                  type="text"
+                  value={formState.description}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="Ex: Transferência de Reserva ou Alocação"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-sky-500 transition"
                 />
               </div>
+
               <div>
-                <label className="text-slate-300 font-bold block mb-1 text-xs">Valor Transferido (R$) *</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  required
-                  placeholder="0,00"
-                  value={formState.amount}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, amount: e.target.value }))}
-                  onBlur={() => setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }));
-                    }
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono tabular-nums text-base font-extrabold outline-none focus:border-sky-500 transition"
-                />
+                <label className="text-slate-300 font-bold block mb-1">Situação</label>
+                <select
+                  value={formState.status}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, status: e.target.value as TxStatus }))}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-sky-500 transition"
+                >
+                  <option value="Pago">Concluída / Efetuada</option>
+                  <option value="Pendente">Pendente / Agendada</option>
+                </select>
               </div>
             </div>
-
-            <div>
-              <label className="text-slate-300 font-bold block mb-1">Descrição</label>
-              <input
-                type="text"
-                value={formState.description}
-                onChange={(e) => setFormState((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="Ex: Transferência de Reserva ou Alocação"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-sky-500 transition"
-              />
-            </div>
-
-            <div>
-              <label className="text-slate-300 font-bold block mb-1">Situação</label>
-              <select
-                value={formState.status}
-                onChange={(e) => setFormState((prev) => ({ ...prev, status: e.target.value as TxStatus }))}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-sky-500 transition"
-              >
-                <option value="Pago">Concluída / Efetuada</option>
-                <option value="Pendente">Pendente / Agendada</option>
-              </select>
-            </div>
-          </div>
-        ) : isPostoExpress ? (
-              <>
-                <Fuel className="w-4 h-4 text-amber-400" />
-                <span>{editingTxId ? "Editar Abastecimento" : "Posto Express (Abastecimento)"}</span>
-              </>
-            ) : (
-              <span>{editingTxId ? "Editar Lançamento" : "Novo Lançamento"}</span>
-            )}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white transition"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Aviso e Controle de Edição em Série para Compras Parceladas */}
-        {editingTxId && isEditingSeries && editingSeriesData && (
-          <div className="rounded-2xl p-3.5 bg-gradient-to-r from-violet-950/70 via-slate-900/90 to-indigo-950/70 border border-violet-500/40 space-y-2 shadow-lg shadow-violet-950/30">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-violet-400" />
-                <span className="font-extrabold text-violet-200 text-xs">Compra Parcelada Detectada</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 font-mono text-[11px] tabular-nums font-bold">
-                {editingSeriesData.series.length} parcelas na série
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-300">
-              Esta transação faz parte de uma série parcelada ({editingSeriesData.currentInstallment || "?"}/{editingSeriesData.totalInstallments || editingSeriesData.series.length}).
-            </p>
-            <label className="flex items-center gap-2.5 pt-1 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={applyToAllSeries}
-                onChange={(e) => setApplyToAllSeries(e.target.checked)}
-                className="w-4 h-4 rounded border-violet-500/50 bg-slate-950 text-violet-500 focus:ring-violet-500 accent-violet-500 cursor-pointer"
-              />
-              <span className="font-bold text-white text-xs">
-                Aplicar alterações em todas as parcelas desta série
-              </span>
-            </label>
-            {applyToAllSeries && (
-              <p className="text-[10px] text-slate-400 pl-6 leading-relaxed">
-                A Categoria, Forma de Pagamento, Banco/Cartão e o Nome Base serão atualizados em todas as {editingSeriesData.series.length} parcelas. As datas de vencimento e os valores individuais de cada mês serão preservados.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Seletor de Modo: Padrão vs Posto Express vs Transferência */}
-        <div className="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-slate-950 border border-white/10">
-          <button
-            type="button"
-            onClick={() => {
-              setIsPostoExpress(false);
-              setFormState((prev) => ({
-                ...prev,
-                isTransfer: false,
-                category: prev.category === "Transferência entre Contas" ? "Alimentação" : prev.category
-              }));
-            }}
-            className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center cursor-pointer ${
-              !isPostoExpress && !formState.isTransfer
-                ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Wallet className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Padrão</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsPostoExpress(true);
-              setFormState((prev) => ({
-                ...prev,
-                isTransfer: false,
-                category: "Gasolina/Combustível",
-                description:
-                  !prev.description || prev.description.toLowerCase().includes("abastecimento")
-                    ? `Abastecimento ${expressFuelType === "Etanol" ? "Etanol" : "Gasolina Comum"}`
-                    : prev.description
-              }));
-            }}
-            className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center ${
-              isPostoExpress && !formState.isTransfer
-                ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Fuel className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Posto Express ⛽</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsPostoExpress(false);
-              const defaultSrc = formState.sourceBank || formState.bankAccount || banks[0]?.name || "Nubank";
-              const defaultDst = formState.destinationBank || (banks.find((b) => b.name !== defaultSrc)?.name || banks[1]?.name || banks[0]?.name || "Inter");
-              setFormState((prev) => ({
-                ...prev,
-                isTransfer: true,
-                category: "Transferência entre Contas",
-                paymentMethod: "PIX",
-                costType: "Fixo",
-                sourceBank: defaultSrc,
-                bankAccount: defaultSrc,
-                destinationBank: defaultDst,
-                description: prev.description && !prev.description.includes("Transferência") ? prev.description : `Transferência: ${defaultSrc} ➔ ${defaultDst}`
-              }));
-            }}
-            className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center ${
-              formState.isTransfer
-                ? "bg-sky-600 text-white shadow-lg shadow-sky-600/30"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Transferência 🔄</span>
-          </button>
-        </div>
-
-        {isPostoExpress ? (
+          ) : isPostoExpress ? (
           <div className="space-y-3.5">
             {/* 1. Tipo de Combustível */}
             <div>
@@ -1525,8 +1536,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
         )}
+        </div>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+        {/* Rodapé Fixo na Base */}
+        <div className="shrink-0 px-5 py-3 border-t border-[var(--cupertino-border)] bg-[var(--cupertino-card)]/80 backdrop-blur-sm flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -1547,9 +1560,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 ))
               }
               onClick={onSaveAndNew}
-              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-purple-500/30 text-purple-200 hover:text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-[var(--cupertino-border)] text-slate-200 hover:text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-sm"
             >
-              {isSavingTx ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 text-purple-400" />}
+              {isSavingTx ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 text-[#0A84FF]" />}
               <span>Salvar e Criar Outro</span>
             </button>
           )}
@@ -1564,7 +1577,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 !formState.thirdPartyName?.trim()
               ))
             }
-            className={`min-h-[44px] px-5 py-2.5 rounded-xl text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 ${
+            className={`min-h-[44px] px-5 py-2.5 rounded-xl text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer ${
               formState.isTransfer
                 ? "bg-sky-600 hover:bg-sky-500 shadow-lg shadow-sky-600/25"
                 : isPostoExpress
@@ -1587,4 +1600,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       </form>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(modalContent, document.body) : null;
 };

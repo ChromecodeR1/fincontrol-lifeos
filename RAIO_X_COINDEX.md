@@ -689,6 +689,14 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       2. Higienização estrita com `toCleanStr` montando objeto plano `cleanPayload` com strings primitivas higienizadas antes de qualquer chamada a `JSON.stringify` (no `fetch("/api/strava")`, no `localStorage` e no Supabase).
       3. Binding limpo com arrow functions explícitas `onClick={() => syncStravaFromApi()}` em todos os botões do sistema (`app/SecondaryTabs.tsx`) e extração controlada de valores nos 4 inputs de credenciais.
 
+  - **Hotfix Sprint 37.1 (Novembro de 2026 — Correção Definitiva dos Modais Fora de Centro via createPortal e Extinção do Transform Trap):**
+    - **Diagnóstico da Causa Raiz:** No CSS, qualquer elemento ancestral com propriedade `transform` diferente de `none` (como `transform: translateY(0) scale(1)` ou `transform: translateZ(0)`) estabelece um novo *containing block* para elementos filhos com `position: fixed`. Isso fazia com que modais calculassem sua altura e posição relativa ao container de página de 5000px em vez da janela visível (`100dvh`), gerando modais esticados ou fora do centro.
+    - **Soluções Implementadas:**
+      1. Correção no `app/globals.css`: `@keyframes cupertinoFadeSlideUp` com `100% { opacity: 1; transform: none; }` e remoção de `transform: translateZ(0)` e `perspective: 1000px` de containers externos de página.
+      2. Renderização de todos os modais (`TransactionModal`, modal de importação OFX/CSV, Command Palette `Ctrl+K`, `ProfileModal`, `deleteSeriesModal` e `confirmModal`) diretamente em `document.body` via `createPortal`.
+      3. Overlays com `fixed inset-0 w-screen h-dvh z-[9999] overflow-hidden` e cards com `max-h-[86dvh]` com scroll interno customizado e cabeçalho/rodapé fixos.
+      4. Substituição de resquícios de paleta roxa legada (`#110724`, `border-[#A855F7]`) pela paleta oficial Cupertino Glassmorphism (`bg-[var(--cupertino-card)] border border-[var(--cupertino-border)]`).
+
 ---
 
 ## 8. Comandos de Manutenção & Verificação Rápida

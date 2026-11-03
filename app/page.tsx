@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Wallet,
   TrendingUp,
@@ -7795,11 +7796,11 @@ export default function CoindexApp() {
         </button>
       </nav>
 
-      {/* COMMAND PALETTE MODAL (CTRL + K) */}
-      {showCommandModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] overflow-hidden text-xs">
-            <div className="p-3.5 border-b border-white/10 flex items-center gap-2.5 bg-slate-950/70">
+      {/* COMMAND PALETTE MODAL (CTRL + K) VIA CREATEPORTAL */}
+      {showCommandModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-start justify-center pt-20 p-4 overflow-hidden">
+          <div className="relative w-full max-w-lg max-h-[86dvh] flex flex-col overflow-hidden rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl text-xs">
+            <div className="p-3.5 border-b border-white/10 flex items-center gap-2.5 bg-slate-950/70 shrink-0">
               <Search className="w-4 h-4 text-indigo-400" />
               <input
                 type="text"
@@ -7812,12 +7813,12 @@ export default function CoindexApp() {
               <button
                 type="button"
                 onClick={() => setShowCommandModal(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-2 max-h-72 overflow-y-auto space-y-1">
+            <div className="p-2 flex-1 overflow-y-auto space-y-1 custom-scrollbar">
               {[
                 {
                   label: "Criar Novo Lançamento",
@@ -7930,7 +7931,8 @@ export default function CoindexApp() {
                 ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL DE LANÇAMENTO */}
@@ -7959,16 +7961,16 @@ export default function CoindexApp() {
         transactions={transactions}
       />
 
-      {/* MODAL DE CHANGELOG */}
-      {showChangelogModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#A855F7]/35 p-6 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.15)] space-y-4 text-xs max-h-[80vh] overflow-y-auto">
+      {/* MODAL DE CHANGELOG VIA CREATEPORTAL */}
+      {showChangelogModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
+          <div className="relative w-full max-w-lg max-h-[86dvh] overflow-y-auto rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] p-6 shadow-2xl space-y-4 text-xs my-auto custom-scrollbar">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="text-base font-extrabold text-white">Histórico de Versões (Changelog)</h3>
               <button
                 type="button"
                 onClick={() => setShowChangelogModal(false)}
-                className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white"
+                className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -7989,13 +7991,14 @@ export default function CoindexApp() {
               </div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* MODAL DE EXCLUSÃO INTELIGENTE DE SÉRIE PARCELADA */}
-      {deleteSeriesModal.isOpen && deleteSeriesModal.targetTx && deleteSeriesModal.seriesData && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#FF2A85]/40 p-6 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.2)] space-y-4 text-xs">
+      {/* MODAL DE EXCLUSÃO INTELIGENTE DE SÉRIE PARCELADA VIA CREATEPORTAL */}
+      {deleteSeriesModal.isOpen && deleteSeriesModal.targetTx && deleteSeriesModal.seriesData && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
+          <div className="relative w-full max-w-md max-h-[86dvh] overflow-y-auto rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] p-6 shadow-2xl space-y-4 text-xs my-auto custom-scrollbar">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
@@ -8009,7 +8012,7 @@ export default function CoindexApp() {
               <button
                 type="button"
                 onClick={() => setDeleteSeriesModal({ isOpen: false, targetTx: null, seriesData: null })}
-                className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white transition"
+                className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -8103,7 +8106,8 @@ export default function CoindexApp() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal de Edição de Perfil do Usuário com Backup Integrado (Sprint 15) */}
@@ -8118,10 +8122,10 @@ export default function CoindexApp() {
         onSeedPatrimonio={handleSyncOfficialPatrimonioData}
       />
 
-      {/* MODAL DE CONFIRMAÇÃO CUSTOMIZADO (Sprint 15 - Clara Vance) */}
-      {confirmModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-[#110724]/95 backdrop-blur-2xl border border-[#FF2A85]/40 p-6 shadow-[0_15px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,42,133,0.2)] space-y-4 animate-in fade-in zoom-in-95">
+      {/* MODAL DE CONFIRMAÇÃO CUSTOMIZADO (Sprint 15 - Clara Vance) VIA CREATEPORTAL */}
+      {confirmModal.isOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
+          <div className="relative w-full max-w-sm max-h-[86dvh] overflow-y-auto rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] p-6 shadow-2xl space-y-4 my-auto custom-scrollbar">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0">
                 <AlertTriangle className="w-5 h-5" />
@@ -8158,7 +8162,8 @@ export default function CoindexApp() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

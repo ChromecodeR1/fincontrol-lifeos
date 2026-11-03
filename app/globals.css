@@ -302,7 +302,7 @@ select:focus-visible {
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
@@ -363,15 +363,9 @@ select:focus-visible {
   z-index: 9999 !important;
 }
 
-/* SPRINT 37: Otimização de GPU & Fluidez 120Hz (Davi Kroner) */
+/* SPRINT 37 & 37.1: Otimização de GPU & Fluidez 120Hz sem armadilha de containing block */
 .glass-card,
-.dashboard-root-wrapper,
-.card-elevation-context,
-.animate-cupertino-in {
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
+.card-elevation-context {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  perspective: 1000px;
-  -webkit-perspective: 1000px;
 }

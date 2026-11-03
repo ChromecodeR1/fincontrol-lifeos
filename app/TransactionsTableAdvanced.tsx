@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useDeferredValue } from "react";
+import { createPortal } from "react-dom";
 import {
   Search,
   Filter,
@@ -1415,12 +1416,12 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
         </div>
       )}
 
-      {/* SPRINT 37: MODAL DE INGESTÃO BANCÁRIA CSV / OFX (Rafael Albuquerque) */}
-      {isImportModalOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl glass-card rounded-3xl border border-white/10 shadow-2xl p-6 space-y-4 max-h-[90vh] flex flex-col animate-cupertino-in">
+      {/* SPRINT 37 & 37.1: MODAL DE INGESTÃO BANCÁRIA CSV / OFX VIA CREATEPORTAL */}
+      {isImportModalOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
+          <div className="relative w-full max-w-2xl max-h-[84dvh] flex flex-col overflow-hidden rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl my-auto text-xs p-6 space-y-4">
             {/* Cabeçalho */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
                   <Upload className="w-5 h-5" />
@@ -1436,7 +1437,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                   setIsImportModalOpen(false);
                   setIngestResult(null);
                 }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1452,7 +1453,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     handleFileUpload(e.dataTransfer.files[0]);
                   }
                 }}
-                className="border-2 border-dashed border-white/20 hover:border-emerald-500/50 rounded-2xl p-8 text-center space-y-3 bg-slate-950/40 transition-colors"
+                className="border-2 border-dashed border-white/20 hover:border-emerald-500/50 rounded-2xl p-8 text-center space-y-3 bg-slate-950/40 transition-colors my-auto"
               >
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center mx-auto">
                   <Upload className="w-6 h-6" />
@@ -1479,9 +1480,9 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                 </div>
               </div>
             ) : (
-              <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+              <div className="space-y-4 flex-1 overflow-hidden flex flex-col min-h-0">
                 {/* Resumo da Ingestão */}
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
                       {ingestResult.bankName} ({ingestResult.format})
@@ -1502,7 +1503,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                 </div>
 
                 {/* Tabela de Preview */}
-                <div className="flex-1 overflow-y-auto rounded-2xl border border-white/10 max-h-72">
+                <div className="flex-1 overflow-y-auto rounded-xl border border-white/10 max-h-[45dvh] custom-scrollbar">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="sticky top-0 bg-slate-950 z-10 border-b border-white/10 text-slate-400">
                       <tr>
@@ -1517,7 +1518,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                                 transactions: ingestResult.transactions.map((t) => ({ ...t, selected: checked }))
                               });
                             }}
-                            className="accent-emerald-500 rounded"
+                            className="accent-emerald-500 rounded cursor-pointer"
                           />
                         </th>
                         <th className="p-2.5">Status</th>
@@ -1539,7 +1540,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                                 next[idx] = { ...next[idx], selected: e.target.checked };
                                 setIngestResult({ ...ingestResult, transactions: next });
                               }}
-                              className="accent-emerald-500 rounded"
+                              className="accent-emerald-500 rounded cursor-pointer"
                             />
                           </td>
                           <td className="p-2.5">
@@ -1583,11 +1584,11 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                 </div>
 
                 {/* Rodapé da Modal com Confirmação */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10 shrink-0">
                   <button
                     type="button"
                     onClick={() => setIngestResult(null)}
-                    className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs text-slate-300 border border-white/10 font-semibold transition"
+                    className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs text-slate-300 border border-white/10 font-semibold transition cursor-pointer"
                   >
                     ← Trocar Arquivo
                   </button>
@@ -1599,7 +1600,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                         setIsImportModalOpen(false);
                         setIngestResult(null);
                       }}
-                      className="px-3.5 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                      className="px-3.5 py-2 rounded-xl text-xs text-slate-400 hover:text-white cursor-pointer"
                     >
                       Cancelar
                     </button>
@@ -1617,7 +1618,8 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
