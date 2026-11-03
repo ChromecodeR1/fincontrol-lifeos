@@ -1790,14 +1790,47 @@ export default function CoindexApp() {
   }, [transactions, banks, wishlist, debtorMap, notify]);
 
   // Sincronização Manual do Strava via Backend Proxy (/api/strava) + Persistência no Supabase
-  const syncStravaFromApi = async (overrideConfig?: StravaCredentials) => {
+  // HOTFIX SPRINT 36.1: Ignorar SyntheticEvent/HTMLButtonElement e garantir serialização 100% primitiva
+  const isDomOrReactEvent = (val: unknown): boolean =>
+    Boolean(
+      val &&
+        typeof val === "object" &&
+        ("nativeEvent" in (val as Record<string, unknown>) ||
+          "currentTarget" in (val as Record<string, unknown>) ||
+          "target" in (val as Record<string, unknown>) ||
+          (typeof Event !== "undefined" && val instanceof Event) ||
+          (typeof HTMLElement !== "undefined" && val instanceof HTMLElement))
+    );
+
+  const toCleanStr = (v: unknown): string =>
+    typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "";
+
+  const syncStravaFromApi = async (overrideConfig?: unknown) => {
     setIsSyncingStrava(true);
-    const activeConfig = overrideConfig || stravaConfig;
+
+    // Ponto 1: Se o parâmetro for evento do DOM/React, ignore-o e use o stravaConfig atual
+    const validOverride =
+      overrideConfig &&
+      typeof overrideConfig === "object" &&
+      !isDomOrReactEvent(overrideConfig)
+        ? (overrideConfig as Partial<StravaCredentials>)
+        : undefined;
+
+    const rawConfig = validOverride || stravaConfig;
+
+    // Ponto 2: Objeto plano estritamente com strings primitivas higienizadas
+    const cleanPayload: StravaCredentials = {
+      athleteId: toCleanStr(rawConfig?.athleteId),
+      clientId: toCleanStr(rawConfig?.clientId),
+      clientSecret: toCleanStr(rawConfig?.clientSecret),
+      refreshToken: toCleanStr(rawConfig?.refreshToken)
+    };
+
     try {
       const res = await fetch("/api/strava", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(activeConfig)
+        body: JSON.stringify(cleanPayload)
       });
 
       const contentType = res.headers.get("content-type") || "";
@@ -1817,14 +1850,19 @@ export default function CoindexApp() {
       setStravaStats(updatedStats);
       localStorage.setItem("lifeos_strava_stats", JSON.stringify(updatedStats));
 
-      let updatedConfig = { ...activeConfig };
+      const updatedConfig: StravaCredentials = {
+        athleteId: cleanPayload.athleteId,
+        clientId: cleanPayload.clientId,
+        clientSecret: cleanPayload.clientSecret,
+        refreshToken: cleanPayload.refreshToken
+      };
       let configChanged = false;
-      if (data.newRefreshToken && data.newRefreshToken !== activeConfig.refreshToken) {
-        updatedConfig.refreshToken = data.newRefreshToken;
+      if (data.newRefreshToken && typeof data.newRefreshToken === "string" && data.newRefreshToken !== cleanPayload.refreshToken) {
+        updatedConfig.refreshToken = toCleanStr(data.newRefreshToken);
         configChanged = true;
       }
       if (data.athlete?.id && (!updatedConfig.athleteId || updatedConfig.athleteId === "")) {
-        updatedConfig.athleteId = String(data.athlete.id);
+        updatedConfig.athleteId = toCleanStr(data.athlete.id);
         configChanged = true;
       }
       if (configChanged) {
@@ -7633,8 +7671,14 @@ export default function CoindexApp() {
               setSheetsSyncStatus={setSheetsSyncStatus}
               stravaConfig={stravaConfig}
               setStravaConfig={(cfg: StravaCredentials) => {
-                setStravaConfig(cfg);
-                updateUserSettingsInDb({ stravaConfig: cfg });
+                const clean: StravaCredentials = {
+                  athleteId: toCleanStr(cfg?.athleteId),
+                  clientId: toCleanStr(cfg?.clientId),
+                  clientSecret: toCleanStr(cfg?.clientSecret),
+                  refreshToken: toCleanStr(cfg?.refreshToken)
+                };
+                setStravaConfig(clean);
+                updateUserSettingsInDb({ stravaConfig: clean });
               }}
               stravaSyncStatus={stravaSyncStatus}
               setStravaSyncStatus={setStravaSyncStatus}

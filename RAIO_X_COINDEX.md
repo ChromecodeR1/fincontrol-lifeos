@@ -682,6 +682,13 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - Headers de segurança HTTP estritos no `next.config.ts` (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Robots-Tag: noindex, nofollow`, `Permissions-Policy`).
     - DDL e políticas documentadas de Row Level Security (RLS) estritas em todas as 9 tabelas do Supabase, com índices compostos por `(user_id, date)`.
 
+  - **Hotfix Sprint 36.1 (Novembro de 2026 — Blindagem de Serialização do Strava e Prevenção de SyntheticEvent Circular):**
+    - **Diagnóstico da Causa Raiz:** Ao disparar `onClick={syncStravaFromApi}` em botões de sincronização, o React repassava o evento `SyntheticEvent` (contendo referências circulares de DOM e `HTMLButtonElement`) como primeiro argumento. Como a função aceitava um `overrideConfig`, ela tratava o evento como credenciais, quebrando no `JSON.stringify` (`Converting circular structure to JSON --> starting at object with constructor 'HTMLButtonElement'`).
+    - **Solução Arquitetural em 3 Pontos:**
+      1. Guard anti-evento `isDomOrReactEvent(val)` em `app/page.tsx` para descartar qualquer objeto de evento do DOM/React passado como parâmetro e usar o estado `stravaConfig`.
+      2. Higienização estrita com `toCleanStr` montando objeto plano `cleanPayload` com strings primitivas higienizadas antes de qualquer chamada a `JSON.stringify` (no `fetch("/api/strava")`, no `localStorage` e no Supabase).
+      3. Binding limpo com arrow functions explícitas `onClick={() => syncStravaFromApi()}` em todos os botões do sistema (`app/SecondaryTabs.tsx`) e extração controlada de valores nos 4 inputs de credenciais.
+
 ---
 
 ## 8. Comandos de Manutenção & Verificação Rápida

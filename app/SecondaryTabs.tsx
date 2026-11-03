@@ -48,6 +48,10 @@ export function formatPace(timeInSeconds: number, km: number): string {
   return `${mins}:${String(secs).padStart(2, "0")} /km`;
 }
 
+export const toCleanStr = (v: unknown): string =>
+  typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "";
+
+
 const DebtorInputCell = React.memo(function DebtorInputCell({
   txId,
   initialValue,
@@ -928,7 +932,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </div>
             <button
               type="button"
-              onClick={syncStravaFromApi}
+              onClick={() => syncStravaFromApi()}
               disabled={isSyncingStrava}
               className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition cursor-pointer"
             >
@@ -1078,7 +1082,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               )}
               <button
                 type="button"
-                onClick={syncStravaFromApi}
+                onClick={() => syncStravaFromApi()}
                 disabled={isSyncingStrava}
                 className="px-3.5 py-1.5 rounded-xl bg-orange-600/30 border border-orange-500/30 hover:bg-orange-600/50 text-orange-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
               >
@@ -2183,7 +2187,13 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     placeholder="Athlete ID (Numérico)"
                     value={stravaConfig.athleteId}
                     onChange={(e) => {
-                      const n = { ...stravaConfig, athleteId: sanitizeText(e.target.value) };
+                      const val = toCleanStr(e.target.value);
+                      const n = {
+                        athleteId: val,
+                        clientId: toCleanStr(stravaConfig.clientId),
+                        clientSecret: toCleanStr(stravaConfig.clientSecret),
+                        refreshToken: toCleanStr(stravaConfig.refreshToken)
+                      };
                       setStravaConfig(n);
                       localStorage.setItem("lifeos_strava_config", JSON.stringify(n));
                       if (setStravaSyncStatus) setStravaSyncStatus({ state: "idle", message: "" });
@@ -2195,7 +2205,13 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     placeholder="Client ID (Numérico)"
                     value={stravaConfig.clientId}
                     onChange={(e) => {
-                      const n = { ...stravaConfig, clientId: sanitizeText(e.target.value) };
+                      const val = toCleanStr(e.target.value);
+                      const n = {
+                        athleteId: toCleanStr(stravaConfig.athleteId),
+                        clientId: val,
+                        clientSecret: toCleanStr(stravaConfig.clientSecret),
+                        refreshToken: toCleanStr(stravaConfig.refreshToken)
+                      };
                       setStravaConfig(n);
                       localStorage.setItem("lifeos_strava_config", JSON.stringify(n));
                       if (setStravaSyncStatus) setStravaSyncStatus({ state: "idle", message: "" });
@@ -2207,7 +2223,13 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     placeholder="Client Secret"
                     value={stravaConfig.clientSecret}
                     onChange={(e) => {
-                      const n = { ...stravaConfig, clientSecret: e.target.value.trim() };
+                      const val = toCleanStr(e.target.value);
+                      const n = {
+                        athleteId: toCleanStr(stravaConfig.athleteId),
+                        clientId: toCleanStr(stravaConfig.clientId),
+                        clientSecret: val,
+                        refreshToken: toCleanStr(stravaConfig.refreshToken)
+                      };
                       setStravaConfig(n);
                       localStorage.setItem("lifeos_strava_config", JSON.stringify(n));
                       if (setStravaSyncStatus) setStravaSyncStatus({ state: "idle", message: "" });
@@ -2219,7 +2241,13 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     placeholder="Refresh Token"
                     value={stravaConfig.refreshToken}
                     onChange={(e) => {
-                      const n = { ...stravaConfig, refreshToken: e.target.value.trim() };
+                      const val = toCleanStr(e.target.value);
+                      const n = {
+                        athleteId: toCleanStr(stravaConfig.athleteId),
+                        clientId: toCleanStr(stravaConfig.clientId),
+                        clientSecret: toCleanStr(stravaConfig.clientSecret),
+                        refreshToken: val
+                      };
                       setStravaConfig(n);
                       localStorage.setItem("lifeos_strava_config", JSON.stringify(n));
                       if (setStravaSyncStatus) setStravaSyncStatus({ state: "idle", message: "" });
@@ -2262,7 +2290,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
 
               <button
                 type="button"
-                onClick={syncStravaFromApi}
+                onClick={() => syncStravaFromApi()}
                 disabled={isSyncingStrava}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white font-extrabold flex items-center justify-center gap-2 shadow-lg transition"
               >
