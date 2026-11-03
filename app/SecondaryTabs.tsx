@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Plus, CreditCard, Car, Table2, Search, CheckCircle2, Clock, Trash2,
   RefreshCw, Activity, Brain, Target, Flame, Pencil,
@@ -25,11 +25,12 @@ import {
   calculateCardExposure, calculateBankExposure, calculateStaticStatusSummary
 } from "./lifeos-data";
 import ChartCard from "./components/ChartCard";
-import {
+import ChartSettingsPopover, {
   ChartKind,
   ChartLineCurve,
   ChartWidgetSettings,
   ChartWidgetSize,
+  ChartHeightSetting,
   DEFAULT_CHART_WIDGET_SETTINGS
 } from "./components/ChartSettingsPopover";
 import { TransactionsTableAdvanced } from "./TransactionsTableAdvanced";
@@ -46,6 +47,42 @@ export function formatPace(timeInSeconds: number, km: number): string {
   const mins = Math.floor(totalSecPerKm / 60);
   const secs = totalSecPerKm % 60;
   return `${mins}:${String(secs).padStart(2, "0")} /km`;
+}
+
+/**
+ * Converte string de ritmo/pace ("5:42 /km" ou "5:42") em segundos totais por quilômetro.
+ */
+export function paceStringToSeconds(paceStr: string): number {
+  if (!paceStr) return 0;
+  const clean = paceStr.replace("/km", "").trim();
+  const parts = clean.split(":");
+  if (parts.length === 2) {
+    const mins = parseInt(parts[0], 10) || 0;
+    const secs = parseInt(parts[1], 10) || 0;
+    return mins * 60 + secs;
+  }
+  const val = parseFloat(clean);
+  return isNaN(val) ? 0 : Math.round(val * 60);
+}
+
+/**
+ * Converte segundos por quilômetro em string formatada "M:SS /km".
+ */
+export function secondsToPaceString(totalSec: number): string {
+  if (!totalSec || totalSec <= 0 || !isFinite(totalSec)) return "—";
+  const mins = Math.floor(totalSec / 60);
+  const secs = Math.round(totalSec % 60);
+  return `${mins}:${String(secs).padStart(2, "0")} /km`;
+}
+
+/**
+ * Helper de Altura Reativa dos Gráficos (175px / 220px / 290px).
+ */
+export function getChartHeightPx(h?: ChartHeightSetting, defaultPx = 220): number {
+  if (h === "compact") return 175;
+  if (h === "normal") return 220;
+  if (h === "tall" || (h as string) === "expanded") return 290;
+  return defaultPx;
 }
 
 export const toCleanStr = (v: unknown): string =>
@@ -67,7 +104,7 @@ const DebtorInputCell = React.memo(function DebtorInputCell({
   }, [initialValue]);
 
   return (
-    <div className="flex items-center gap-2 max-w-[195px]">
+    <div className="flex items-center gap-1.5 max-w-[195px]">
       <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
       <input
         type="text"
@@ -82,7 +119,7 @@ const DebtorInputCell = React.memo(function DebtorInputCell({
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-        className="w-full px-2.5 py-1.5 rounded-xl bg-slate-950/90 border border-amber-500/30 text-white placeholder-slate-500 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 outline-none text-xs transition-all"
+        className="w-full px-2 py-1 rounded-lg bg-slate-950/90 border border-amber-500/30 text-white placeholder-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-500/20 outline-none text-xs transition-all"
       />
     </div>
   );
@@ -296,6 +333,386 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     isAuto: false,
     color: "#6366f1"
   });
+
+  // SPRINT 38: Estados de Filtros e Ordenação da Tabela de Valores a Receber (Passo 2)
+  const [receivableSearch, setReceivableSearch] = useState("");
+  const [receivableDebtorFilter, setReceivableDebtorFilter] = useState("ALL");
+  const [receivableStatusFilter, setReceivableStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("all");
+  const [receivableSortCol, setReceivableSortCol] = useState<"date" | "debtor" | "description" | "amount" | "status">("date");
+  const [receivableSortDir, setReceivableSortDir] = useState<"asc" | "desc">("desc");
+
+  // SPRINT 38: Estados da Central Analítica de Bioimpedância (Passo 3)
+  const [bioPeriodFilter, setBioPeriodFilter] = useState<"1M" | "3M" | "6M" | "1A" | "Tudo">("6M");
+  const [bioSeriesMode, setBioSeriesMode] = useState<"all" | "weight" | "bf" | "target">("all");
+  const [bioSettingsOpen, setBioSettingsOpen] = useState(false);
+  const bioGearRef = useRef<HTMLButtonElement | null>(null);
+  const [bioSettings, setBioSettings] = useState<ChartWidgetSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("fincontrol_chart_settings_bio_weight_chart");
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return {
+      ...DEFAULT_CHART_WIDGET_SETTINGS,
+      color: "#30D158",
+      chartType: "area",
+      height: "normal"
+    };
+  });
+  const handleUpdateBioSettings = (next: ChartWidgetSettings) => {
+    setBioSettings(next);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("fincontrol_chart_settings_bio_weight_chart", JSON.stringify(next));
+      } catch {}
+    }
+  };
+
+  // SPRINT 38: Estados da Central Analítica de Corridas & Pace — Strava Progress (Passo 4)
+  const [stravaTimeScale, setStravaTimeScale] = useState<"Dia" | "Semana" | "Mês" | "Ano">("Semana");
+  const [stravaMetric, setStravaMetric] = useState<"distance" | "pace" | "time" | "calories">("distance");
+  const [stravaSettingsOpen, setStravaSettingsOpen] = useState(false);
+  const stravaGearRef = useRef<HTMLButtonElement | null>(null);
+  const [stravaChartSettings, setStravaChartSettings] = useState<ChartWidgetSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("fincontrol_chart_settings_strava_runs_chart");
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return {
+      ...DEFAULT_CHART_WIDGET_SETTINGS,
+      color: "#FF9F0A",
+      chartType: "bar",
+      height: "normal"
+    };
+  });
+  const handleUpdateStravaChartSettings = (next: ChartWidgetSettings) => {
+    setStravaChartSettings(next);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("fincontrol_chart_settings_strava_runs_chart", JSON.stringify(next));
+      } catch {}
+    }
+  };
+
+  // Lista de Devedores Únicos para Filtro
+  const uniqueDebtors = useMemo(() => {
+    const set = new Set<string>();
+    receivableItems.forEach((item) => {
+      const name = item.debtorName?.trim();
+      if (name) set.add(name);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [receivableItems]);
+
+  // Lançamentos a Receber Filtrados e Ordenados
+  const processedReceivables = useMemo(() => {
+    return receivableItems
+      .filter((item) => {
+        // Busca textual
+        if (receivableSearch.trim()) {
+          const q = receivableSearch.toLowerCase().trim();
+          const matchesDesc = (item.description || "").toLowerCase().includes(q);
+          const matchesDebtor = (item.debtorName || "").toLowerCase().includes(q);
+          if (!matchesDesc && !matchesDebtor) return false;
+        }
+        // Filtro por devedor
+        if (receivableDebtorFilter !== "ALL") {
+          const itemDebtor = item.debtorName?.trim() || "";
+          if (itemDebtor !== receivableDebtorFilter) return false;
+        }
+        // Filtro por situação
+        const isPaid = item.status === "Pago" || item.remaining <= 0;
+        const isPartial = !isPaid && item.effectivePaid > 0 && item.remaining > 0;
+        const isPending = !isPaid && item.effectivePaid === 0;
+
+        if (receivableStatusFilter === "pending" && !isPending) return false;
+        if (receivableStatusFilter === "partial" && !isPartial) return false;
+        if (receivableStatusFilter === "paid" && !isPaid) return false;
+
+        return true;
+      })
+      .sort((a, b) => {
+        let cmp = 0;
+        if (receivableSortCol === "date") {
+          cmp = compareDatesBR(a.date, b.date);
+        } else if (receivableSortCol === "debtor") {
+          cmp = (a.debtorName || "").localeCompare(b.debtorName || "");
+        } else if (receivableSortCol === "description") {
+          cmp = (a.description || "").localeCompare(b.description || "");
+        } else if (receivableSortCol === "amount") {
+          cmp = a.amount - b.amount;
+        } else if (receivableSortCol === "status") {
+          cmp = (a.status || "").localeCompare(b.status || "");
+        }
+        return receivableSortDir === "asc" ? cmp : -cmp;
+      });
+  }, [receivableItems, receivableSearch, receivableDebtorFilter, receivableStatusFilter, receivableSortCol, receivableSortDir]);
+
+  const handleToggleReceivableSort = (col: "date" | "debtor" | "description" | "amount" | "status") => {
+    if (receivableSortCol === col) {
+      setReceivableSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setReceivableSortCol(col);
+      setReceivableSortDir("asc");
+    }
+  };
+
+  const renderSortIcon = (col: "date" | "debtor" | "description" | "amount" | "status") => {
+    if (receivableSortCol !== col) {
+      return <ArrowUpDown className="w-3 h-3 text-slate-500 inline ml-1 opacity-40 group-hover:opacity-100 transition-opacity" />;
+    }
+    return receivableSortDir === "asc" ? (
+      <ArrowUp className="w-3 h-3 text-amber-400 inline ml-1" />
+    ) : (
+      <ArrowDown className="w-3 h-3 text-amber-400 inline ml-1" />
+    );
+  };
+
+  // Filtro de bioimpedância por período
+  const filteredBioLogs = useMemo(() => {
+    const sorted = [...bioLogs].sort((a, b) => compareDatesBR(a.date, b.date));
+    if (bioPeriodFilter === "Tudo" || sorted.length === 0) return sorted;
+
+    const days =
+      bioPeriodFilter === "1M" ? 30 :
+      bioPeriodFilter === "3M" ? 90 :
+      bioPeriodFilter === "6M" ? 180 : 365;
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+    const filtered = sorted.filter((l) => {
+      const iso = toSortableISO(l.date);
+      if (!iso) return true;
+      const d = new Date(iso + "T12:00:00");
+      return !isNaN(d.getTime()) && d >= cutoff;
+    });
+
+    return filtered.length > 0 ? filtered : sorted;
+  }, [bioLogs, bioPeriodFilter]);
+
+  // Telemetria executiva de bioimpedância
+  const bioTelemetry = useMemo(() => {
+    if (filteredBioLogs.length === 0) {
+      return {
+        currentWeight: 0,
+        initialWeight: 0,
+        deltaWeight: 0,
+        deltaPct: 0,
+        currentBf: null as number | null,
+        minWeight: 0,
+        avgWeight: 0,
+        leanMass: null as number | null
+      };
+    }
+    const initialLog = filteredBioLogs[0];
+    const currentLog = filteredBioLogs[filteredBioLogs.length - 1];
+    const initialWeight = Number(initialLog.weight) || 0;
+    const currentWeight = Number(currentLog.weight) || 0;
+    const deltaWeight = currentWeight - initialWeight;
+    const deltaPct = initialWeight > 0 ? (deltaWeight / initialWeight) * 100 : 0;
+    const currentBf = currentLog.bf != null ? Number(currentLog.bf) : null;
+
+    const weights = filteredBioLogs.map((l) => Number(l.weight) || 0).filter((w) => w > 0);
+    const minWeight = weights.length > 0 ? Math.min(...weights) : currentWeight;
+    const avgWeight = weights.length > 0 ? weights.reduce((acc, w) => acc + w, 0) / weights.length : currentWeight;
+    const leanMass = currentBf != null && currentWeight > 0 ? currentWeight * (1 - currentBf / 100) : null;
+
+    return {
+      currentWeight,
+      initialWeight,
+      deltaWeight,
+      deltaPct,
+      currentBf,
+      minWeight,
+      avgWeight,
+      leanMass
+    };
+  }, [filteredBioLogs]);
+
+  // Agregação temporal dos treinos Strava
+  const aggregatedStravaData = useMemo(() => {
+    if (!stravaActivities || stravaActivities.length === 0) return [];
+
+    const sorted = [...stravaActivities].sort((a, b) => compareDatesBR(a.date, b.date));
+
+    if (stravaTimeScale === "Dia") {
+      return sorted.map((act, i) => {
+        const paceSec = paceStringToSeconds(act.pace);
+        return {
+          key: act.id || `${act.date}_${i}`,
+          label: formatDateBR(act.date),
+          date: act.date,
+          name: act.name,
+          distance: Number(act.distanceKm) || 0,
+          time: Number(act.movingTimeMin) || 0,
+          paceSec,
+          paceStr: act.pace || secondsToPaceString(paceSec),
+          elevation: Number(act.elevationGain) || 0,
+          calories: Number(act.calories) || 0
+        };
+      });
+    }
+
+    if (stravaTimeScale === "Semana") {
+      const map = new Map<string, {
+        key: string;
+        label: string;
+        date: string;
+        runs: StravaActivity[];
+      }>();
+
+      sorted.forEach((act) => {
+        const iso = toSortableISO(act.date);
+        const d = iso ? new Date(iso + "T12:00:00") : new Date();
+        const startOfYear = new Date(d.getFullYear(), 0, 1);
+        const dayOfYear = Math.floor((d.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
+        const weekNumber = Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7);
+        const weekKey = `${d.getFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
+        const label = `Sem ${weekNumber}/${String(d.getFullYear()).slice(-2)}`;
+
+        if (!map.has(weekKey)) {
+          map.set(weekKey, { key: weekKey, label, date: act.date, runs: [] });
+        }
+        map.get(weekKey)!.runs.push(act);
+      });
+
+      return Array.from(map.values()).map((group) => {
+        const totalKm = group.runs.reduce((acc, r) => acc + (Number(r.distanceKm) || 0), 0);
+        const totalTimeMin = group.runs.reduce((acc, r) => acc + (Number(r.movingTimeMin) || 0), 0);
+        const totalCalories = group.runs.reduce((acc, r) => acc + (Number(r.calories) || 0), 0);
+        const totalElevation = group.runs.reduce((acc, r) => acc + (Number(r.elevationGain) || 0), 0);
+        const totalSec = totalTimeMin * 60;
+        const paceSec = totalKm > 0 ? Math.round(totalSec / totalKm) : 0;
+        const count = group.runs.length;
+
+        return {
+          key: group.key,
+          label: group.label,
+          date: group.date,
+          name: `${count} ${count === 1 ? "corrida" : "corridas"} na semana`,
+          distance: Math.round(totalKm * 100) / 100,
+          time: Math.round(totalTimeMin),
+          paceSec,
+          paceStr: secondsToPaceString(paceSec),
+          elevation: totalElevation,
+          calories: totalCalories
+        };
+      });
+    }
+
+    if (stravaTimeScale === "Mês") {
+      const map = new Map<string, {
+        key: string;
+        label: string;
+        date: string;
+        runs: StravaActivity[];
+      }>();
+
+      sorted.forEach((act) => {
+        const ym = getYearMonthKey(act.date);
+        if (!map.has(ym)) {
+          map.set(ym, { key: ym, label: ym, date: act.date, runs: [] });
+        }
+        map.get(ym)!.runs.push(act);
+      });
+
+      return Array.from(map.values()).map((group) => {
+        const totalKm = group.runs.reduce((acc, r) => acc + (Number(r.distanceKm) || 0), 0);
+        const totalTimeMin = group.runs.reduce((acc, r) => acc + (Number(r.movingTimeMin) || 0), 0);
+        const totalCalories = group.runs.reduce((acc, r) => acc + (Number(r.calories) || 0), 0);
+        const totalElevation = group.runs.reduce((acc, r) => acc + (Number(r.elevationGain) || 0), 0);
+        const totalSec = totalTimeMin * 60;
+        const paceSec = totalKm > 0 ? Math.round(totalSec / totalKm) : 0;
+        const count = group.runs.length;
+
+        return {
+          key: group.key,
+          label: group.label,
+          date: group.date,
+          name: `${count} ${count === 1 ? "treino" : "treinos"} no mês`,
+          distance: Math.round(totalKm * 100) / 100,
+          time: Math.round(totalTimeMin),
+          paceSec,
+          paceStr: secondsToPaceString(paceSec),
+          elevation: totalElevation,
+          calories: totalCalories
+        };
+      });
+    }
+
+    // Escala: Ano
+    const map = new Map<string, {
+      key: string;
+      label: string;
+      date: string;
+      runs: StravaActivity[];
+    }>();
+
+    sorted.forEach((act) => {
+      const iso = toSortableISO(act.date);
+      const yr = iso ? iso.slice(0, 4) : "2026";
+      if (!map.has(yr)) {
+        map.set(yr, { key: yr, label: yr, date: act.date, runs: [] });
+      }
+      map.get(yr)!.runs.push(act);
+    });
+
+    return Array.from(map.values()).map((group) => {
+      const totalKm = group.runs.reduce((acc, r) => acc + (Number(r.distanceKm) || 0), 0);
+      const totalTimeMin = group.runs.reduce((acc, r) => acc + (Number(r.movingTimeMin) || 0), 0);
+      const totalCalories = group.runs.reduce((acc, r) => acc + (Number(r.calories) || 0), 0);
+      const totalElevation = group.runs.reduce((acc, r) => acc + (Number(r.elevationGain) || 0), 0);
+      const totalSec = totalTimeMin * 60;
+      const paceSec = totalKm > 0 ? Math.round(totalSec / totalKm) : 0;
+      const count = group.runs.length;
+
+      return {
+        key: group.key,
+        label: group.label,
+        date: group.date,
+        name: `${count} ${count === 1 ? "treino" : "treinos"} em ${group.label}`,
+        distance: Math.round(totalKm * 100) / 100,
+        time: Math.round(totalTimeMin),
+        paceSec,
+        paceStr: secondsToPaceString(paceSec),
+        elevation: totalElevation,
+        calories: totalCalories
+      };
+    });
+  }, [stravaActivities, stravaTimeScale]);
+
+  // Telemetria executiva das corridas Strava
+  const stravaTelemetry = useMemo(() => {
+    const acts = stravaActivities || [];
+    const totalKm = acts.reduce((acc, a) => acc + (Number(a.distanceKm) || 0), 0);
+    const totalTimeMin = acts.reduce((acc, a) => acc + (Number(a.movingTimeMin) || 0), 0);
+    const hours = Math.floor(totalTimeMin / 60);
+    const mins = Math.round(totalTimeMin % 60);
+
+    let bestPaceSec = Infinity;
+    let bestPaceStr = "—";
+    let maxKm = 0;
+
+    acts.forEach((a) => {
+      const km = Number(a.distanceKm) || 0;
+      if (km > maxKm) maxKm = km;
+      const sec = paceStringToSeconds(a.pace);
+      if (sec > 0 && sec < bestPaceSec) {
+        bestPaceSec = sec;
+        bestPaceStr = a.pace || secondsToPaceString(sec);
+      }
+    });
+
+    return {
+      totalKm: Math.round(totalKm * 10) / 10,
+      bestPaceStr: bestPaceSec < Infinity ? bestPaceStr : "—",
+      maxKm: Math.round(maxKm * 10) / 10,
+      timeFormatted: `${hours}h ${String(mins).padStart(2, "0")}m`
+    };
+  }, [stravaActivities]);
 
   const inputClass =
     "w-full px-3.5 py-2.5 rounded-xl bg-slate-950/90 border border-white/10 text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all";
@@ -683,54 +1100,178 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         </div>
 
         <div className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-4">
-          <div>
-            <h3 className="text-sm font-extrabold text-white">Tabela de Atribuição de Devedores e Abatimento Parcial</h3>
-            <p className="text-xs text-slate-400">
-              Digite o nome da pessoa (salva ao sair do campo), abata valores parciais ou clique na situação para quitar 100%.
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-extrabold text-white">Tabela de Atribuição de Devedores e Abatimento Parcial</h3>
+              <p className="text-xs text-slate-400">
+                Digite o nome da pessoa (salva ao sair do campo), abata valores parciais ou clique na situação para quitar 100%.
+              </p>
+            </div>
+            <div className="text-xs text-slate-400 font-mono">
+              Mostrando <strong className="text-amber-400">{processedReceivables.length}</strong> de {receivableItems.length}
+            </div>
           </div>
+
+          {/* SPRINT 38: Barra de Ferramentas de Filtros e Ordenação Inteligente */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-950/40 border border-white/[0.08]">
+            <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
+              {/* Campo de Busca Rápida */}
+              <div className="relative flex-1 min-w-[180px] max-w-sm">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Buscar por descrição ou devedor..."
+                  value={receivableSearch}
+                  onChange={(e) => setReceivableSearch(e.target.value)}
+                  className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-white placeholder-slate-500 focus:border-amber-400 outline-none transition"
+                />
+                {receivableSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setReceivableSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown de Filtro por Devedor */}
+              <div className="relative">
+                <select
+                  value={receivableDebtorFilter}
+                  onChange={(e) => setReceivableDebtorFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-slate-200 focus:border-amber-400 outline-none transition cursor-pointer"
+                >
+                  <option value="ALL">Todos os Devedores ({uniqueDebtors.length})</option>
+                  {uniqueDebtors.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Segmented Control de Status */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/90 border border-white/10 text-xs">
+              {(
+                [
+                  { id: "all", label: "Todos" },
+                  { id: "pending", label: "Pendentes" },
+                  { id: "partial", label: "Parciais" },
+                  { id: "paid", label: "Quitados" }
+                ] as const
+              ).map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setReceivableStatusFilter(st.id)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                    receivableStatusFilter === st.id
+                      ? "bg-amber-500 text-slate-950 shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-white/[0.08] bg-slate-950/60 text-slate-400">
-                  <th className="py-3.5 px-3">Data</th>
-                  <th className="py-3.5 px-3">Descrição</th>
-                  <th className="py-3.5 px-3">Pessoa (Devedor)</th>
-                  <th className="py-3.5 px-3">Abater Valor Parcial</th>
-                  <th className="py-3.5 px-3">Situação</th>
-                  <th className="py-3.5 px-3 text-right">Restante / Total</th>
-                  <th className="py-3.5 px-3 text-center">Ações</th>
+                <tr className="border-b border-white/[0.08] bg-slate-950/60 text-slate-400 select-none">
+                  <th
+                    className="py-2 px-3 font-semibold text-left cursor-pointer group"
+                    onClick={() => handleToggleReceivableSort("date")}
+                  >
+                    <span className="inline-flex items-center">
+                      Data {renderSortIcon("date")}
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 px-3 font-semibold text-left cursor-pointer group"
+                    onClick={() => handleToggleReceivableSort("description")}
+                  >
+                    <span className="inline-flex items-center">
+                      Descrição {renderSortIcon("description")}
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 px-3 font-semibold text-left cursor-pointer group"
+                    onClick={() => handleToggleReceivableSort("debtor")}
+                  >
+                    <span className="inline-flex items-center">
+                      Pessoa (Devedor) {renderSortIcon("debtor")}
+                    </span>
+                  </th>
+                  <th className="py-2 px-3 font-semibold text-left">Abater Valor Parcial</th>
+                  <th
+                    className="py-2 px-3 font-semibold text-left cursor-pointer group"
+                    onClick={() => handleToggleReceivableSort("status")}
+                  >
+                    <span className="inline-flex items-center">
+                      Situação {renderSortIcon("status")}
+                    </span>
+                  </th>
+                  <th
+                    className="py-2 px-3 font-semibold text-right cursor-pointer group"
+                    onClick={() => handleToggleReceivableSort("amount")}
+                  >
+                    <span className="inline-flex items-center justify-end">
+                      Restante / Total {renderSortIcon("amount")}
+                    </span>
+                  </th>
+                  <th className="py-2 px-3 font-semibold text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
-                {receivableItems.length === 0 ? (
+                {processedReceivables.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-slate-400">
-                      Nenhum lançamento classificado como "A Receber" até o momento.
+                      {receivableItems.length === 0
+                        ? "Nenhum lançamento classificado como \"A Receber\" até o momento."
+                        : "Nenhum lançamento encontrado para os filtros selecionados."}
                     </td>
                   </tr>
                 ) : (
-                  receivableItems.map((item) => {
+                  processedReceivables.map((item) => {
                     const pInput = partialInputs[item.id] ? partialInputs[item.id] : "";
+                    const isPaid = item.status === "Pago" || item.remaining <= 0;
+                    const isPartial = !isPaid && item.effectivePaid > 0 && item.remaining > 0;
+                    const paidPct = Math.min(100, Math.round((item.effectivePaid / Math.max(1, item.amount)) * 100));
+
                     return (
                       <tr key={item.id} className="hover:bg-white/[0.03] transition-colors">
-                        <td className="py-3.5 px-3 font-mono tabular-nums text-slate-300">{formatDateBR(item.date)}</td>
-                        <td className="py-3.5 px-3 font-semibold text-white">
-                          {item.description}
-                          {item.cardUsed && <span className="block text-[10px] text-indigo-400">{item.paymentMethod} • {item.cardUsed}</span>}
-                          {item.bankAccount && !item.cardUsed && <span className="block text-[10px] text-sky-400">{item.paymentMethod} • {item.bankAccount}</span>}
+                        <td className="py-1.5 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap min-w-[100px]">
+                          {formatDateBR(item.date)}
                         </td>
-                        <td className="py-3.5 px-3">
+                        <td className="py-1.5 px-3 font-semibold text-white max-w-[240px]">
+                          <span className="truncate block">{item.description}</span>
+                          {item.cardUsed && (
+                            <span className="block text-[10px] text-indigo-400 truncate">
+                              {item.paymentMethod} • {item.cardUsed}
+                            </span>
+                          )}
+                          {item.bankAccount && !item.cardUsed && (
+                            <span className="block text-[10px] text-sky-400 truncate">
+                              {item.paymentMethod} • {item.bankAccount}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-3">
                           <DebtorInputCell txId={item.id} initialValue={item.debtorName} onCommit={handleAssignDebtor} />
                         </td>
-                        <td className="py-3.5 px-3">
-                          {item.status === "Pago" ? (
+                        <td className="py-1.5 px-3">
+                          {isPaid ? (
                             <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1.5">
                               <CheckCircle2 className="w-3.5 h-3.5" /> 100% Quitado
                             </span>
                           ) : (
-                            <div className="flex flex-col gap-1.5 min-w-[210px] max-w-[230px]">
-                              <div className="flex items-center gap-1.5">
+                            <div className="flex flex-col gap-1 min-w-[200px] max-w-[220px]">
+                              <div className="flex items-center gap-1">
                                 <input
                                   type="number"
                                   step="0.01"
@@ -739,14 +1280,14 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                                   onChange={(e) =>
                                     setPartialInputs((prev) => ({ ...prev, [item.id]: e.target.value }))
                                   }
-                                  className="w-20 min-h-[36px] px-2 py-1.5 rounded-lg bg-slate-950 border border-white/10 text-xs text-white outline-none focus:border-indigo-500 font-mono tabular-nums"
+                                  className="w-16 h-7 px-2 py-0.5 rounded-md bg-slate-950 border border-white/10 text-xs text-white outline-none focus:border-indigo-500 font-mono tabular-nums"
                                 />
                                 <select
                                   value={partialBank[item.id] || banks[0]?.name || ""}
                                   onChange={(e) =>
                                     setPartialBank((prev) => ({ ...prev, [item.id]: e.target.value }))
                                   }
-                                  className="flex-1 min-h-[36px] px-2 py-1.5 rounded-lg bg-slate-950 border border-white/10 text-[11px] text-white outline-none focus:border-indigo-500 truncate"
+                                  className="flex-1 h-7 px-1.5 py-0.5 rounded-md bg-slate-950 border border-white/10 text-[10px] text-white outline-none focus:border-indigo-500 truncate"
                                   title="Banco / Conta de destino para o valor recebido"
                                 >
                                   {banks.map((b) => (
@@ -756,7 +1297,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                                   ))}
                                 </select>
                               </div>
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -767,7 +1308,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                                       setPartialInputs((prev) => ({ ...prev, [item.id]: "" }));
                                     }
                                   }}
-                                  className="flex-1 min-h-[36px] py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shadow-md transition flex items-center justify-center"
+                                  className="flex-1 h-7 py-0.5 px-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shadow transition flex items-center justify-center cursor-pointer"
                                 >
                                   + Abater
                                 </button>
@@ -779,7 +1320,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                                       handlePartialPaymentReceivable(item, item.remaining, dest);
                                     }
                                   }}
-                                  className="min-h-[36px] py-1.5 px-2.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold transition flex items-center justify-center"
+                                  className="h-7 py-0.5 px-2 rounded-md bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold transition flex items-center justify-center cursor-pointer"
                                   title="Quitar 100% do saldo restante e creditar receita"
                                 >
                                   Quitar 100%
@@ -788,11 +1329,11 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                             </div>
                           )}
                         </td>
-                        <td className="py-3.5 px-3">
+                        <td className="py-1.5 px-3">
                           <button
                             type="button"
                             onClick={() => {
-                              if (item.status !== "Pago" && item.remaining > 0) {
+                              if (!isPaid && item.remaining > 0) {
                                 const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
                                 handlePartialPaymentReceivable(item, item.remaining, dest);
                               } else {
@@ -800,29 +1341,57 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                               }
                             }}
                             className={`whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium leading-none transition ${
-                              item.status === "Pago"
+                              isPaid
                                 ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
                                 : "bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
                             }`}
-                            title={item.status === "Pago" ? "Reabrir lançamento" : "Quitar lançamento integralmente"}
+                            title={isPaid ? "Reabrir lançamento" : "Quitar lançamento integralmente"}
                           >
-                            {item.status === "Pago" ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                            {item.status}
+                            {isPaid ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                            {isPaid ? "Pago" : "Pendente"}
                           </button>
                         </td>
-                        <td className={`py-3.5 px-3 text-right ${moneyBlur}`}>
-                          <span className="font-extrabold text-amber-400 block font-mono tabular-nums">{formatBRL(item.remaining)}</span>
-                          {item.effectivePaid > 0 && item.status !== "Pago" && (
-                            <span className="text-[10px] text-emerald-400 block font-mono tabular-nums">
-                              Pago: {formatBRL(item.effectivePaid)} de {formatBRL(item.amount)}
-                            </span>
+                        <td className={`py-1.5 px-3 text-right ${moneyBlur}`}>
+                          {isPaid ? (
+                            <div className="flex flex-col items-end">
+                              <span className="font-extrabold text-emerald-400 font-mono tabular-nums text-sm">
+                                {formatBRL(item.amount)}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400/90 font-medium">
+                                <CheckCircle2 className="w-2.5 h-2.5" /> 100% Quitado
+                              </span>
+                            </div>
+                          ) : isPartial ? (
+                            <div className="flex flex-col items-end">
+                              <span className="font-bold text-amber-400 font-mono tabular-nums text-sm">
+                                {formatBRL(item.remaining)}
+                              </span>
+                              <div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                                <div
+                                  className="h-full bg-emerald-400 rounded-full"
+                                  style={{ width: `${paidPct}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-emerald-400 font-mono tabular-nums mt-0.5">
+                                Pago: {formatBRL(item.effectivePaid)} de {formatBRL(item.amount)}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-end">
+                              <span className="font-bold text-amber-400 font-mono tabular-nums text-sm">
+                                {formatBRL(item.amount)}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono tabular-nums">
+                                Total em aberto
+                              </span>
+                            </div>
                           )}
                         </td>
-                        <td className="py-3.5 px-3 text-center">
+                        <td className="py-1.5 px-3 text-center">
                           <button
                             type="button"
                             onClick={() => handleStartEditTransaction(item)}
-                            className="p-1.5 rounded-lg bg-white/10 text-slate-300 hover:text-white hover:bg-indigo-600 transition"
+                            className="p-1 rounded-lg bg-white/10 text-slate-300 hover:text-white hover:bg-indigo-600 transition"
                             title="Editar lançamento"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -909,6 +1478,309 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   // ABA 6: BIO & STRAVA
   // ============================================================================
   if (activeTab === "bio") {
+    const StravaCustomTooltip = ({ active, payload, label }: any) => {
+      if (!active || !payload || !payload.length) return null;
+      const item = payload[0]?.payload;
+      if (!item) return null;
+      return (
+        <div className="glass-card p-3 rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl text-xs space-y-1.5 min-w-[200px]">
+          <div className="border-b border-white/10 pb-1.5 flex justify-between items-center gap-2">
+            <span className="font-bold text-white tracking-tight">{item.label || label}</span>
+            {item.date && (
+              <span className="text-[10px] text-slate-400 font-mono tabular-nums">{formatDateBR(item.date)}</span>
+            )}
+          </div>
+          {item.name && (
+            <p className="text-[11px] text-orange-300 font-medium truncate max-w-[220px]">{item.name}</p>
+          )}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] pt-1">
+            <div>
+              <span className="text-slate-400 block text-[10px]">Distância</span>
+              <strong className="text-orange-400 font-mono tabular-nums">{Number(item.distance || 0).toFixed(1)} km</strong>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px]">Pace Médio</span>
+              <strong className="text-emerald-400 font-mono tabular-nums">{item.paceStr || secondsToPaceString(item.paceSec)}</strong>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px]">Tempo</span>
+              <strong className="text-slate-200 font-mono tabular-nums">{Math.round(item.time || 0)} min</strong>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px]">Calorias</span>
+              <strong className="text-amber-300 font-mono tabular-nums">
+                {item.calories > 0 ? `${Math.round(item.calories)} kcal` : "—"}
+              </strong>
+            </div>
+            {item.elevation > 0 && (
+              <div className="col-span-2 pt-0.5 border-t border-white/5">
+                <span className="text-slate-400 text-[10px]">Altimetria Acumulada: </span>
+                <strong className="text-indigo-300 font-mono tabular-nums">+{item.elevation} m</strong>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const renderBioChart = () => {
+      const chartType = bioSettings.chartType || "area";
+      const strokeColor = bioSettings.color === "auto" ? (chartTheme.weightLine || "#30D158") : bioSettings.color;
+      const bfColor = chartTheme.bfLine || "#6366f1";
+      const curveType = bioSettings.curveType || "monotone";
+      const strokeWidth = bioSettings.strokeWidth || 2.5;
+
+      const showWeight = bioSeriesMode === "all" || bioSeriesMode === "weight" || bioSeriesMode === "target";
+      const showBf = (bioSeriesMode === "all" || bioSeriesMode === "bf") && filteredBioLogs.some((l) => l.bf != null);
+      const showTarget = bioSeriesMode === "target" || bioSeriesMode === "all";
+
+      const commonAxesAndDefs = (
+        <>
+          <defs>
+            <linearGradient id="bioColorWeight" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={strokeColor} stopOpacity={0.28} />
+              <stop offset="95%" stopColor={strokeColor} stopOpacity={0.0} />
+            </linearGradient>
+            <linearGradient id="bioColorBf" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={bfColor} stopOpacity={0.28} />
+              <stop offset="95%" stopColor={bfColor} stopOpacity={0.0} />
+            </linearGradient>
+          </defs>
+          {bioSettings.showGrid !== false && (
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+          )}
+          <XAxis
+            dataKey="date"
+            stroke="#64748b"
+            fontSize={11}
+            tickFormatter={(v) => formatDateBR(v)}
+          />
+          <YAxis
+            yAxisId="weight"
+            stroke="#64748b"
+            fontSize={11}
+            domain={["auto", "auto"]}
+            tickFormatter={(v) => `${Number(v).toFixed(0)}kg`}
+          />
+          {showBf && (
+            <YAxis
+              yAxisId="bf"
+              orientation="right"
+              stroke="#64748b"
+              fontSize={11}
+              domain={["auto", "auto"]}
+              tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
+            />
+          )}
+          <Tooltip content={<CustomCyberTooltip isCurrency={false} />} cursor={false} />
+          {bioSettings.showLegend !== false && <Legend wrapperStyle={{ fontSize: "11px" }} />}
+          {showTarget && (
+            <ReferenceLine
+              yAxisId="weight"
+              y={78.0}
+              stroke="#f59e0b"
+              strokeDasharray="4 4"
+              strokeWidth={1.5}
+              label={{ value: "Meta 78kg", fill: "#f59e0b", fontSize: 10, position: "insideTopRight" }}
+            />
+          )}
+        </>
+      );
+
+      if (chartType === "bar") {
+        return (
+          <BarChart data={filteredBioLogs} barSize={20} accessibilityLayer={false}>
+            {commonAxesAndDefs}
+            {showWeight && (
+              <Bar yAxisId="weight" dataKey="weight" name="Peso (kg)" fill={strokeColor} radius={[4, 4, 0, 0]} />
+            )}
+            {showBf && (
+              <Bar yAxisId="bf" dataKey="bf" name="Gordura - BF (%)" fill={bfColor} radius={[4, 4, 0, 0]} />
+            )}
+          </BarChart>
+        );
+      }
+
+      if (chartType === "line") {
+        return (
+          <LineChart data={filteredBioLogs} accessibilityLayer={false}>
+            {commonAxesAndDefs}
+            {showWeight && (
+              <Line
+                yAxisId="weight"
+                type={curveType}
+                dataKey="weight"
+                name="Peso (kg)"
+                stroke={strokeColor}
+                strokeWidth={strokeWidth}
+                dot={bioSettings.showDots ? { r: 3, fill: strokeColor } : false}
+                activeDot={{ r: 5 }}
+              />
+            )}
+            {showBf && (
+              <Line
+                yAxisId="bf"
+                type={curveType}
+                dataKey="bf"
+                name="Gordura - BF (%)"
+                stroke={bfColor}
+                strokeWidth={strokeWidth}
+                dot={bioSettings.showDots ? { r: 3, fill: bfColor } : false}
+                activeDot={{ r: 5 }}
+              />
+            )}
+          </LineChart>
+        );
+      }
+
+      // Default: area
+      return (
+        <AreaChart data={filteredBioLogs} accessibilityLayer={false}>
+          {commonAxesAndDefs}
+          {showWeight && (
+            <Area
+              yAxisId="weight"
+              type={curveType}
+              dataKey="weight"
+              name="Peso (kg)"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              fill="url(#bioColorWeight)"
+              dot={bioSettings.showDots ? { r: 3, fill: strokeColor } : false}
+              activeDot={{ r: 5 }}
+            />
+          )}
+          {showBf && (
+            <Area
+              yAxisId="bf"
+              type={curveType}
+              dataKey="bf"
+              name="Gordura - BF (%)"
+              stroke={bfColor}
+              strokeWidth={strokeWidth}
+              fill="url(#bioColorBf)"
+              dot={bioSettings.showDots ? { r: 3, fill: bfColor } : false}
+              activeDot={{ r: 5 }}
+            />
+          )}
+        </AreaChart>
+      );
+    };
+
+    const renderStravaChart = () => {
+      const chartType = stravaChartSettings.chartType || "bar";
+      const strokeColor = stravaChartSettings.color === "auto" ? "#FF9F0A" : stravaChartSettings.color;
+      const curveType = stravaChartSettings.curveType || "monotone";
+      const strokeWidth = stravaChartSettings.strokeWidth || 2.5;
+
+      const dataKey =
+        stravaMetric === "distance"
+          ? "distance"
+          : stravaMetric === "pace"
+          ? "paceSec"
+          : stravaMetric === "time"
+          ? "time"
+          : "calories";
+
+      const metricLabel =
+        stravaMetric === "distance"
+          ? "Distância (km)"
+          : stravaMetric === "pace"
+          ? "Pace Médio (/km)"
+          : stravaMetric === "time"
+          ? "Tempo (min)"
+          : "Calorias (kcal)";
+
+      const yTickFormatter = (v: number) => {
+        if (stravaMetric === "distance") return `${v.toFixed(0)}km`;
+        if (stravaMetric === "pace") return secondsToPaceString(v);
+        if (stravaMetric === "time") return `${Math.round(v)}m`;
+        return `${Math.round(v)}`;
+      };
+
+      const weeklyGoalKm = Math.round(annualRunGoalKm / 52);
+      const showWeeklyGoal = stravaTimeScale === "Semana" && stravaMetric === "distance" && weeklyGoalKm > 0;
+
+      const commonAxesAndDefs = (
+        <>
+          <defs>
+            <linearGradient id="stravaColorMetric" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={strokeColor} stopOpacity={0.28} />
+              <stop offset="95%" stopColor={strokeColor} stopOpacity={0.0} />
+            </linearGradient>
+          </defs>
+          {stravaChartSettings.showGrid !== false && (
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+          )}
+          <XAxis
+            dataKey="label"
+            stroke="#64748b"
+            fontSize={11}
+          />
+          <YAxis
+            stroke="#64748b"
+            fontSize={11}
+            domain={["auto", "auto"]}
+            tickFormatter={yTickFormatter}
+          />
+          <Tooltip content={<StravaCustomTooltip />} cursor={false} />
+          {stravaChartSettings.showLegend !== false && <Legend wrapperStyle={{ fontSize: "11px" }} />}
+          {showWeeklyGoal && (
+            <ReferenceLine
+              y={weeklyGoalKm}
+              stroke="#f59e0b"
+              strokeDasharray="4 4"
+              strokeWidth={1.5}
+              label={{ value: `Meta: ${weeklyGoalKm} km/sem`, fill: "#f59e0b", fontSize: 10, position: "insideTopRight" }}
+            />
+          )}
+        </>
+      );
+
+      if (chartType === "area") {
+        return (
+          <AreaChart data={aggregatedStravaData} accessibilityLayer={false}>
+            {commonAxesAndDefs}
+            <Area
+              type={curveType}
+              dataKey={dataKey}
+              name={metricLabel}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              fill="url(#stravaColorMetric)"
+              dot={stravaChartSettings.showDots ? { r: 3, fill: strokeColor } : false}
+              activeDot={{ r: 5 }}
+            />
+          </AreaChart>
+        );
+      }
+
+      if (chartType === "line") {
+        return (
+          <LineChart data={aggregatedStravaData} accessibilityLayer={false}>
+            {commonAxesAndDefs}
+            <Line
+              type={curveType}
+              dataKey={dataKey}
+              name={metricLabel}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              dot={stravaChartSettings.showDots ? { r: 3, fill: strokeColor } : false}
+              activeDot={{ r: 5 }}
+            />
+          </LineChart>
+        );
+      }
+
+      // Default: bar
+      return (
+        <BarChart data={aggregatedStravaData} barSize={stravaTimeScale === "Dia" ? 16 : 28} accessibilityLayer={false}>
+          {commonAxesAndDefs}
+          <Bar dataKey={dataKey} name={metricLabel} fill={strokeColor} radius={[6, 6, 0, 0]} />
+        </BarChart>
+      );
+    };
+
     return (
       <div className="space-y-6">
         <div className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-orange-950/50 border border-orange-500/30 flex flex-wrap items-center justify-between gap-4 shadow-xl mb-3">
@@ -971,33 +1843,143 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 glass-card p-6 rounded-3xl border border-white/[0.08] space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* SPRINT 38: CENTRAL ANALÍTICA DE BIOIMPEDÂNCIA */}
+          <div className="lg:col-span-2 glass-card p-5 sm:p-6 rounded-3xl border border-white/[0.08] flex flex-col justify-between space-y-4">
+            {/* Cabeçalho de Controles & Períodos */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/5">
               <div>
-                <h3 className="text-sm font-extrabold text-white">Curva de Peso (kg) e Gordura Corporal (BF %)</h3>
+                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-400" />
+                  Curva de Peso (kg) e Gordura Corporal (BF %)
+                </h3>
                 <p className="text-xs text-slate-400">Histórico visual das suas pesagens e avaliações físicas.</p>
               </div>
-              <div className="flex items-center gap-3 text-[11px]">
-                <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer"><span>Peso:</span><input type="color" value={chartTheme.weightLine} onChange={(e) => updateChartThemeColor("weightLine", e.target.value)} className="color-circle" /></label>
-                <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer"><span>BF%:</span><input type="color" value={chartTheme.bfLine} onChange={(e) => updateChartThemeColor("bfLine", e.target.value)} className="color-circle" /></label>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Seletor de Séries */}
+                <select
+                  value={bioSeriesMode}
+                  onChange={(e) => setBioSeriesMode(e.target.value as any)}
+                  className="px-2.5 py-1 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-slate-200 outline-none focus:border-emerald-400 cursor-pointer"
+                >
+                  <option value="all">Peso + BF%</option>
+                  <option value="weight">Só Peso (kg)</option>
+                  <option value="bf">Só BF (%)</option>
+                  <option value="target">Rumo à Meta (78kg)</option>
+                </select>
+
+                {/* Seletor de Período Rápido */}
+                <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-900/90 border border-white/10 text-xs">
+                  {(["1M", "3M", "6M", "1A", "Tudo"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setBioPeriodFilter(p)}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
+                        bioPeriodFilter === p
+                          ? "bg-emerald-500 text-slate-950 shadow-sm"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Botão de Engrenagem / Popover */}
+                <div className="relative">
+                  <button
+                    ref={bioGearRef}
+                    type="button"
+                    onClick={() => setBioSettingsOpen((prev) => !prev)}
+                    className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                    title="Configurações do gráfico de bioimpedância"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </button>
+
+                  <ChartSettingsPopover
+                    isOpen={bioSettingsOpen}
+                    onClose={() => setBioSettingsOpen(false)}
+                    anchorRef={bioGearRef}
+                    chartKind={bioSettings.chartType || "area"}
+                    hasMultipleSeries={true}
+                    settings={bioSettings}
+                    onChange={handleUpdateBioSettings}
+                  />
+                </div>
               </div>
             </div>
-            <div className="h-72 select-none">
+
+            {/* Display Executivo no Topo */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="flex items-baseline gap-3">
+                <span className="text-2xl sm:text-3xl font-extrabold font-mono text-white tracking-tight tabular-nums">
+                  {bioTelemetry.currentWeight > 0 ? `${bioTelemetry.currentWeight.toFixed(1)} kg` : "—"}
+                </span>
+                {bioTelemetry.initialWeight > 0 && (
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold tabular-nums border ${
+                      bioTelemetry.deltaWeight <= 0
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        : "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                    }`}
+                  >
+                    {bioTelemetry.deltaWeight <= 0 ? "▼" : "▲"}
+                    {Math.abs(bioTelemetry.deltaWeight).toFixed(1)} kg ({bioTelemetry.deltaPct >= 0 ? "+" : ""}
+                    {bioTelemetry.deltaPct.toFixed(1)}%)
+                  </span>
+                )}
+              </div>
+
+              {bioTelemetry.currentBf != null && (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 tabular-nums">
+                    BF Atual: {bioTelemetry.currentBf.toFixed(1)}%
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Gráfico Recharts Dinâmico */}
+            <div
+              style={{ height: getChartHeightPx(bioSettings.height, 220) }}
+              className="w-full select-none"
+            >
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={bioLogs} accessibilityLayer={false}>
-                  <defs>
-                    <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartTheme.weightLine} stopOpacity={0.25} /><stop offset="95%" stopColor={chartTheme.weightLine} stopOpacity={0.0} /></linearGradient>
-                    <linearGradient id="colorBf" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartTheme.bfLine} stopOpacity={0.25} /><stop offset="95%" stopColor={chartTheme.bfLine} stopOpacity={0.0} /></linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                  <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickFormatter={(v) => formatDateBR(v)} />
-                  <YAxis stroke="#64748b" fontSize={11} domain={["auto", "auto"]} />
-                  <Tooltip content={<CustomCyberTooltip isCurrency={false} />} cursor={false} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <Area type="monotone" dataKey="weight" name="Peso Corporal (kg)" stroke={chartTheme.weightLine} strokeWidth={2} fill="url(#colorWeight)" />
-                  <Area type="monotone" dataKey="bf" name="Gordura - BF (%)" stroke={chartTheme.bfLine} strokeWidth={2} fill="url(#colorBf)" />
-                </AreaChart>
+                {renderBioChart()}
               </ResponsiveContainer>
+            </div>
+
+            {/* Faixa Inferior de Telemetria com 4 Mini-Cards Executivos */}
+            <div className="pt-3 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Peso Inicial ({bioPeriodFilter})</span>
+                <p className="text-sm font-bold text-white font-mono tabular-nums mt-0.5">
+                  {bioTelemetry.initialWeight > 0 ? `${bioTelemetry.initialWeight.toFixed(1)} kg` : "—"}
+                </p>
+              </div>
+
+              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Mínimo Atingido</span>
+                <p className="text-sm font-bold text-emerald-400 font-mono tabular-nums mt-0.5">
+                  {bioTelemetry.minWeight > 0 ? `${bioTelemetry.minWeight.toFixed(1)} kg` : "—"}
+                </p>
+              </div>
+
+              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Média do Período</span>
+                <p className="text-sm font-bold text-sky-400 font-mono tabular-nums mt-0.5">
+                  {bioTelemetry.avgWeight > 0 ? `${bioTelemetry.avgWeight.toFixed(1)} kg` : "—"}
+                </p>
+              </div>
+
+              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Massa Magra Est.</span>
+                <p className="text-sm font-bold text-indigo-300 font-mono tabular-nums mt-0.5">
+                  {bioTelemetry.leanMass != null ? `${bioTelemetry.leanMass.toFixed(1)} kg` : "—"}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -1046,6 +2028,134 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* SPRINT 38: CENTRAL ANALÍTICA DE CORRIDAS & PACE (STRAVA PROGRESS) */}
+        <div className="glass-card p-5 sm:p-6 rounded-3xl border border-white/[0.08] flex flex-col justify-between space-y-4">
+          {/* Cabeçalho de Controles, Métricas e Escala Temporal */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/5">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-orange-500/15 text-orange-400">
+                  <Flame className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-extrabold text-white tracking-tight">
+                  Central Analítica de Corridas & Pace — Strava Progress
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Volume acumulado, ritmo médio e calorias por período com meta semanal.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Seletor de Métrica Principal */}
+              <select
+                value={stravaMetric}
+                onChange={(e) => setStravaMetric(e.target.value as any)}
+                className="px-2.5 py-1 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-slate-200 outline-none focus:border-orange-500 cursor-pointer"
+              >
+                <option value="distance">Distância (km)</option>
+                <option value="pace">Pace Médio (/km)</option>
+                <option value="time">Tempo (min)</option>
+                <option value="calories">Calorias (kcal)</option>
+              </select>
+
+              {/* Seletor de Escala Temporal */}
+              <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-900/90 border border-white/10 text-xs">
+                {(["Dia", "Semana", "Mês", "Ano"] as const).map((sc) => (
+                  <button
+                    key={sc}
+                    type="button"
+                    onClick={() => setStravaTimeScale(sc)}
+                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
+                      stravaTimeScale === sc
+                        ? "bg-orange-500 text-slate-950 shadow-sm"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {sc}
+                  </button>
+                ))}
+              </div>
+
+              {/* Botão de Engrenagem / Popover */}
+              <div className="relative">
+                <button
+                  ref={stravaGearRef}
+                  type="button"
+                  onClick={() => setStravaSettingsOpen((prev) => !prev)}
+                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
+                  title="Configurações do gráfico Strava"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
+
+                <ChartSettingsPopover
+                  isOpen={stravaSettingsOpen}
+                  onClose={() => setStravaSettingsOpen(false)}
+                  anchorRef={stravaGearRef}
+                  chartKind={stravaChartSettings.chartType || "bar"}
+                  hasMultipleSeries={false}
+                  settings={stravaChartSettings}
+                  onChange={handleUpdateStravaChartSettings}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Gráfico Recharts Dinâmico */}
+          <div
+            style={{ height: getChartHeightPx(stravaChartSettings.height, 220) }}
+            className="w-full select-none"
+          >
+            {aggregatedStravaData.length === 0 ? (
+              <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 rounded-2xl bg-slate-950/40 border border-white/5">
+                <Flame className="w-8 h-8 text-orange-500/30 mb-2" />
+                <p className="text-xs text-slate-400">
+                  Nenhum treino disponível para a escala <strong>{stravaTimeScale}</strong>.
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Sincronize pelo Strava para carregar suas atividades recentes.
+                </p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                {renderStravaChart()}
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Faixa Inferior de Telemetria com 4 Mini-Cards Executivos */}
+          <div className="pt-3 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Distância Total</span>
+              <p className="text-sm font-bold text-orange-400 font-mono tabular-nums mt-0.5">
+                {stravaTelemetry.totalKm > 0 ? `${stravaTelemetry.totalKm} km` : "—"}
+              </p>
+            </div>
+
+            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Melhor Pace</span>
+              <p className="text-sm font-bold text-emerald-400 font-mono tabular-nums mt-0.5">
+                {stravaTelemetry.bestPaceStr}
+              </p>
+            </div>
+
+            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Maior Distância</span>
+              <p className="text-sm font-bold text-sky-400 font-mono tabular-nums mt-0.5">
+                {stravaTelemetry.maxKm > 0 ? `Longão: ${stravaTelemetry.maxKm} km` : "—"}
+              </p>
+            </div>
+
+            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Horas em Movimento</span>
+              <p className="text-sm font-bold text-amber-300 font-mono tabular-nums mt-0.5">
+                {stravaTelemetry.timeFormatted}
+              </p>
+            </div>
           </div>
         </div>
 

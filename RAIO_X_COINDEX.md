@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.28.0`  
-> **Última Atualização:** 2 de Novembro de 2026 (Pós-Sprint 36 — Criação da Rota Oficial /api/strava, Callback OAuth2 1-Clique com Suporte a Escopo Read e Blindagem de Sincronização na Aba Bio)  
+> **Versão da Aplicação:** `0.29.0`  
+> **Última Atualização:** 3 de Novembro de 2026 (Pós-Sprint 38 — Correção da Digitação de Data no TransactionModal, Reforma Slim de Valores a Receber e Central Analítica de Bioimpedância & Strava Progress)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -696,6 +696,31 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       2. Renderização de todos os modais (`TransactionModal`, modal de importação OFX/CSV, Command Palette `Ctrl+K`, `ProfileModal`, `deleteSeriesModal` e `confirmModal`) diretamente em `document.body` via `createPortal`.
       3. Overlays com `fixed inset-0 w-screen h-dvh z-[9999] overflow-hidden` e cards com `max-h-[86dvh]` com scroll interno customizado e cabeçalho/rodapé fixos.
       4. Substituição de resquícios de paleta roxa legada (`#110724`, `border-[#A855F7]`) pela paleta oficial Cupertino Glassmorphism (`bg-[var(--cupertino-card)] border border-[var(--cupertino-border)]`).
+
+  - **Sprint 38 (Novembro de 2026 — Correção da Digitação de Data no TransactionModal, Reforma Slim de Valores a Receber e Central Analítica de Bioimpedância & Strava Progress):**
+    - **Passo 1 — Correção da Digitação de Data (`SmartDateInputBR` em `app/components/TransactionModal.tsx` e blindagem em `app/lib/domain/date-br.ts`):**
+      - Substituição dos campos nativos `<input type="date">` pelo componente inteligente `SmartDateInputBR` com máscara progressiva visual (`DD/MM/AAAA`), auto-commit de 8 dígitos para formato canônico `DD-MM-YYYY` e botão integrado com popover de calendário nativo via `.showPicker()`.
+      - Extinção do bug de reset do dia e mês causado por strings temporárias emitidas pelos navegadores ao digitar o primeiro dígito do ano (ex: `"0002-11-03"`).
+      - Blindagem em `app/lib/domain/date-br.ts` com guard `year < 1000` em `parseDateParts` para rejeitar anos parciais.
+      - Botões de seleção rápida "Hoje" e "Ontem" com foco e preenchimento instantâneo.
+    - **Passo 2 — Reforma Slim da Tabela de Valores a Receber (`app/SecondaryTabs.tsx`):**
+      - **Preservação do Valor Original Quitado:** Extinção do `R$ 0,00` fantasma ao quitar 100% de uma dívida. A coluna "Restante / Total" preserva o valor integral emprestado em verde menta (`#30D158` / `text-emerald-400 font-extrabold`) com badge "100% Quitado".
+      - **3 Estados Visuais Claros:** Pendente Integral (total devido em âmbar), Parcialmente Quitado (saldo restante em âmbar, micro barra de progresso horizontal e legenda `Pago: R$ X de R$ Y`) e 100% Quitado (valor total em verde com confirmação).
+      - **Compactação Vertical Slim:** Linhas executivas de ~38px com `py-1.5 px-3`, coluna de data em linha única com `whitespace-nowrap tabular-nums min-w-[100px]` e inputs/botões de abatimento parcial compactados em `h-7` (28px).
+      - **Barra de Ferramentas de Filtros & Ordenação Inteligente:** Campo de busca rápida por texto (descrição ou devedor), dropdown de devedores únicos, segmented control de situação (`[Todos | Pendentes | Parciais | Quitados]`) e cabeçalhos ordenáveis clicáveis (`Data`, `Descrição`, `Pessoa`, `Situação`, `Restante / Total`) com setas indicativas `ArrowUp` / `ArrowDown` / `ArrowUpDown`.
+    - **Passo 3 — Central Analítica de Bioimpedância no Padrão Cupertino (`app/SecondaryTabs.tsx`):**
+      - Conexão oficial do `ChartSettingsPopover` com persistência em chave dedicada `fincontrol_chart_settings_bio_weight_chart`, permitindo alternar tipo de gráfico (`area`, `line`, `bar`), curvatura (`monotone`, `linear`, `step`), cor da série e altura (`compact`: 175px, `normal`: 220px, `tall`: 290px).
+      - Seletor de período dinâmico `[1M | 3M | 6M | 1A | Tudo]` e seletor de séries visíveis `[Peso + BF% | Só Peso (kg) | Só BF (%) | Rumo à Meta (78kg)]`.
+      - Display executivo de alto impacto com Peso Atual em destaque (`text-3xl font-mono text-white`), badge colorida de variação no período (`-1.4 kg (-1.8%)` em verde ou rose) e badge de BF Atual (`15.2%`).
+      - Linha de referência horizontal pontilhada (`ReferenceLine`) com a meta física (`Meta 78kg`).
+      - Faixa inferior de telemetria com 4 mini-cards executivos: Peso Inicial do Período, Peso Mínimo Atingido, Média do Período e Massa Magra Estimada (kg).
+    - **Passo 4 — Nova Central Analítica de Corridas & Pace — Strava Progress (`app/SecondaryTabs.tsx`):**
+      - Novo card analítico completo posicionado acima do feed de atividades Strava.
+      - Seletor de escala temporal no cabeçalho: `[Dia | Semana | Mês | Ano]`, com motor de agregação agrupando corridas semanais (com pace médio ponderado por distância) e mensais.
+      - Seletor de métrica principal: `[Distância (km) | Pace Médio (/km) | Tempo (min) | Calorias]`.
+      - Suporte ao `ChartSettingsPopover` (`strava_runs_chart`), altura dinâmica reativa e linha de meta semanal pontilhada (`ReferenceLine` com `annualRunGoalKm / 52` km/semana).
+      - Tooltip de alta telemetria esportiva (`StravaCustomTooltip`) com data, nome da atividade, distância, pace formatado, tempo, calorias e altimetria acumulada.
+      - Faixa inferior com 4 mini-cards executivos: Distância Total no Período, Melhor Pace Registrado, Maior Distância Única (Longão) e Total de Horas em Movimento (`Xh XXm`).
 
 ---
 

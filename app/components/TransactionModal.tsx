@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Fuel, Wallet, X, Layers, Gauge, CreditCard, Loader2, ArrowLeftRight, Users, Sparkles, Plus, TrendingUp } from "lucide-react";
+import { Fuel, Wallet, X, Layers, Gauge, CreditCard, Loader2, ArrowLeftRight, Users, Sparkles, Plus, TrendingUp, Calendar } from "lucide-react";
 import {
   BankItem,
   CategoryCatalogItem,
@@ -17,6 +17,8 @@ import {
   todayBR,
   toSortableISO,
   compareDatesBR,
+  daysInMonth,
+  parseDateParts,
   getYearMonthKey,
   getAutomaticStatus,
   getCardInvoiceCompetence,
@@ -78,6 +80,125 @@ export interface TransactionModalProps {
   };
   transactions?: Transaction[];
 }
+
+export interface SmartDateInputBRProps {
+  value: string;
+  onChange: (dateBR: string) => void;
+  required?: boolean;
+  className?: string;
+  focusBorderColor?: "sky" | "amber" | "indigo";
+}
+
+export const SmartDateInputBR: React.FC<SmartDateInputBRProps> = ({
+  value,
+  onChange,
+  required = false,
+  className = "",
+  focusBorderColor = "indigo"
+}) => {
+  const formatToDisplay = (val: string): string => {
+    if (!val) return "";
+    const parts = parseDateParts(val);
+    if (parts) {
+      const dd = String(parts.day).padStart(2, "0");
+      const mm = String(parts.month).padStart(2, "0");
+      return `${dd}/${mm}/${parts.year}`;
+    }
+    return val.replace(/-/g, "/");
+  };
+
+  const [textValue, setTextValue] = useState<string>(() => formatToDisplay(value));
+  const hiddenPickerRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setTextValue(formatToDisplay(value));
+  }, [value]);
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+    let formatted = digits;
+    if (digits.length > 4) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    } else if (digits.length > 2) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    setTextValue(formatted);
+
+    // Se completou os 8 dígitos (DD/MM/AAAA)
+    if (digits.length === 8) {
+      const day = parseInt(digits.slice(0, 2), 10);
+      const month = parseInt(digits.slice(2, 4), 10);
+      const year = parseInt(digits.slice(4, 8), 10);
+
+      if (month >= 1 && month <= 12 && year >= 1900 && year <= 2099) {
+        const maxDays = daysInMonth(year, month);
+        const safeDay = Math.min(Math.max(1, day), maxDays);
+        const validBR = `${String(safeDay).padStart(2, "0")}-${String(month).padStart(2, "0")}-${year}`;
+        onChange(validBR);
+      }
+    }
+  };
+
+  const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const iso = e.target.value;
+    if (!iso) return;
+    const br = formatDateBR(iso);
+    if (br) {
+      setTextValue(br.replace(/-/g, "/"));
+      onChange(br);
+    }
+  };
+
+  const openNativePicker = () => {
+    if (hiddenPickerRef.current) {
+      try {
+        hiddenPickerRef.current.showPicker();
+      } catch {
+        hiddenPickerRef.current.click();
+      }
+    }
+  };
+
+  const borderFocusClass =
+    focusBorderColor === "sky"
+      ? "focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500/20"
+      : focusBorderColor === "amber"
+      ? "focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500/20"
+      : "focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500/20";
+
+  return (
+    <div className={`relative flex items-center rounded-xl bg-slate-950 border border-white/10 ${borderFocusClass} transition-all ${className}`}>
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="DD/MM/AAAA"
+        maxLength={10}
+        required={required}
+        value={textValue}
+        onChange={handleTextChange}
+        className="w-full px-3.5 py-2.5 bg-transparent text-white font-mono tabular-nums text-xs outline-none placeholder:text-slate-500"
+      />
+      <button
+        type="button"
+        onClick={openNativePicker}
+        className="p-2 mr-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition cursor-pointer shrink-0"
+        title="Abrir calendário"
+        tabIndex={-1}
+      >
+        <Calendar className="w-4 h-4" />
+      </button>
+      <input
+        ref={hiddenPickerRef}
+        type="date"
+        tabIndex={-1}
+        aria-hidden="true"
+        value={toSortableISO(value) || ""}
+        onChange={handlePickerChange}
+        className="sr-only pointer-events-none"
+      />
+    </div>
+  );
+};
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
   isOpen,
@@ -516,12 +637,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       </button>
                     </div>
                   </div>
-                  <input
-                    type="date"
+                  <SmartDateInputBR
+                    value={formState.date}
+                    onChange={(brDate) => setFormState((prev) => ({ ...prev, date: brDate }))}
                     required
-                    value={toSortableISO(formState.date) || formState.date}
-                    onChange={(e) => setFormState((prev) => ({ ...prev, date: formatDateBR(e.target.value) }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-sky-500 transition"
+                    focusBorderColor="sky"
                   />
                 </div>
                 <div>
@@ -750,12 +870,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     </button>
                   </div>
                 </div>
-                <input
-                  type="date"
+                <SmartDateInputBR
+                  value={formState.date}
+                  onChange={(brDate) => setFormState((prev) => ({ ...prev, date: brDate }))}
                   required
-                  value={toSortableISO(formState.date) || formState.date}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, date: formatDateBR(e.target.value) }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500 text-xs tabular-nums"
+                  focusBorderColor="amber"
                 />
               </div>
             </div>
@@ -1087,12 +1206,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     </button>
                   </div>
                 </div>
-                <input
-                  type="date"
+                <SmartDateInputBR
+                  value={formState.date}
+                  onChange={(brDate) => setFormState((prev) => ({ ...prev, date: brDate }))}
                   required
-                  value={toSortableISO(formState.date) || formState.date}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, date: formatDateBR(e.target.value) }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-indigo-500 tabular-nums text-xs transition"
+                  focusBorderColor="indigo"
                 />
               </div>
             </div>
