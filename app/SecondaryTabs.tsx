@@ -755,15 +755,58 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     return acts;
   }, [stravaActivities, stravaSport]);
 
+  // Helper universal e robusto de parsing de data de atividades Strava
+  const parseActDate = (dateStr?: string | null): Date | null => {
+    if (!dateStr || typeof dateStr !== "string") return null;
+    const s = dateStr.trim();
+    if (
+      s.toLowerCase().includes("semana") ||
+      s.toLowerCase().includes("ano") ||
+      s.toLowerCase().includes("hist") ||
+      s.toLowerCase().includes("total")
+    ) {
+      return null;
+    }
+    const parts = parseDateParts(s);
+    if (parts && parts.year >= 2000 && parts.month >= 1 && parts.month <= 12 && parts.day >= 1 && parts.day <= 31) {
+      return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0);
+    }
+    const isoMatch = s.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (isoMatch) {
+      const y = parseInt(isoMatch[1], 10);
+      const m = parseInt(isoMatch[2], 10);
+      const d = parseInt(isoMatch[3], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m - 1, d, 12, 0, 0);
+      }
+    }
+    const brMatch = s.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (brMatch) {
+      const d = parseInt(brMatch[1], 10);
+      const m = parseInt(brMatch[2], 10);
+      const y = parseInt(brMatch[3], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m - 1, d, 12, 0, 0);
+      }
+    }
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  // Atividades reais com data identificável
+  const datedActivities = useMemo(() => {
+    return effectiveStravaActivities.filter((a) => {
+      const d = parseActDate(a.date);
+      return d !== null && Number(a.distanceKm) > 0;
+    });
+  }, [effectiveStravaActivities]);
+
+  const hasDatedActivities = datedActivities.length > 0;
+
   const stravaRefDate = useMemo(() => {
-    if (effectiveStravaActivities.length > 0) {
-      const timestamps = effectiveStravaActivities
-        .map((a) => {
-          const parts = parseDateParts(a.date);
-          if (parts) return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0).getTime();
-          const d = new Date(a.date);
-          return isNaN(d.getTime()) ? 0 : d.getTime();
-        })
+    if (hasDatedActivities) {
+      const timestamps = datedActivities
+        .map((a) => parseActDate(a.date)?.getTime() || 0)
         .filter((t) => t > 0);
       if (timestamps.length > 0) {
         const maxTs = Math.max(...timestamps);
@@ -772,309 +815,26 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
       }
     }
     return new Date();
-  }, [effectiveStravaActivities]);
-
-  const stravaProgressPoints = useMemo(() => {
-    const ref = stravaRefDate;
-    const monthsShort = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
-    const monthsFull = [
-      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-    ];
-    const daysShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-    const parseActDate = (dateStr?: string | null): Date | null => {
-      if (!dateStr) return null;
-      const parts = parseDateParts(dateStr);
-      if (parts) return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0);
-      const iso = toSortableISO(dateStr);
-      if (iso) {
-        const p = iso.split("-").map(Number);
-        if (p.length === 3 && !isNaN(p[0]) && !isNaN(p[1]) && !isNaN(p[2])) {
-          return new Date(p[0], p[1] - 1, p[2], 12, 0, 0);
-        }
-      }
-      const d = new Date(dateStr);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
-    // 1. Caso 7D: Agrupa dia a dia nos últimos 7 dias
-    if (stravaPeriod === "7D") {
-      const pts = [];
-      const sampleDist = [0, 6.2, 0, 8.5, 0, 14.1, 0];
-      const sampleTime = [0, 34, 0, 48, 0, 82, 0];
-      const sampleElev = [0, 52, 0, 78, 0, 142, 0];
-
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - i, 12, 0, 0);
-        const dStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0).getTime();
-        const dEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
-
-        const acts = effectiveStravaActivities.filter((a) => {
-          const ad = parseActDate(a.date);
-          if (!ad) return false;
-          const t = ad.getTime();
-          return t >= dStart && t <= dEnd;
-        });
-
-        const dist = Math.round(acts.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 100) / 100;
-        const time = Math.round(acts.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
-        const elev = Math.round(acts.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
-
-        const dayStr = String(d.getDate()).padStart(2, "0");
-        const monthStr = monthsShort[d.getMonth()];
-        const weekDayStr = daysShort[d.getDay()];
-        const idx = 6 - i;
-
-        pts.push({
-          xKey: `day_${idx}`,
-          label: `${dayStr} ${monthStr}`,
-          monthShort: monthStr,
-          rangeLabel: `${weekDayStr}, ${dayStr} de ${monthsFull[d.getMonth()]}, ${d.getFullYear()}`,
-          distanceKm: effectiveStravaActivities.length > 0 ? dist : sampleDist[idx],
-          movingTimeMin: effectiveStravaActivities.length > 0 ? time : sampleTime[idx],
-          elevationGain: effectiveStravaActivities.length > 0 ? elev : sampleElev[idx]
-        });
-      }
-      return pts;
-    }
-
-    // 2. Caso 1M, 3M, 6M: Agrupa semana a semana (Segunda a Domingo)
-    if (stravaPeriod === "1M" || stravaPeriod === "3M" || stravaPeriod === "6M") {
-      const numWeeks = stravaPeriod === "1M" ? 5 : stravaPeriod === "3M" ? 13 : 26;
-      const dayOfWeek = ref.getDay();
-      const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const currentMonday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + diffToMon, 0, 0, 0, 0);
-
-      const sample1M_dist = [21.5, 28.0, 32.4, 34.8, 18.2];
-      const sample1M_time = [112, 145, 170, 192, 98];
-      const sample1M_elev = [190, 240, 310, 342, 160];
-
-      const pts = [];
-
-      for (let w = numWeeks - 1; w >= 0; w--) {
-        const mon = new Date(currentMonday.getTime() - w * 7 * 86400000);
-        mon.setHours(0, 0, 0, 0);
-        const sun = new Date(mon.getTime() + 6 * 86400000);
-        sun.setHours(23, 59, 59, 999);
-
-        const acts = effectiveStravaActivities.filter((a) => {
-          const ad = parseActDate(a.date);
-          if (!ad) return false;
-          const t = ad.getTime();
-          return t >= mon.getTime() && t <= sun.getTime();
-        });
-
-        const dist = Math.round(acts.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 100) / 100;
-        const time = Math.round(acts.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
-        const elev = Math.round(acts.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
-
-        const monDay = String(mon.getDate()).padStart(2, "0");
-        const sunDay = String(sun.getDate()).padStart(2, "0");
-        const monM = monthsShort[mon.getMonth()].slice(0, 3);
-        const sunM = monthsShort[sun.getMonth()].slice(0, 3);
-        const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-
-        const rangeLabel = `${monDay} de ${cap(monM)}, ${mon.getFullYear()} - ${sunDay} de ${cap(sunM)}, ${sun.getFullYear()}`;
-        const monthShort = monthsShort[sun.getMonth()];
-        const idx = numWeeks - 1 - w;
-
-        let finalDist = dist;
-        let finalTime = time;
-        let finalElev = elev;
-
-        if (effectiveStravaActivities.length === 0) {
-          if (numWeeks === 5) {
-            finalDist = sample1M_dist[idx];
-            finalTime = sample1M_time[idx];
-            finalElev = sample1M_elev[idx];
-          } else if (numWeeks === 13) {
-            const factor = (idx + 1) / 13;
-            finalDist = Math.round((14 + factor * 20.8) * 100) / 100;
-            finalTime = Math.round(finalDist * 5.5);
-            finalElev = Math.round(finalDist * 10);
-          } else {
-            const factor = (idx + 1) / 26;
-            finalDist = Math.round((10 + factor * 24.8) * 100) / 100;
-            finalTime = Math.round(finalDist * 5.5);
-            finalElev = Math.round(finalDist * 10);
-          }
-        }
-
-        pts.push({
-          xKey: `week_${idx}`,
-          label: monthShort,
-          monthShort,
-          rangeLabel,
-          distanceKm: finalDist,
-          movingTimeMin: finalTime,
-          elevationGain: finalElev
-        });
-      }
-      return pts;
-    }
-
-    // 3. Caso 1Y: Agrupa mês a mês nos últimos 12 meses
-    const pts = [];
-    const sample1Y_dist = [35, 42, 50, 48, 62, 70, 65, 80, 85, 92, 78, 45];
-
-    for (let m = 11; m >= 0; m--) {
-      const mDate = new Date(ref.getFullYear(), ref.getMonth() - m, 1, 0, 0, 0);
-      const y = mDate.getFullYear();
-      const monIdx = mDate.getMonth();
-      const mStart = new Date(y, monIdx, 1, 0, 0, 0).getTime();
-      const mEnd = new Date(y, monIdx + 1, 0, 23, 59, 59, 999).getTime();
-
-      const acts = effectiveStravaActivities.filter((a) => {
-        const ad = parseActDate(a.date);
-        if (!ad) return false;
-        const t = ad.getTime();
-        return t >= mStart && t <= mEnd;
-      });
-
-      const dist = Math.round(acts.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 100) / 100;
-      const time = Math.round(acts.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
-      const elev = Math.round(acts.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
-
-      const monthShort = monthsShort[monIdx];
-      const rangeLabel = `${monthsFull[monIdx]} de ${y}`;
-      const idx = 11 - m;
-
-      pts.push({
-        xKey: `month_${idx}`,
-        label: monthShort,
-        monthShort,
-        rangeLabel,
-        distanceKm: effectiveStravaActivities.length > 0 ? dist : sample1Y_dist[idx],
-        movingTimeMin: effectiveStravaActivities.length > 0 ? time : Math.round(sample1Y_dist[idx] * 5.5),
-        elevationGain: effectiveStravaActivities.length > 0 ? elev : Math.round(sample1Y_dist[idx] * 10)
-      });
-    }
-    return pts;
-  }, [effectiveStravaActivities, stravaPeriod, stravaRefDate]);
-
-  // Ponto padrão selecionado
-  const lastActiveStravaPointIdx = useMemo(() => {
-    if (stravaProgressPoints.length === 0) return 0;
-    if (stravaPeriod === "1M" && stravaProgressPoints.length >= 4 && effectiveStravaActivities.length === 0) {
-      return 3; // Hero point da amostra (34.80 km)
-    }
-    for (let i = stravaProgressPoints.length - 1; i >= 0; i--) {
-      if (stravaProgressPoints[i].distanceKm > 0) return i;
-    }
-    return Math.max(0, stravaProgressPoints.length - 1);
-  }, [stravaProgressPoints, stravaPeriod, effectiveStravaActivities.length]);
-
-  useEffect(() => {
-    setSelectedPointIndex(lastActiveStravaPointIdx);
-  }, [stravaPeriod, lastActiveStravaPointIdx]);
-
-  // Estatísticas da Semana Atual
-  const currentWeekStats = useMemo(() => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon, 0, 0, 0, 0);
-    const sunday = new Date(monday.getTime() + 6 * 86400000);
-    sunday.setHours(23, 59, 59, 999);
-
-    const parseActDate = (dateStr?: string | null): Date | null => {
-      if (!dateStr) return null;
-      const parts = parseDateParts(dateStr);
-      if (parts) return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0);
-      const iso = toSortableISO(dateStr);
-      if (iso) {
-        const p = iso.split("-").map(Number);
-        if (p.length === 3 && !isNaN(p[0]) && !isNaN(p[1]) && !isNaN(p[2])) {
-          return new Date(p[0], p[1] - 1, p[2], 12, 0, 0);
-        }
-      }
-      const d = new Date(dateStr);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
-    const daysInfo: { letter: string; hasRun: boolean; isToday: boolean }[] = [];
-    const letters = ["S", "T", "Q", "Q", "S", "S", "D"];
-
-    for (let i = 0; i < 7; i++) {
-      const dayDate = new Date(monday.getTime() + i * 86400000);
-      const isToday =
-        now.getDate() === dayDate.getDate() &&
-        now.getMonth() === dayDate.getMonth() &&
-        now.getFullYear() === dayDate.getFullYear();
-
-      const dStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 0, 0, 0, 0).getTime();
-      const dEnd = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 23, 59, 59, 999).getTime();
-
-      const hasRun = effectiveStravaActivities.some((a) => {
-        const ad = parseActDate(a.date);
-        if (!ad) return false;
-        const t = ad.getTime();
-        return t >= dStart && t <= dEnd && (Number(a.distanceKm) || 0) > 0;
-      });
-
-      daysInfo.push({
-        letter: letters[i],
-        hasRun,
-        isToday
-      });
-    }
-
-    const weekActs = effectiveStravaActivities.filter((a) => {
-      const ad = parseActDate(a.date);
-      if (!ad) return false;
-      const t = ad.getTime();
-      return t >= monday.getTime() && t <= sunday.getTime();
-    });
-
-    const totalKm = weekActs.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0);
-    const totalMin = weekActs.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0);
-    const totalElev = weekActs.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0);
-
-    const finalKm = effectiveStravaActivities.length === 0 ? 8.5 : Math.round(totalKm * 10) / 10;
-    const finalMin = effectiveStravaActivities.length === 0 ? 46 : Math.round(totalMin);
-    const finalElev = effectiveStravaActivities.length === 0 ? 74 : Math.round(totalElev);
-
-    return {
-      daysInfo,
-      weeklyCurrentKm: finalKm,
-      weeklyHours: Math.floor(finalMin / 60),
-      weeklyMins: Math.round(finalMin % 60),
-      weeklyElev: finalElev
-    };
-  }, [effectiveStravaActivities]);
+  }, [hasDatedActivities, datedActivities]);
 
   // Estatísticas Anuais (YTD) e Ritmo
   const annualProgressStats = useMemo(() => {
-    const parseActDate = (dateStr?: string | null): Date | null => {
-      if (!dateStr) return null;
-      const parts = parseDateParts(dateStr);
-      if (parts) return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0);
-      const iso = toSortableISO(dateStr);
-      if (iso) {
-        const p = iso.split("-").map(Number);
-        if (p.length === 3 && !isNaN(p[0]) && !isNaN(p[1]) && !isNaN(p[2])) {
-          return new Date(p[0], p[1] - 1, p[2], 12, 0, 0);
-        }
-      }
-      const d = new Date(dateStr);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
     let ytdKm = 0;
     if (stravaStats && Number(stravaStats.ytdKm) > 0) {
       ytdKm = Number(stravaStats.ytdKm);
-    } else {
+    } else if (hasDatedActivities) {
       const now = new Date();
       const y = now.getFullYear();
       const yStart = new Date(y, 0, 1).getTime();
       const yEnd = new Date(y, 11, 31, 23, 59, 59).getTime();
-      const yActs = effectiveStravaActivities.filter((a) => {
+      const yActs = datedActivities.filter((a) => {
         const ad = parseActDate(a.date);
         return ad && ad.getTime() >= yStart && ad.getTime() <= yEnd;
       });
       const sum = yActs.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0);
-      ytdKm = sum > 0 ? Math.round(sum * 10) / 10 : (effectiveStravaActivities.length === 0 ? 142 : 0);
+      ytdKm = Math.round(sum * 10) / 10;
+    } else {
+      ytdKm = 218;
     }
 
     const annualGoal = annualRunGoalKm > 0 ? annualRunGoalKm : 500;
@@ -1096,7 +856,273 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
       paceDeltaKm,
       progressPct
     };
-  }, [stravaStats, effectiveStravaActivities, annualRunGoalKm]);
+  }, [stravaStats, hasDatedActivities, datedActivities, annualRunGoalKm]);
+
+  const stravaProgressPoints = useMemo(() => {
+    const ref = stravaRefDate;
+    const monthsShort = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+    const monthsFull = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+    const daysShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    // 1. Caso 7D: Agrupa dia a dia nos últimos 7 dias
+    if (stravaPeriod === "7D") {
+      const pts = [];
+      const sampleDist = [0, 6.2, 0, 8.5, 0, 10.4, 4.2];
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - i, 12, 0, 0);
+        const dStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0).getTime();
+        const dEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+
+        const acts = hasDatedActivities
+          ? datedActivities.filter((a) => {
+              const ad = parseActDate(a.date);
+              if (!ad) return false;
+              const t = ad.getTime();
+              return t >= dStart && t <= dEnd;
+            })
+          : [];
+
+        const dist = Math.round(acts.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 100) / 100;
+        const time = Math.round(acts.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
+        const elev = Math.round(acts.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
+
+        const dayStr = String(d.getDate()).padStart(2, "0");
+        const monthStr = monthsShort[d.getMonth()];
+        const weekDayStr = daysShort[d.getDay()];
+        const idx = 6 - i;
+
+        const finalDist = hasDatedActivities ? dist : sampleDist[idx];
+        const finalTime = hasDatedActivities ? time : Math.round(finalDist * 5.4);
+        const finalElev = hasDatedActivities ? elev : Math.round(finalDist * 9.5);
+
+        pts.push({
+          xKey: `day_${idx}`,
+          label: `${dayStr} ${monthStr}`,
+          monthShort: monthStr,
+          rangeLabel: `${weekDayStr}, ${dayStr} de ${monthsFull[d.getMonth()]}, ${d.getFullYear()}`,
+          distanceKm: finalDist,
+          movingTimeMin: finalTime,
+          elevationGain: finalElev
+        });
+      }
+      return pts;
+    }
+
+    // 2. Caso 1M, 3M, 6M: Agrupa semana a semana (Segunda a Domingo)
+    if (stravaPeriod === "1M" || stravaPeriod === "3M" || stravaPeriod === "6M") {
+      const numWeeks = stravaPeriod === "1M" ? 5 : stravaPeriod === "3M" ? 13 : 26;
+      const dayOfWeek = ref.getDay();
+      const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const currentMonday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + diffToMon, 0, 0, 0, 0);
+
+      const sample1M_dist = [21.5, 28.0, 32.4, 34.8, 14.5];
+      const sample3M_dist = [14.2, 18.5, 21.0, 16.5, 22.8, 26.0, 18.2, 28.0, 31.2, 34.8, 22.4, 18.5, 12.0];
+      const sample6M_dist = [
+        8.5, 12.0, 15.4, 6.0, 18.2, 14.0, 21.5, 16.0, 24.8, 12.0,
+        28.5, 8.0, 19.2, 22.0, 16.5, 25.4, 18.0, 31.2, 22.4, 28.0,
+        34.8, 18.5, 24.0, 14.5, 9.8, 5.2
+      ];
+
+      const pts = [];
+
+      for (let w = numWeeks - 1; w >= 0; w--) {
+        const mon = new Date(currentMonday.getTime() - w * 7 * 86400000);
+        mon.setHours(0, 0, 0, 0);
+        const sun = new Date(mon.getTime() + 6 * 86400000);
+        sun.setHours(23, 59, 59, 999);
+
+        const acts = hasDatedActivities
+          ? datedActivities.filter((a) => {
+              const ad = parseActDate(a.date);
+              if (!ad) return false;
+              const t = ad.getTime();
+              return t >= mon.getTime() && t <= sun.getTime();
+            })
+          : [];
+
+        const dist = Math.round(acts.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 100) / 100;
+        const time = Math.round(acts.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
+        const elev = Math.round(acts.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
+
+        const monDay = String(mon.getDate()).padStart(2, "0");
+        const sunDay = String(sun.getDate()).padStart(2, "0");
+        const monM = monthsShort[mon.getMonth()].slice(0, 3);
+        const sunM = monthsShort[sun.getMonth()].slice(0, 3);
+        const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+        const rangeLabel = `${monDay} de ${cap(monM)}, ${mon.getFullYear()} - ${sunDay} de ${cap(sunM)}, ${sun.getFullYear()}`;
+        const monthShort = monthsShort[sun.getMonth()];
+        const idx = numWeeks - 1 - w;
+
+        let finalDist = dist;
+        let finalTime = time;
+        let finalElev = elev;
+
+        if (!hasDatedActivities) {
+          if (numWeeks === 5) {
+            finalDist = sample1M_dist[idx];
+          } else if (numWeeks === 13) {
+            finalDist = sample3M_dist[idx];
+          } else {
+            finalDist = sample6M_dist[idx];
+          }
+          finalTime = Math.round(finalDist * 5.51);
+          finalElev = Math.round(finalDist * 9.8);
+        }
+
+        pts.push({
+          xKey: `week_${idx}`,
+          label: monthShort,
+          monthShort,
+          rangeLabel,
+          distanceKm: finalDist,
+          movingTimeMin: finalTime,
+          elevationGain: finalElev
+        });
+      }
+      return pts;
+    }
+
+    // 3. Caso 1Y: Agrupa mês a mês nos últimos 12 meses
+    const pts = [];
+    const sample1Y_dist = [12.0, 16.5, 22.0, 25.4, 20.0, 24.5, 28.2, 22.0, 26.5, 21.4, 25.0, 8.5];
+
+    for (let m = 11; m >= 0; m--) {
+      const mDate = new Date(ref.getFullYear(), ref.getMonth() - m, 1, 0, 0, 0);
+      const y = mDate.getFullYear();
+      const monIdx = mDate.getMonth();
+      const mStart = new Date(y, monIdx, 1, 0, 0, 0).getTime();
+      const mEnd = new Date(y, monIdx + 1, 0, 23, 59, 59, 999).getTime();
+
+      const acts = hasDatedActivities
+        ? datedActivities.filter((a) => {
+            const ad = parseActDate(a.date);
+            if (!ad) return false;
+            const t = ad.getTime();
+            return t >= mStart && t <= mEnd;
+          })
+        : [];
+
+      const dist = Math.round(acts.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 100) / 100;
+      const time = Math.round(acts.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
+      const elev = Math.round(acts.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
+
+      const monthShort = monthsShort[monIdx];
+      const rangeLabel = `${monthsFull[monIdx]} de ${y}`;
+      const idx = 11 - m;
+
+      const finalDist = hasDatedActivities ? dist : sample1Y_dist[idx];
+      const finalTime = hasDatedActivities ? time : Math.round(finalDist * 5.51);
+      const finalElev = hasDatedActivities ? elev : Math.round(finalDist * 9.8);
+
+      pts.push({
+        xKey: `month_${idx}`,
+        label: monthShort,
+        monthShort,
+        rangeLabel,
+        distanceKm: finalDist,
+        movingTimeMin: finalTime,
+        elevationGain: finalElev
+      });
+    }
+    return pts;
+  }, [hasDatedActivities, datedActivities, stravaPeriod, stravaRefDate]);
+
+  // Ponto padrão selecionado
+  const lastActiveStravaPointIdx = useMemo(() => {
+    if (stravaProgressPoints.length === 0) return 0;
+    if (stravaPeriod === "1M" && !hasDatedActivities && stravaProgressPoints.length >= 4) {
+      return 3; // Hero point da amostra (34.80 km)
+    }
+    if (stravaPeriod === "6M" && !hasDatedActivities && stravaProgressPoints.length >= 21) {
+      return 20; // Hero point da amostra 6M (34.80 km)
+    }
+    if (stravaPeriod === "3M" && !hasDatedActivities && stravaProgressPoints.length >= 10) {
+      return 9; // Hero point da amostra 3M (34.80 km)
+    }
+    for (let i = stravaProgressPoints.length - 1; i >= 0; i--) {
+      if (stravaProgressPoints[i].distanceKm > 0) return i;
+    }
+    return Math.max(0, stravaProgressPoints.length - 1);
+  }, [stravaProgressPoints, stravaPeriod, hasDatedActivities]);
+
+  useEffect(() => {
+    setSelectedPointIndex(lastActiveStravaPointIdx);
+  }, [stravaPeriod, lastActiveStravaPointIdx]);
+
+  // Estatísticas da Semana Atual
+  const currentWeekStats = useMemo(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon, 0, 0, 0, 0);
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+    sunday.setHours(23, 59, 59, 999);
+
+    const daysInfo: { letter: string; hasRun: boolean; isToday: boolean }[] = [];
+    const letters = ["S", "T", "Q", "Q", "S", "S", "D"];
+
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(monday.getTime() + i * 86400000);
+      const isToday =
+        now.getDate() === dayDate.getDate() &&
+        now.getMonth() === dayDate.getMonth() &&
+        now.getFullYear() === dayDate.getFullYear();
+
+      const dStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 0, 0, 0, 0).getTime();
+      const dEnd = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 23, 59, 59, 999).getTime();
+
+      let hasRun = false;
+      if (hasDatedActivities) {
+        hasRun = datedActivities.some((a) => {
+          const ad = parseActDate(a.date);
+          if (!ad) return false;
+          const t = ad.getTime();
+          return t >= dStart && t <= dEnd && (Number(a.distanceKm) || 0) > 0;
+        });
+      } else {
+        hasRun = i === 1 || i === 3;
+      }
+
+      daysInfo.push({
+        letter: letters[i],
+        hasRun,
+        isToday
+      });
+    }
+
+    let finalKm = 0;
+    let finalMin = 0;
+    let finalElev = 0;
+
+    if (hasDatedActivities) {
+      const weekActs = datedActivities.filter((a) => {
+        const ad = parseActDate(a.date);
+        if (!ad) return false;
+        const t = ad.getTime();
+        return t >= monday.getTime() && t <= sunday.getTime();
+      });
+      finalKm = Math.round(weekActs.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 10) / 10;
+      finalMin = Math.round(weekActs.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
+      finalElev = Math.round(weekActs.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
+    } else {
+      finalKm = 8.5;
+      finalMin = 46;
+      finalElev = 74;
+    }
+
+    return {
+      daysInfo,
+      weeklyCurrentKm: finalKm,
+      weeklyHours: Math.floor(finalMin / 60),
+      weeklyMins: Math.round(finalMin % 60),
+      weeklyElev: finalElev
+    };
+  }, [hasDatedActivities, datedActivities]);
 
   const handleSaveGoalsModal = (e: React.FormEvent) => {
     e.preventDefault();
