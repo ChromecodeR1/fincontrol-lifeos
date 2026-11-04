@@ -37,6 +37,7 @@ export interface TransactionFormState {
   status: TxStatus;
   km: string;
   liters: string;
+  pricePerLiter?: string;
   installments: string;
   debtor: string;
   isTransfer?: boolean;
@@ -409,12 +410,161 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
   };
 
+  // Auto-cálculo e inicialização de Preço por Litro caso já existam valor e litros ao abrir
+  useEffect(() => {
+    if (isPostoExpress && formState.amount && formState.liters && !formState.pricePerLiter) {
+      const a = parseFloat(evaluateMathExpression(formState.amount) || "0");
+      const l = parseFloat(formState.liters.replace(",", ".") || "0");
+      if (!isNaN(a) && !isNaN(l) && a > 0 && l > 0) {
+        setFormState((prev) => ({
+          ...prev,
+          pricePerLiter: (a / l).toFixed(2)
+        }));
+      }
+    }
+  }, [isPostoExpress, formState.amount, formState.liters, formState.pricePerLiter, setFormState]);
+
+  // Cálculos bidirecionais no Posto Express: Valor Total (R$), Litros (L) e Preço/Litro (R$/L)
+  const handleExpressAmountChange = (val: string) => {
+    setFormState((prev) => {
+      const nextAmount = val;
+      const numAmount = parseFloat(nextAmount.replace(",", "."));
+      const numLiters = parseFloat(prev.liters?.replace(",", ".") || "0");
+      const numPrice = parseFloat(prev.pricePerLiter?.replace(",", ".") || "0");
+
+      let nextPrice = prev.pricePerLiter;
+      let nextLiters = prev.liters;
+
+      if (!isNaN(numAmount) && numAmount > 0) {
+        if (!isNaN(numLiters) && numLiters > 0) {
+          nextPrice = (numAmount / numLiters).toFixed(2);
+        } else if (!isNaN(numPrice) && numPrice > 0) {
+          nextLiters = (numAmount / numPrice).toFixed(2);
+        }
+      }
+
+      return {
+        ...prev,
+        amount: nextAmount,
+        liters: nextLiters,
+        pricePerLiter: nextPrice
+      };
+    });
+  };
+
+  const handleExpressAmountBlur = () => {
+    setFormState((prev) => {
+      const evaluated = evaluateMathExpression(prev.amount);
+      const numAmount = parseFloat(evaluated);
+      const numLiters = parseFloat(prev.liters?.replace(",", ".") || "0");
+      const numPrice = parseFloat(prev.pricePerLiter?.replace(",", ".") || "0");
+
+      let nextPrice = prev.pricePerLiter;
+      let nextLiters = prev.liters;
+
+      if (!isNaN(numAmount) && numAmount > 0) {
+        if (!isNaN(numLiters) && numLiters > 0) {
+          nextPrice = (numAmount / numLiters).toFixed(2);
+        } else if (!isNaN(numPrice) && numPrice > 0) {
+          nextLiters = (numAmount / numPrice).toFixed(2);
+        }
+      }
+
+      return {
+        ...prev,
+        amount: evaluated,
+        liters: nextLiters,
+        pricePerLiter: nextPrice
+      };
+    });
+  };
+
+  const handleExpressLitersChange = (val: string) => {
+    setFormState((prev) => {
+      const nextLiters = val;
+      const numLiters = parseFloat(nextLiters.replace(",", "."));
+      const numPrice = parseFloat(prev.pricePerLiter?.replace(",", ".") || "0");
+      const numAmount = parseFloat(prev.amount?.replace(",", ".") || "0");
+
+      let nextAmount = prev.amount;
+      let nextPrice = prev.pricePerLiter;
+
+      if (!isNaN(numLiters) && numLiters > 0) {
+        if (!isNaN(numPrice) && numPrice > 0) {
+          nextAmount = (numLiters * numPrice).toFixed(2);
+        } else if (!isNaN(numAmount) && numAmount > 0) {
+          nextPrice = (numAmount / numLiters).toFixed(2);
+        }
+      }
+
+      return {
+        ...prev,
+        liters: nextLiters,
+        amount: nextAmount,
+        pricePerLiter: nextPrice
+      };
+    });
+  };
+
+  const handleExpressPriceChange = (val: string) => {
+    setFormState((prev) => {
+      const nextPrice = val;
+      const numPrice = parseFloat(nextPrice.replace(",", "."));
+      const numLiters = parseFloat(prev.liters?.replace(",", ".") || "0");
+      const numAmount = parseFloat(prev.amount?.replace(",", ".") || "0");
+
+      let nextAmount = prev.amount;
+      let nextLiters = prev.liters;
+
+      if (!isNaN(numPrice) && numPrice > 0) {
+        if (!isNaN(numLiters) && numLiters > 0) {
+          nextAmount = (numLiters * numPrice).toFixed(2);
+        } else if (!isNaN(numAmount) && numAmount > 0) {
+          nextLiters = (numAmount / numPrice).toFixed(2);
+        }
+      }
+
+      return {
+        ...prev,
+        pricePerLiter: nextPrice,
+        amount: nextAmount,
+        liters: nextLiters
+      };
+    });
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isPostoExpress) {
+      let finalAmount = formState.amount;
+      const parsedAmount = parseFloat(evaluateMathExpression(formState.amount) || "0") || 0;
+      const parsedLiters = parseFloat(formState.liters?.replace(",", ".") || "0") || 0;
+      const parsedPrice = parseFloat(formState.pricePerLiter?.replace(",", ".") || "0") || 0;
+
+      if (parsedAmount <= 0 && parsedLiters > 0 && parsedPrice > 0) {
+        finalAmount = (parsedLiters * parsedPrice).toFixed(2);
+      }
+
+      const normalizedDate = formatDateBR(formState.date) || todayBR();
+
+      setFormState((prev) => ({
+        ...prev,
+        amount: finalAmount,
+        date: normalizedDate,
+        category: "Gasolina",
+        status: prev.status || "Pago",
+        fuelType: expressFuelType
+      }));
+    }
+    onSubmit(e);
+  };
+
   if (!isOpen) return null;
 
   const modalContent = (
     <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
       <form
-        onSubmit={onSubmit}
+        onSubmit={handleFormSubmit}
         className="relative w-full max-w-lg max-h-[86dvh] flex flex-col overflow-hidden rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl my-auto text-xs"
       >
         {/* Cabeçalho Fixo no Topo */}
@@ -505,7 +655,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 setFormState((prev) => ({
                   ...prev,
                   isTransfer: false,
-                  category: "Gasolina/Combustível",
+                  category: "Gasolina",
                   description:
                     !prev.description || prev.description.toLowerCase().includes("abastecimento")
                       ? `Abastecimento ${expressFuelType === "Etanol" ? "Etanol" : "Gasolina Comum"}`
@@ -700,7 +850,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     setExpressFuelType("Gasolina");
                     setFormState((prev) => ({
                       ...prev,
-                      category: "Gasolina/Combustível",
+                      category: "Gasolina",
+                      fuelType: "Gasolina",
                       description:
                         !prev.description || prev.description.toLowerCase().includes("abastecimento")
                           ? "Abastecimento Gasolina Comum"
@@ -723,7 +874,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     setExpressFuelType("Etanol");
                     setFormState((prev) => ({
                       ...prev,
-                      category: "Gasolina/Combustível",
+                      category: "Gasolina",
+                      fuelType: "Etanol",
                       description:
                         !prev.description || prev.description.toLowerCase().includes("abastecimento")
                           ? "Abastecimento Etanol"
@@ -742,10 +894,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               </div>
             </div>
 
-            {/* 2. Litros Abastecidos e Valor Total Pago */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* 2. Valor Total Pago, Litros Abastecidos e Preço por Litro (Cálculo Bidirecional) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="text-slate-300 font-bold block mb-1">Valor Total Pago (R$)</label>
+                <label className="text-slate-300 font-bold block mb-1">Valor Total (R$)</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">R$</span>
                   <input
@@ -754,12 +906,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     required
                     placeholder="0,00 ou ex: 150 + 20"
                     value={formState.amount}
-                    onChange={(e) => setFormState((prev) => ({ ...prev, amount: e.target.value }))}
-                    onBlur={() => setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }))}
+                    onChange={(e) => handleExpressAmountChange(e.target.value)}
+                    onBlur={handleExpressAmountBlur}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        setFormState((prev) => ({ ...prev, amount: evaluateMathExpression(prev.amount) }));
+                        handleExpressAmountBlur();
                       }
                     }}
                     className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500"
@@ -768,18 +920,32 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-300 font-bold block mb-1">Litros Abastecidos</label>
+                <label className="text-slate-300 font-bold block mb-1">Litros (L)</label>
                 <div className="relative">
                   <input
                     type="number"
                     step="0.01"
-                    required
                     placeholder="Ex: 40.50"
                     value={formState.liters}
-                    onChange={(e) => setFormState((prev) => ({ ...prev, liters: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500"
+                    onChange={(e) => handleExpressLitersChange(e.target.value)}
+                    className="w-full pl-3.5 pr-8 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">L</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">Preço / Litro (R$/L)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">R$</span>
+                  <input
+                    type="number"
+                    step="0.001"
+                    placeholder="Ex: 5.89"
+                    value={formState.pricePerLiter || ""}
+                    onChange={(e) => handleExpressPriceChange(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500"
+                  />
                 </div>
               </div>
             </div>
@@ -811,8 +977,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               </div>
             ) : (
               <div className="p-3 rounded-2xl bg-slate-950/70 border border-white/5 text-slate-400 text-[11px] flex items-center gap-2">
-                <Fuel className="w-3.5 h-3.5 text-amber-400" />
-                <span>Digite o Valor Pago e os Litros para calcular o Preço por Litro (R$/L) automaticamente.</span>
+                <Fuel className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Preencha 2 campos (Valor Total, Litros ou Preço/L) para calcular o 3º automaticamente.</span>
               </div>
             )}
 
@@ -936,7 +1102,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       paymentMethod: m,
                       cardUsed: nextCardUsed,
                       bankAccount: nextBankAccount,
-                      status: getAutomaticStatus(m, "Gasolina/Combustível")
+                      status: getAutomaticStatus(m, "Gasolina")
                     }));
                   }}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500"
@@ -1027,7 +1193,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       prev.category.toLowerCase().includes("combustível") ||
                       prev.category.toLowerCase().includes("gasolina")
                         ? prev.category
-                        : "Gasolina/Combustível",
+                        : "Gasolina",
                     description:
                       !prev.description || prev.description.toLowerCase().includes("abastecimento")
                         ? `Abastecimento ${expressFuelType === "Etanol" ? "Etanol" : "Gasolina Comum"}`

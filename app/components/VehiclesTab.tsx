@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   Fuel,
   Settings,
@@ -18,7 +19,8 @@ import {
   AlertCircle,
   Wrench,
   FileCheck,
-  Coins
+  Coins,
+  Plus
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -44,6 +46,7 @@ import {
   ChartThemeColors,
   formatBRL,
   formatDateBR,
+  todayBR,
   compareDatesBR,
   CustomCyberTooltip
 } from "@/app/lifeos-data";
@@ -78,6 +81,7 @@ export interface VehiclesTabProps {
   chartTheme: ChartThemeColors;
   updateChartThemeColor: (key: keyof ChartThemeColors, val: string) => void;
   handleOpenNewTxModal: (cat?: string) => void;
+  onAddTransaction?: (tx: Transaction) => Promise<void> | void;
   notify: (title: string, subtitle?: string, type?: "success" | "warning" | "info", cat?: any) => void;
   moneyBlur: string;
   autoLayout?: DashboardWidgetConfig[];
@@ -101,6 +105,7 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
   chartTheme,
   updateChartThemeColor,
   handleOpenNewTxModal,
+  onAddTransaction,
   notify,
   moneyBlur,
   autoLayout,
@@ -129,6 +134,138 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
   // Calculadora Rápida Etanol vs Gasolina Flex
   const [calcGasPrice, setCalcGasPrice] = useState<string>("5.99");
   const [calcEthPrice, setCalcEthPrice] = useState<string>("4.19");
+
+  // Estado e Fluxo do Modal de Abastecimento Rápido (Telemetria + Lançamentos)
+  const [showQuickFuelModal, setShowQuickFuelModal] = useState(false);
+  const [quickFuelDate, setQuickFuelDate] = useState(() => todayBR());
+  const [quickFuelType, setQuickFuelType] = useState<"Gasolina" | "Etanol">("Gasolina");
+  const [quickFuelAmount, setQuickFuelAmount] = useState("");
+  const [quickFuelLiters, setQuickFuelLiters] = useState("");
+  const [quickFuelPrice, setQuickFuelPrice] = useState("");
+  const [quickFuelKm, setQuickFuelKm] = useState("");
+  const [quickFuelFullTank, setQuickFuelFullTank] = useState(true);
+  const [quickFuelMethod, setQuickFuelMethod] = useState("PIX");
+  const [quickFuelBank, setQuickFuelBank] = useState("Nubank");
+  const [isSubmittingQuickFuel, setIsSubmittingQuickFuel] = useState(false);
+
+  const handleQuickAmountChange = (val: string) => {
+    setQuickFuelAmount(val);
+    const numA = parseFloat(val.replace(",", "."));
+    const numL = parseFloat(quickFuelLiters.replace(",", "."));
+    const numP = parseFloat(quickFuelPrice.replace(",", "."));
+    if (!isNaN(numA) && numA > 0) {
+      if (!isNaN(numL) && numL > 0) {
+        setQuickFuelPrice((numA / numL).toFixed(2));
+      } else if (!isNaN(numP) && numP > 0) {
+        setQuickFuelLiters((numA / numP).toFixed(2));
+      }
+    }
+  };
+
+  const handleQuickLitersChange = (val: string) => {
+    setQuickFuelLiters(val);
+    const numL = parseFloat(val.replace(",", "."));
+    const numP = parseFloat(quickFuelPrice.replace(",", "."));
+    const numA = parseFloat(quickFuelAmount.replace(",", "."));
+    if (!isNaN(numL) && numL > 0) {
+      if (!isNaN(numP) && numP > 0) {
+        setQuickFuelAmount((numL * numP).toFixed(2));
+      } else if (!isNaN(numA) && numA > 0) {
+        setQuickFuelPrice((numA / numL).toFixed(2));
+      }
+    }
+  };
+
+  const handleQuickPriceChange = (val: string) => {
+    setQuickFuelPrice(val);
+    const numP = parseFloat(val.replace(",", "."));
+    const numL = parseFloat(quickFuelLiters.replace(",", "."));
+    const numA = parseFloat(quickFuelAmount.replace(",", "."));
+    if (!isNaN(numP) && numP > 0) {
+      if (!isNaN(numL) && numL > 0) {
+        setQuickFuelAmount((numL * numP).toFixed(2));
+      } else if (!isNaN(numA) && numA > 0) {
+        setQuickFuelLiters((numA / numP).toFixed(2));
+      }
+    }
+  };
+
+  const handleQuickFuelSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let numA = parseFloat(quickFuelAmount.replace(",", "."));
+    const numL = parseFloat(quickFuelLiters.replace(",", "."));
+    const numP = parseFloat(quickFuelPrice.replace(",", "."));
+
+    if ((isNaN(numA) || numA <= 0) && !isNaN(numL) && numL > 0 && !isNaN(numP) && numP > 0) {
+      numA = Math.round(numL * numP * 100) / 100;
+    }
+
+    if (isNaN(numA) || numA <= 0) {
+      notify("Valor Obrigatório", "Informe o valor total pago ou litros + preço por litro.", "warning", "CONFIG");
+      return;
+    }
+
+    setIsSubmittingQuickFuel(true);
+    const txId = `fuel_tx_${Date.now()}`;
+    const normDate = formatDateBR(quickFuelDate) || todayBR();
+
+    const newTx: Transaction = {
+      id: txId,
+      date: normDate,
+      description: `Abastecimento ${quickFuelType === "Etanol" ? "Etanol" : "Gasolina Comum"}`,
+      amount: numA,
+      category: "Gasolina",
+      flowType: "EXPENSE",
+      costType: "Variável",
+      paymentMethod: quickFuelMethod,
+      bankAccount: quickFuelBank,
+      status: "Pago",
+      km: quickFuelKm ? parseFloat(quickFuelKm) : undefined,
+      liters: !isNaN(numL) && numL > 0 ? numL : undefined,
+      fuelType: quickFuelType,
+      fullTank: quickFuelFullTank,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Salva na telemetria local (lifeos_fuel_logs_v1)
+    try {
+      const raw = localStorage.getItem("lifeos_fuel_logs_v1");
+      const list = raw ? JSON.parse(raw) : [];
+      const entry = {
+        id: txId,
+        date: normDate,
+        liters: newTx.liters || 0,
+        pricePerLiter: newTx.liters && newTx.liters > 0 ? numA / newTx.liters : numP || 0,
+        totalAmount: numA,
+        odometer: newTx.km || 0,
+        fuelType: quickFuelType,
+        fullTank: quickFuelFullTank,
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify([entry, ...list.filter((l: any) => l.id !== txId)]));
+    } catch (err) {
+      console.error("Erro ao salvar telemetria lifeos_fuel_logs_v1", err);
+    }
+
+    try {
+      if (onAddTransaction) {
+        await onAddTransaction(newTx);
+      } else {
+        handleOpenNewTxModal("Gasolina");
+      }
+      notify("Abastecimento Registrado!", `${formatBRL(numA)} salvo com sucesso nos lançamentos e telemetria.`, "success", "FINANCE");
+      setShowQuickFuelModal(false);
+      setQuickFuelAmount("");
+      setQuickFuelLiters("");
+      setQuickFuelPrice("");
+      setQuickFuelKm("");
+    } catch (err) {
+      console.error("Erro ao registrar abastecimento rápido", err);
+      notify("Erro ao Salvar", "Não foi possível registrar o abastecimento.", "warning", "FINANCE");
+    } finally {
+      setIsSubmittingQuickFuel(false);
+    }
+  };
 
   // 1. Filtragem e Análise de Combustível
   const fuelTxs: Transaction[] = autoMetrics.autoTxs.filter(
@@ -366,10 +503,18 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => handleOpenNewTxModal("Gasolina/Combustível")}
-            className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-xs text-white font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/20 transition"
+            onClick={() => setShowQuickFuelModal(true)}
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-xs text-white font-extrabold flex items-center gap-1.5 shadow-lg shadow-amber-600/25 transition cursor-pointer"
           >
-            <Fuel className="w-3.5 h-3.5" /> Posto Express (Abastecer)
+            <Plus className="w-3.5 h-3.5" /> + Abastecimento Rápido
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleOpenNewTxModal("Gasolina")}
+            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-amber-300 font-bold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Fuel className="w-3.5 h-3.5 text-amber-400" /> Posto Express (Abastecer)
           </button>
 
           <button
@@ -626,8 +771,8 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
 
           <button
             type="button"
-            onClick={() => handleOpenNewTxModal("Gasolina/Combustível")}
-            className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-amber-600/20 transition"
+            onClick={() => setShowQuickFuelModal(true)}
+            className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-amber-600/20 transition cursor-pointer"
           >
             <Fuel className="w-3.5 h-3.5" /> Abastecer no Posto Express
           </button>
@@ -1311,6 +1456,187 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
           ))}
         </div>
       </div>
+
+      {/* Modal de Abastecimento Rápido com createPortal */}
+      {showQuickFuelModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
+          <form
+            onSubmit={handleQuickFuelSubmit}
+            className="relative w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl my-auto text-xs"
+          >
+            {/* Header */}
+            <div className="shrink-0 px-5 pt-4 pb-3 border-b border-[var(--cupertino-border)] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300">
+                  <Fuel className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-white">Abastecimento Rápido</h3>
+                  <p className="text-[10px] text-slate-400">Sincronização atômica na telemetria e lançamentos</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQuickFuelModal(false)}
+                className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-3.5 overflow-y-auto">
+              {/* Tipo de Combustível */}
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">Tipo de Combustível</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuickFuelType("Gasolina")}
+                    className={`min-h-[40px] py-2 px-3 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                      quickFuelType === "Gasolina"
+                        ? "bg-amber-500/20 border-amber-500/60 text-amber-300"
+                        : "bg-slate-950 border-white/10 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Fuel className="w-3.5 h-3.5 text-amber-400" /> Gasolina
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickFuelType("Etanol")}
+                    className={`min-h-[40px] py-2 px-3 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                      quickFuelType === "Etanol"
+                        ? "bg-emerald-500/20 border-emerald-500/60 text-emerald-300"
+                        : "bg-slate-950 border-white/10 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <span>🌱</span> Etanol
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid 3 inputs: Valor, Litros, Preço/L */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Valor Total (R$)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={quickFuelAmount}
+                    onChange={(e) => handleQuickAmountChange(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-xs tabular-nums outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Litros (L)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={quickFuelLiters}
+                    onChange={(e) => handleQuickLitersChange(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-xs tabular-nums outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">R$ / Litro</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    placeholder="0.00"
+                    value={quickFuelPrice}
+                    onChange={(e) => handleQuickPriceChange(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-xs tabular-nums outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Data & Odômetro */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Data (DD/MM/AAAA)</label>
+                  <input
+                    type="text"
+                    placeholder="DD-MM-AAAA"
+                    value={quickFuelDate}
+                    onChange={(e) => setQuickFuelDate(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-xs tabular-nums outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Odômetro (KM)</label>
+                  <input
+                    type="number"
+                    placeholder={autoMetrics.maxKm > 0 ? `Ant.: ${autoMetrics.maxKm}` : "KM Atual"}
+                    value={quickFuelKm}
+                    onChange={(e) => setQuickFuelKm(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-xs tabular-nums outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Tanque Cheio */}
+              <label className="flex items-center justify-between p-2 rounded-xl bg-slate-950 border border-white/10 cursor-pointer select-none">
+                <span className="text-xs font-semibold text-slate-200">Abastecimento com Tanque Cheio</span>
+                <input
+                  type="checkbox"
+                  checked={quickFuelFullTank}
+                  onChange={(e) => setQuickFuelFullTank(e.target.checked)}
+                  className="w-4 h-4 rounded border-amber-500/50 bg-slate-900 text-amber-500 accent-amber-500 cursor-pointer"
+                />
+              </label>
+
+              {/* Forma de Pagamento e Banco */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block mb-1">Pagamento</label>
+                  <select
+                    value={quickFuelMethod}
+                    onChange={(e) => setQuickFuelMethod(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500 text-xs"
+                  >
+                    <option value="PIX">PIX</option>
+                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                    <option value="Cartão de Débito">Cartão de Débito</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Banco / Conta</label>
+                  <input
+                    type="text"
+                    value={quickFuelBank}
+                    onChange={(e) => setQuickFuelBank(e.target.value)}
+                    placeholder="Ex: Nubank"
+                    className="w-full px-2.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="shrink-0 px-5 py-3 border-t border-[var(--cupertino-border)] bg-[var(--cupertino-card)]/80 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowQuickFuelModal(false)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmittingQuickFuel}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold flex items-center gap-1.5 shadow-lg shadow-amber-600/25 transition cursor-pointer disabled:opacity-50"
+              >
+                <Fuel className="w-3.5 h-3.5" />
+                <span>{isSubmittingQuickFuel ? "Salvando..." : "Salvar Abastecimento"}</span>
+              </button>
+            </div>
+          </form>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

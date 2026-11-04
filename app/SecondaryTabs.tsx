@@ -148,6 +148,7 @@ export interface SecondaryTabsProps {
   setSearchQuery: (q: string) => void;
   handleExportCSV: () => void;
   handleOpenNewTxModal: (defaultCategory?: string) => void;
+  onAddTransaction?: (tx: Transaction) => Promise<void> | void;
   onBatchImportTransactions?: (txs: Transaction[]) => void;
   dailyQuotaInfo?: { dailyBudget: number; remainingDays: number; remainingFree: number };
   cdiAnnualRate?: number;
@@ -284,7 +285,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     activeTab, moneyBlur, currentUser, currentUserAvatar, themeMode, changeThemeMode,
     setShowChangelogModal, staticStatus, editingStatusId, setEditingStatusId, newStatusItem,
     setNewStatusItem, handleSaveStaticStatus, saveStaticStatus, filteredTransactions, transactions,
-    searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, onBatchImportTransactions, dailyQuotaInfo, cdiAnnualRate, getFlowType,
+    searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, onAddTransaction, onBatchImportTransactions, dailyQuotaInfo, cdiAnnualRate, getFlowType,
     banks, editingBankId, setEditingBankId, newBank, setNewBank, handleSaveBank, handleDeleteBank,
     cards, categoryColors, handleToggleStatus, handleStartEditTransaction, handleDeleteTransaction,
     receivableItems, receivablesAnalytics, handleAssignDebtor, handlePartialPaymentReceivable,
@@ -1459,6 +1460,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         chartTheme={chartTheme}
         updateChartThemeColor={updateChartThemeColor}
         handleOpenNewTxModal={handleOpenNewTxModal}
+        onAddTransaction={onAddTransaction}
         notify={notify}
         moneyBlur={moneyBlur}
         autoLayout={autoLayout}

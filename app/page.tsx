@@ -1128,6 +1128,7 @@ export default function CoindexApp() {
     linkedReceivableId?: string;
     fuelType?: "Gasolina" | "Etanol";
     fullTank?: boolean;
+    pricePerLiter?: string;
     indexer?: string;
     cdiPercentage?: string;
   }>({
@@ -1142,6 +1143,7 @@ export default function CoindexApp() {
     status: "Pago",
     km: "",
     liters: "",
+    pricePerLiter: "",
     installments: "1",
     debtor: "",
     isTransfer: false,
@@ -1574,6 +1576,135 @@ export default function CoindexApp() {
 
     syncInitialSupabaseData();
   }, [currentUser, cloudLoadedForUser]);
+
+  // HOTFIX SPRINT 38.1 — Reconciliação Retroativa Automática de Abastecimentos Órfãos e Normalização de Datas
+  const hasRunFuelReconciliationRef = useRef(false);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (hasRunFuelReconciliationRef.current) return;
+    if (!transactions || transactions.length === 0) return;
+    hasRunFuelReconciliationRef.current = true;
+
+    try {
+      let hasChanges = false;
+      // 1. Normalização de datas e categorias no array transactions existente
+      const normalizedTxs = transactions.map((t) => {
+        let changed = false;
+        let nextDate = t.date;
+        if (t.date && (t.date.includes("/") || /^\d{4}-\d{2}-\d{2}$/.test(t.date))) {
+          const formatted = formatDateBR(t.date);
+          if (formatted && formatted !== t.date) {
+            nextDate = formatted;
+            changed = true;
+          }
+        }
+        let nextCategory = t.category;
+        if (t.category === "Gasolina/Combustível") {
+          nextCategory = "Gasolina";
+          changed = true;
+        }
+        if (changed) {
+          hasChanges = true;
+          return { ...t, date: nextDate, category: nextCategory, updatedAt: new Date().toISOString() };
+        }
+        return t;
+      });
+
+      // 2. Scan de chaves de telemetria veicular em localStorage
+      const candidateKeys = [
+        "lifeos_fuel_logs_v1",
+        "fuelLogs",
+        "lifeos_fuel_logs",
+        "vehicles",
+        "lifeos_vehicles"
+      ];
+
+      const orphanFuelTxs: Transaction[] = [];
+
+      for (const key of candidateKeys) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw);
+          let entries: any[] = [];
+          if (Array.isArray(parsed)) {
+            entries = parsed;
+          } else if (parsed && Array.isArray(parsed.fuelLogs)) {
+            entries = parsed.fuelLogs;
+          } else if (parsed && typeof parsed === "object") {
+            for (const val of Object.values(parsed)) {
+              if (Array.isArray(val)) {
+                entries.push(...val);
+              }
+            }
+          }
+
+          for (const entry of entries) {
+            if (!entry) continue;
+            const entryDate = formatDateBR(entry.date || entry.createdAt) || todayBR();
+            const entryAmount = parseFloat(entry.totalAmount || entry.amount || entry.valor || "0") || 0;
+            const entryLiters = parseFloat(entry.liters || entry.litros || "0") || 0;
+            const entryKm = parseFloat(entry.odometer || entry.km || "0") || undefined;
+            const entryFuelType = entry.fuelType || entry.tipo || "Gasolina";
+
+            if (entryAmount <= 0 && entryLiters <= 0) continue;
+
+            const entryId = entry.id ? `fuel_tx_${entry.id}` : `fuel_tx_${entryDate}_${Math.round(entryAmount * 100)}`;
+
+            // Verifica se já existe em normalizedTxs ou orphanFuelTxs
+            const alreadyExists = normalizedTxs.some(
+              (t) =>
+                t.id === entry.id ||
+                t.id === entryId ||
+                (t.date === entryDate &&
+                  Math.round(t.amount * 100) === Math.round(entryAmount * 100) &&
+                  (t.category === "Gasolina" || t.category === "Combustível (Gasolina / Etanol)"))
+            ) || orphanFuelTxs.some((o) => o.id === entryId || o.id === entry.id);
+
+            if (!alreadyExists && entryAmount > 0) {
+              orphanFuelTxs.push({
+                id: entryId,
+                date: entryDate,
+                description: entry.description || `Abastecimento - Posto Express (${entryFuelType})`,
+                amount: entryAmount,
+                category: "Gasolina",
+                flowType: "EXPENSE",
+                costType: "Variável",
+                paymentMethod: entry.paymentMethod || "PIX",
+                bankAccount: entry.bankAccount || banks[0]?.name || "Nubank",
+                status: "Pago",
+                km: entryKm,
+                liters: entryLiters > 0 ? entryLiters : undefined,
+                fuelType: entryFuelType === "Etanol" ? "Etanol" : "Gasolina",
+                fullTank: entry.fullTank !== false,
+                updatedAt: new Date().toISOString()
+              });
+            }
+          }
+        } catch {
+          // Ignora JSON mal formatado na chave
+        }
+      }
+
+      if (orphanFuelTxs.length > 0 || hasChanges) {
+        const reconciledTxs = [...orphanFuelTxs, ...normalizedTxs];
+        setTransactions(reconciledTxs);
+        localStorage.setItem("lifeos_txs_v8", JSON.stringify(reconciledTxs));
+        if (orphanFuelTxs.length > 0) {
+          upsertTransactionsInDb(orphanFuelTxs, debtorMap).catch(console.error);
+          notify(
+            "Reconciliação de Abastecimentos",
+            `${orphanFuelTxs.length} abastecimento(s) órfão(s) recuperado(s) e integrado(s) aos Lançamentos.`,
+            "info",
+            "FINANCE"
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Erro na auto-reconciliação de abastecimentos", err);
+    }
+  }, [isHydrated, transactions, banks, debtorMap, notify]);
 
   // SPRINT 30: Consulta Oficial ao SGS / Banco Central do Brasil para Taxa CDI
   useEffect(() => {
@@ -3391,6 +3522,7 @@ export default function CoindexApp() {
       status: getAutomaticStatus(defaultMethod, isFuel ? "Gasolina" : cat),
       km: "",
       liters: "",
+      pricePerLiter: "",
       installments: "1",
       debtor: "",
       isTransfer: false,
@@ -3446,6 +3578,7 @@ export default function CoindexApp() {
       status: tx.status,
       km: tx.km ? String(tx.km) : "",
       liters: tx.liters ? String(tx.liters) : "",
+      pricePerLiter: tx.liters && tx.liters > 0 ? (tx.amount / tx.liters).toFixed(2) : "",
       installments: "1",
       debtor: tx.debtor || debtorMap[tx.id] || "",
       isTransfer: Boolean(tx.isTransfer || tx.category === "Transferência entre Contas"),
@@ -3468,7 +3601,20 @@ export default function CoindexApp() {
   const handleSaveTransaction = async (e: React.FormEvent, createAnother: boolean = false) => {
     e.preventDefault();
     const evaluatedAmountStr = evaluateMathExpression(newTx.amount);
-    const totalAmount = parseFloat(evaluatedAmountStr) || 0;
+    let totalAmount = parseFloat(evaluatedAmountStr) || 0;
+    const parsedLiters = parseFloat(newTx.liters?.replace(",", ".") || "0") || 0;
+    const parsedPrice = parseFloat(newTx.pricePerLiter?.replace(",", ".") || "0") || 0;
+
+    // Se o valor for 0 mas houver Litros e Preço/Litro no Posto Express, calcula automaticamente
+    if (isPostoExpress && totalAmount <= 0 && parsedLiters > 0 && parsedPrice > 0) {
+      totalAmount = Math.round(parsedLiters * parsedPrice * 100) / 100;
+    }
+
+    const normalizedDate = formatDateBR(newTx.date) || todayBR();
+    const normalizedCategory = isPostoExpress
+      ? "Gasolina"
+      : (newTx.category === "Gasolina/Combustível" ? "Gasolina" : newTx.category);
+
     const isCredit = newTx.paymentMethod === "Cartão de Crédito";
     const matchedCard = isCredit ? cards.find((c) => c.name === newTx.cardUsed) : undefined;
     const resolvedBank = isCredit
@@ -3483,8 +3629,8 @@ export default function CoindexApp() {
     const resolvedBankId = matchedBank?.id || (isCredit ? matchedCard?.bankId : undefined);
     const resolvedCardId = isCredit ? matchedCard?.id : undefined;
 
-    const isTransferTx = Boolean(newTx.isTransfer || newTx.category === "Transferência entre Contas");
-    const isSplitTx = Boolean(!isTransferTx && newTx.isSplit && newTx.category !== "A Receber");
+    const isTransferTx = Boolean(newTx.isTransfer || normalizedCategory === "Transferência entre Contas");
+    const isSplitTx = Boolean(!isTransferTx && newTx.isSplit && normalizedCategory !== "A Receber");
     const parsedThirdAmount = isSplitTx && newTx.thirdPartyAmount ? parseFloat(newTx.thirdPartyAmount) : undefined;
     const cleanThirdName = isSplitTx && newTx.thirdPartyName ? sanitizeText(newTx.thirdPartyName) : undefined;
     const calculatedPersonal = isSplitTx && parsedThirdAmount != null
@@ -3492,7 +3638,7 @@ export default function CoindexApp() {
       : undefined;
 
     const resolvedFlow = resolveTransactionFlowType(
-      { category: newTx.category, isTransfer: isTransferTx, isSplit: isSplitTx },
+      { category: normalizedCategory, isTransfer: isTransferTx, isSplit: isSplitTx },
       categoriesCatalog
     );
     const resolvedFuelType = newTx.fuelType || (isPostoExpress ? expressFuelType : undefined);
@@ -3512,14 +3658,14 @@ export default function CoindexApp() {
     const validation = validateTransactionData({
       description: newTx.description,
       amount: totalAmount,
-      date: newTx.date,
-      category: newTx.category,
+      date: normalizedDate,
+      category: normalizedCategory,
       paymentMethod: newTx.paymentMethod,
       costType: newTx.costType,
       status: newTx.status,
       cardUsed: savedCardUsed,
       bankAccount: resolvedBank,
-      debtor: newTx.category === "A Receber" ? newTx.debtor : undefined,
+      debtor: normalizedCategory === "A Receber" ? newTx.debtor : undefined,
       km: newTx.km ? Number(newTx.km) : undefined,
       liters: newTx.liters ? Number(newTx.liters) : undefined,
       isTransfer: isTransferTx,
@@ -3615,7 +3761,7 @@ export default function CoindexApp() {
             finalLinkedReceivableId = recId;
             childItemToUpsert = {
               id: recId,
-              date: newTx.date,
+              date: normalizedDate,
               description: `Divisão: ${sanitizeText(newTx.description)}`,
               amount: parsedThirdAmount,
               category: "A Receber",
@@ -3634,54 +3780,68 @@ export default function CoindexApp() {
             finalLinkedReceivableId = undefined;
           }
 
-          let updated = transactions.map((t) => {
-            if (t.id === editingTxId) {
-              editedItem = {
-                ...t,
-                date: newTx.date,
-                description: sanitizeText(newTx.description),
-                amount: totalAmount,
-                category: newTx.category,
-                flowType: resolvedFlow,
-                costType: newTx.costType,
-                paymentMethod: newTx.paymentMethod,
-                cardUsed: savedCardUsed,
-                bankAccount: resolvedBank,
-                cardId: resolvedCardId,
-                bankId: resolvedBankId,
-                status: newTx.status,
-                km: newTx.km ? Number(newTx.km) : undefined,
-                liters: newTx.liters ? Number(newTx.liters) : undefined,
-                fuelType: resolvedFuelType,
-                fullTank: resolvedFullTank,
-                invoiceMonth: itemInvoiceMonth,
-                cashMonth: itemCashMonth,
-                debtor: newTx.category === "A Receber" ? sanitizeText(newTx.debtor) : t.debtor,
-                isTransfer: isTransferTx,
-                sourceBank: newTx.sourceBank || resolvedBank,
-                destinationBank: newTx.destinationBank,
-                isSplit: isSplitTx,
-                thirdPartyAmount: parsedThirdAmount,
-                thirdPartyName: cleanThirdName,
-                personalAmount: calculatedPersonal,
-                linkedReceivableId: finalLinkedReceivableId,
-                indexer: newTx.indexer,
-                cdiPercentage: newTx.cdiPercentage ? parseFloat(newTx.cdiPercentage) : undefined,
-                updatedAt: nowIso
-              };
-              return editedItem;
+          let updatedEditedItem: Transaction | null = null;
+          setTransactions((prev) => {
+            let next = prev.map((t) => {
+              if (t.id === editingTxId) {
+                editedItem = {
+                  ...t,
+                  date: normalizedDate,
+                  description: sanitizeText(newTx.description),
+                  amount: totalAmount,
+                  category: normalizedCategory,
+                  flowType: resolvedFlow,
+                  costType: newTx.costType,
+                  paymentMethod: newTx.paymentMethod,
+                  cardUsed: savedCardUsed,
+                  bankAccount: resolvedBank,
+                  cardId: resolvedCardId,
+                  bankId: resolvedBankId,
+                  status: newTx.status,
+                  km: newTx.km ? Number(newTx.km) : undefined,
+                  liters: newTx.liters ? Number(newTx.liters) : undefined,
+                  fuelType: resolvedFuelType,
+                  fullTank: resolvedFullTank,
+                  invoiceMonth: itemInvoiceMonth,
+                  cashMonth: itemCashMonth,
+                  debtor: normalizedCategory === "A Receber" ? sanitizeText(newTx.debtor) : t.debtor,
+                  isTransfer: isTransferTx,
+                  sourceBank: newTx.sourceBank || resolvedBank,
+                  destinationBank: newTx.destinationBank,
+                  isSplit: isSplitTx,
+                  thirdPartyAmount: parsedThirdAmount,
+                  thirdPartyName: cleanThirdName,
+                  personalAmount: calculatedPersonal,
+                  linkedReceivableId: finalLinkedReceivableId,
+                  indexer: newTx.indexer,
+                  cdiPercentage: newTx.cdiPercentage ? parseFloat(newTx.cdiPercentage) : undefined,
+                  updatedAt: nowIso
+                };
+                updatedEditedItem = editedItem;
+                return editedItem;
+              }
+              if (childItemToUpsert && t.id === childItemToUpsert.id) {
+                return childItemToUpsert;
+              }
+              return t;
+            });
+
+            if (childIdToDelete) {
+              next = next.filter((t) => t.id !== childIdToDelete);
+            } else if (childItemToUpsert && !next.some((t) => t.id === childItemToUpsert!.id)) {
+              next = [childItemToUpsert, ...next];
             }
-            if (childItemToUpsert && t.id === childItemToUpsert.id) {
-              return childItemToUpsert;
+
+            try {
+              localStorage.setItem("lifeos_txs_v8", JSON.stringify(next));
+            } catch (err) {
+              console.error("Erro ao salvar localStorage lifeos_txs_v8", err);
             }
-            return t;
+            return next;
           });
 
           if (childIdToDelete) {
-            updated = updated.filter((t) => t.id !== childIdToDelete);
             await deleteTransactionInDb(childIdToDelete);
-          } else if (childItemToUpsert && !updated.some((t) => t.id === childItemToUpsert!.id)) {
-            updated = [childItemToUpsert, ...updated];
           }
 
           const nextDebtorMap = { ...debtorMap };
@@ -3691,12 +3851,33 @@ export default function CoindexApp() {
             localStorage.setItem("lifeos_debtors_v8", JSON.stringify(nextDebtorMap));
           }
 
-          setTransactions(updated);
-          localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
-          const itemsToDb = editedItem
-            ? (childItemToUpsert ? [editedItem, childItemToUpsert] : [editedItem])
+          const finalEdited: Transaction | null = updatedEditedItem || editedItem;
+          const itemsToDb: Transaction[] = finalEdited
+            ? (childItemToUpsert ? [finalEdited, childItemToUpsert] : [finalEdited])
             : [];
           if (itemsToDb.length > 0) await upsertTransactionsInDb(itemsToDb, nextDebtorMap);
+
+          // Sincroniza telemetria de combustível se aplicável
+          if (isPostoExpress || (newTx.liters && Number(newTx.liters) > 0)) {
+            try {
+              const rawLogs = localStorage.getItem("lifeos_fuel_logs_v1");
+              const logs = rawLogs ? JSON.parse(rawLogs) : [];
+              const fuelEntry = {
+                id: editingTxId,
+                date: normalizedDate,
+                liters: newTx.liters ? Number(newTx.liters) : 0,
+                pricePerLiter: newTx.liters && Number(newTx.liters) > 0 ? totalAmount / Number(newTx.liters) : parsedPrice || 0,
+                totalAmount: totalAmount,
+                odometer: newTx.km ? Number(newTx.km) : 0,
+                fuelType: resolvedFuelType || "Gasolina",
+                fullTank: resolvedFullTank,
+                updatedAt: nowIso
+              };
+              localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify([fuelEntry, ...logs.filter((l: any) => l.id !== editingTxId)]));
+            } catch (fuelErr) {
+              console.error("Erro ao sincronizar telemetria no edit", fuelErr);
+            }
+          }
           if (isPostoExpress && newTx.liters && Number(newTx.liters) > 0) {
             const priceL = (totalAmount / Number(newTx.liters)).toFixed(2);
             notify("Abastecimento Atualizado!", `${newTx.description} — ${newTx.liters}L a R$ ${priceL}/L`, "success", "FINANCE");
@@ -3748,7 +3929,7 @@ export default function CoindexApp() {
         );
       } else {
         const invData = isCredit
-          ? calculateInvoiceAndCashMonths(newTx.date, matchedCard?.closingDay, matchedCard?.dueDay)
+          ? calculateInvoiceAndCashMonths(normalizedDate, matchedCard?.closingDay, matchedCard?.dueDay)
           : null;
         const itemInvoiceMonth = invData?.invoiceCompetence;
         const itemCashMonth = invData?.cashMonth;
@@ -3760,7 +3941,7 @@ export default function CoindexApp() {
           childId = `tx-split-rec-${Date.now()}`;
           childItem = {
             id: childId,
-            date: newTx.date,
+            date: normalizedDate,
             description: `Divisão: ${sanitizeText(newTx.description)}`,
             amount: parsedThirdAmount,
             category: "A Receber",
@@ -3778,10 +3959,10 @@ export default function CoindexApp() {
 
         const item: Transaction = {
           id: parentId,
-          date: newTx.date,
+          date: normalizedDate,
           description: sanitizeText(newTx.description),
           amount: totalAmount,
-          category: newTx.category,
+          category: normalizedCategory,
           flowType: resolvedFlow,
           costType: newTx.costType,
           paymentMethod: newTx.paymentMethod,
@@ -3796,7 +3977,7 @@ export default function CoindexApp() {
           fullTank: resolvedFullTank,
           invoiceMonth: itemInvoiceMonth,
           cashMonth: itemCashMonth,
-          debtor: newTx.category === "A Receber" ? sanitizeText(newTx.debtor) : undefined,
+          debtor: normalizedCategory === "A Receber" ? sanitizeText(newTx.debtor) : undefined,
           isTransfer: isTransferTx,
           sourceBank: newTx.sourceBank || resolvedBank,
           destinationBank: newTx.destinationBank,
@@ -3818,10 +3999,41 @@ export default function CoindexApp() {
         }
 
         const toSaveList = childItem ? [item, childItem] : [item];
-        const updated = [...toSaveList, ...transactions];
-        setTransactions(updated);
-        localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
+        setTransactions((prev) => {
+          const next = [...toSaveList, ...prev.filter((t) => !toSaveList.some((s) => s.id === t.id))];
+          try {
+            localStorage.setItem("lifeos_txs_v8", JSON.stringify(next));
+          } catch (err) {
+            console.error("Erro ao salvar localStorage lifeos_txs_v8", err);
+          }
+          return next;
+        });
         await upsertTransactionsInDb(toSaveList, nextDebtorMap);
+
+        // Registro Atômico na Telemetria de Combustível (lifeos_fuel_logs_v1)
+        if (isPostoExpress || (item.liters && item.liters > 0)) {
+          try {
+            const rawLogs = localStorage.getItem("lifeos_fuel_logs_v1");
+            const logs = rawLogs ? JSON.parse(rawLogs) : [];
+            const fuelEntry = {
+              id: item.id,
+              date: normalizedDate,
+              liters: item.liters || 0,
+              pricePerLiter: item.liters && item.liters > 0 ? totalAmount / item.liters : parsedPrice || 0,
+              totalAmount: totalAmount,
+              odometer: item.km || 0,
+              fuelType: resolvedFuelType || "Gasolina",
+              fullTank: resolvedFullTank,
+              createdAt: nowIso
+            };
+            localStorage.setItem(
+              "lifeos_fuel_logs_v1",
+              JSON.stringify([fuelEntry, ...logs.filter((l: any) => l.id !== item.id)])
+            );
+          } catch (fuelErr) {
+            console.error("Erro ao salvar telemetria lifeos_fuel_logs_v1", fuelErr);
+          }
+        }
         if (isPostoExpress && newTx.liters && Number(newTx.liters) > 0) {
           const priceL = (totalAmount / Number(newTx.liters)).toFixed(2);
           notify("Abastecimento Registrado!", `${item.description} — ${newTx.liters}L a R$ ${priceL}/L`, "success", "FINANCE");
@@ -3859,6 +4071,71 @@ export default function CoindexApp() {
   const handleSaveAndNewTransaction = async (e: React.FormEvent) => {
     await handleSaveTransaction(e, true);
   };
+
+  // HOTFIX SPRINT 38.1 — Fluxo Atômico Único de Abastecimento (Telemetria + Lançamentos)
+  const handleUnifiedAddFuel = useCallback(
+    async (tx: Transaction) => {
+      const normalizedDate = formatDateBR(tx.date) || todayBR();
+      const normalizedTx: Transaction = {
+        ...tx,
+        date: normalizedDate,
+        category: "Gasolina",
+        flowType: "EXPENSE",
+        costType: tx.costType || "Variável",
+        status: tx.status || "Pago",
+        updatedAt: new Date().toISOString()
+      };
+
+      // 1. Telemetria do Veículo em localStorage (lifeos_fuel_logs_v1)
+      try {
+        const existingFuelLogs = JSON.parse(localStorage.getItem("lifeos_fuel_logs_v1") || "[]");
+        const fuelEntry = {
+          id: normalizedTx.id,
+          date: normalizedDate,
+          liters: normalizedTx.liters || 0,
+          pricePerLiter:
+            normalizedTx.liters && normalizedTx.liters > 0
+              ? normalizedTx.amount / normalizedTx.liters
+              : 0,
+          totalAmount: normalizedTx.amount,
+          odometer: normalizedTx.km || 0,
+          fuelType: normalizedTx.fuelType || "Gasolina",
+          fullTank: normalizedTx.fullTank !== false,
+          createdAt: new Date().toISOString()
+        };
+        const updatedFuelLogs = [fuelEntry, ...existingFuelLogs.filter((l: any) => l.id !== normalizedTx.id)];
+        localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify(updatedFuelLogs));
+      } catch (err) {
+        console.error("Erro ao salvar telemetria lifeos_fuel_logs_v1", err);
+      }
+
+      // 2. Na Coleção Central de Lançamentos (transactions):
+      setTransactions((prev) => {
+        const next = [normalizedTx, ...prev.filter((t) => t.id !== normalizedTx.id)];
+        try {
+          localStorage.setItem("lifeos_txs_v8", JSON.stringify(next));
+        } catch (err) {
+          console.error("Erro ao salvar localStorage lifeos_txs_v8", err);
+        }
+        return next;
+      });
+
+      // 3. Sincronização com Supabase
+      try {
+        await upsertTransactionsInDb([normalizedTx], debtorMap);
+      } catch (err) {
+        console.error("Erro ao sincronizar abastecimento com Supabase", err);
+      }
+
+      notify(
+        "Abastecimento Sincronizado!",
+        `${normalizedTx.description} — ${formatBRL(normalizedTx.amount)} registrado nos Lançamentos e Telemetria.`,
+        "success",
+        "FINANCE"
+      );
+    },
+    [debtorMap, notify]
+  );
 
   const handleToggleStatus = (tx: Transaction) => {
     let nextStatus: TxStatus;
@@ -7592,6 +7869,7 @@ export default function CoindexApp() {
               setSearchQuery={setSearchQuery}
               handleExportCSV={handleExportCSV}
               handleOpenNewTxModal={handleOpenNewTxModal}
+              onAddTransaction={handleUnifiedAddFuel}
               onBatchImportTransactions={handleBatchImportTransactions}
               dailyQuotaInfo={dailyQuotaInfo}
               cdiAnnualRate={marketRates.cdiAnnualRate}
