@@ -8,7 +8,7 @@ import {
   Users, Share2, Layers, AlertTriangle, XCircle, Eye, EyeOff, Filter, Loader2,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Check, X, RotateCcw,
   SlidersHorizontal, Settings, Fuel, Gauge, DollarSign, Award, Info, Landmark, PiggyBank,
-  Sparkles, ExternalLink, ShoppingBag, Circle
+  Sparkles, ExternalLink, ShoppingBag, Circle, Footprints
 } from "lucide-react";
 import {
   ResponsiveContainer, Tooltip, Legend, XAxis, YAxis, CartesianGrid,
@@ -35,6 +35,7 @@ import ChartSettingsPopover, {
 } from "./components/ChartSettingsPopover";
 import { TransactionsTableAdvanced } from "./TransactionsTableAdvanced";
 import { simulatePurchaseImpact } from "./lib/domain/purchase-simulator";
+import { parseDateParts } from "./lib/domain/date-br";
 import { BanksTab } from "./components/BanksTab";
 import { VehiclesTab } from "./components/VehiclesTab";
 
@@ -385,8 +386,8 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     }
     return {
       ...DEFAULT_CHART_WIDGET_SETTINGS,
-      color: "#FF9F0A",
-      chartType: "bar",
+      color: "#FC4C02",
+      chartType: "area",
       height: "normal"
     };
   });
@@ -398,6 +399,24 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
       } catch {}
     }
   };
+
+  // SPRINT 41: Estados do Redesign do Painel Strava Progress & Widget de Metas
+  const [stravaInnerTab, setStravaInnerTab] = useState<"progress" | "activities">("progress");
+  const [stravaSport, setStravaSport] = useState<"run" | "all">("run");
+  const [stravaPeriod, setStravaPeriod] = useState<"7D" | "1M" | "3M" | "6M" | "1Y">("3M");
+  const [selectedPointIndex, setSelectedPointIndex] = useState<number>(0);
+  const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
+  const [editWeeklyGoal, setEditWeeklyGoal] = useState<string>("15");
+  const [editAnnualGoal, setEditAnnualGoal] = useState<string>("500");
+  const [weeklyRunGoalKm, setWeeklyRunGoalKm] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("fincontrol_weekly_run_goal_km");
+        if (saved) return Number(saved) || 15;
+      } catch {}
+    }
+    return 15;
+  });
 
   // Lista de Devedores Únicos para Filtro
   const uniqueDebtors = useMemo(() => {
@@ -721,6 +740,378 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
       timeFormatted: `${hours}h ${String(mins).padStart(2, "0")}m`
     };
   }, [stravaActivities]);
+
+  // ============================================================================
+  // SPRINT 41: MOTOR DE TELEMETRIA STRAVA PROGRESS & WIDGET DE METAS
+  // ============================================================================
+  const effectiveStravaActivities = useMemo(() => {
+    let acts = stravaActivities || [];
+    if (stravaSport === "run") {
+      acts = acts.filter((a) => {
+        const t = (a.type || "").toLowerCase();
+        return t.includes("run") || t.includes("corrida") || !t;
+      });
+    }
+    return acts;
+  }, [stravaActivities, stravaSport]);
+
+  const stravaRefDate = useMemo(() => {
+    if (effectiveStravaActivities.length > 0) {
+      const timestamps = effectiveStravaActivities
+        .map((a) => {
+          const parts = parseDateParts(a.date);
+          if (parts) return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0).getTime();
+          const d = new Date(a.date);
+          return isNaN(d.getTime()) ? 0 : d.getTime();
+        })
+        .filter((t) => t > 0);
+      if (timestamps.length > 0) {
+        const maxTs = Math.max(...timestamps);
+        const now = new Date();
+        return now.getTime() > maxTs ? now : new Date(maxTs);
+      }
+    }
+    return new Date();
+  }, [effectiveStravaActivities]);
+
+  const stravaProgressPoints = useMemo(() => {
+    const ref = stravaRefDate;
+    const monthsShort = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+    const monthsFull = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+    const daysShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    const parseActDate = (dateStr?: string | null): Date | null => {
+      if (!dateStr) return null;
+      const parts = parseDateParts(dateStr);
+      if (parts) return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0);
+      const iso = toSortableISO(dateStr);
+      if (iso) {
+        const p = iso.split("-").map(Number);
+        if (p.length === 3 && !isNaN(p[0]) && !isNaN(p[1]) && !isNaN(p[2])) {
+          return new Date(p[0], p[1] - 1, p[2], 12, 0, 0);
+        }
+      }
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    // 1. Caso 7D: Agrupa dia a dia nos últimos 7 dias
+    if (stravaPeriod === "7D") {
+      const pts = [];
+      const sampleDist = [0, 6.2, 0, 8.5, 0, 14.1, 0];
+      const sampleTime = [0, 34, 0, 48, 0, 82, 0];
+      const sampleElev = [0, 52, 0, 78, 0, 142, 0];
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - i, 12, 0, 0);
+        const dStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0).getTime();
+        const dEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+
+        const acts = effectiveStravaActivities.filter((a) => {
+          const ad = parseActDate(a.date);
+          if (!ad) return false;
+          const t = ad.getTime();
+          return t >= dStart && t <= dEnd;
+        });
+
+        const dist = Math.round(acts.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 100) / 100;
+        const time = Math.round(acts.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
+        const elev = Math.round(acts.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
+
+        const dayStr = String(d.getDate()).padStart(2, "0");
+        const monthStr = monthsShort[d.getMonth()];
+        const weekDayStr = daysShort[d.getDay()];
+        const idx = 6 - i;
+
+        pts.push({
+          xKey: `day_${idx}`,
+          label: `${dayStr} ${monthStr}`,
+          monthShort: monthStr,
+          rangeLabel: `${weekDayStr}, ${dayStr} de ${monthsFull[d.getMonth()]}, ${d.getFullYear()}`,
+          distanceKm: effectiveStravaActivities.length > 0 ? dist : sampleDist[idx],
+          movingTimeMin: effectiveStravaActivities.length > 0 ? time : sampleTime[idx],
+          elevationGain: effectiveStravaActivities.length > 0 ? elev : sampleElev[idx]
+        });
+      }
+      return pts;
+    }
+
+    // 2. Caso 1M, 3M, 6M: Agrupa semana a semana (Segunda a Domingo)
+    if (stravaPeriod === "1M" || stravaPeriod === "3M" || stravaPeriod === "6M") {
+      const numWeeks = stravaPeriod === "1M" ? 5 : stravaPeriod === "3M" ? 13 : 26;
+      const dayOfWeek = ref.getDay();
+      const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const currentMonday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + diffToMon, 0, 0, 0, 0);
+
+      const sample1M_dist = [21.5, 28.0, 32.4, 34.8, 18.2];
+      const sample1M_time = [112, 145, 170, 192, 98];
+      const sample1M_elev = [190, 240, 310, 342, 160];
+
+      const pts = [];
+
+      for (let w = numWeeks - 1; w >= 0; w--) {
+        const mon = new Date(currentMonday.getTime() - w * 7 * 86400000);
+        mon.setHours(0, 0, 0, 0);
+        const sun = new Date(mon.getTime() + 6 * 86400000);
+        sun.setHours(23, 59, 59, 999);
+
+        const acts = effectiveStravaActivities.filter((a) => {
+          const ad = parseActDate(a.date);
+          if (!ad) return false;
+          const t = ad.getTime();
+          return t >= mon.getTime() && t <= sun.getTime();
+        });
+
+        const dist = Math.round(acts.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 100) / 100;
+        const time = Math.round(acts.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
+        const elev = Math.round(acts.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
+
+        const monDay = String(mon.getDate()).padStart(2, "0");
+        const sunDay = String(sun.getDate()).padStart(2, "0");
+        const monM = monthsShort[mon.getMonth()].slice(0, 3);
+        const sunM = monthsShort[sun.getMonth()].slice(0, 3);
+        const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+        const rangeLabel = `${monDay} de ${cap(monM)}, ${mon.getFullYear()} - ${sunDay} de ${cap(sunM)}, ${sun.getFullYear()}`;
+        const monthShort = monthsShort[sun.getMonth()];
+        const idx = numWeeks - 1 - w;
+
+        let finalDist = dist;
+        let finalTime = time;
+        let finalElev = elev;
+
+        if (effectiveStravaActivities.length === 0) {
+          if (numWeeks === 5) {
+            finalDist = sample1M_dist[idx];
+            finalTime = sample1M_time[idx];
+            finalElev = sample1M_elev[idx];
+          } else if (numWeeks === 13) {
+            const factor = (idx + 1) / 13;
+            finalDist = Math.round((14 + factor * 20.8) * 100) / 100;
+            finalTime = Math.round(finalDist * 5.5);
+            finalElev = Math.round(finalDist * 10);
+          } else {
+            const factor = (idx + 1) / 26;
+            finalDist = Math.round((10 + factor * 24.8) * 100) / 100;
+            finalTime = Math.round(finalDist * 5.5);
+            finalElev = Math.round(finalDist * 10);
+          }
+        }
+
+        pts.push({
+          xKey: `week_${idx}`,
+          label: monthShort,
+          monthShort,
+          rangeLabel,
+          distanceKm: finalDist,
+          movingTimeMin: finalTime,
+          elevationGain: finalElev
+        });
+      }
+      return pts;
+    }
+
+    // 3. Caso 1Y: Agrupa mês a mês nos últimos 12 meses
+    const pts = [];
+    const sample1Y_dist = [35, 42, 50, 48, 62, 70, 65, 80, 85, 92, 78, 45];
+
+    for (let m = 11; m >= 0; m--) {
+      const mDate = new Date(ref.getFullYear(), ref.getMonth() - m, 1, 0, 0, 0);
+      const y = mDate.getFullYear();
+      const monIdx = mDate.getMonth();
+      const mStart = new Date(y, monIdx, 1, 0, 0, 0).getTime();
+      const mEnd = new Date(y, monIdx + 1, 0, 23, 59, 59, 999).getTime();
+
+      const acts = effectiveStravaActivities.filter((a) => {
+        const ad = parseActDate(a.date);
+        if (!ad) return false;
+        const t = ad.getTime();
+        return t >= mStart && t <= mEnd;
+      });
+
+      const dist = Math.round(acts.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0) * 100) / 100;
+      const time = Math.round(acts.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0));
+      const elev = Math.round(acts.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0));
+
+      const monthShort = monthsShort[monIdx];
+      const rangeLabel = `${monthsFull[monIdx]} de ${y}`;
+      const idx = 11 - m;
+
+      pts.push({
+        xKey: `month_${idx}`,
+        label: monthShort,
+        monthShort,
+        rangeLabel,
+        distanceKm: effectiveStravaActivities.length > 0 ? dist : sample1Y_dist[idx],
+        movingTimeMin: effectiveStravaActivities.length > 0 ? time : Math.round(sample1Y_dist[idx] * 5.5),
+        elevationGain: effectiveStravaActivities.length > 0 ? elev : Math.round(sample1Y_dist[idx] * 10)
+      });
+    }
+    return pts;
+  }, [effectiveStravaActivities, stravaPeriod, stravaRefDate]);
+
+  // Ponto padrão selecionado
+  const lastActiveStravaPointIdx = useMemo(() => {
+    if (stravaProgressPoints.length === 0) return 0;
+    if (stravaPeriod === "1M" && stravaProgressPoints.length >= 4 && effectiveStravaActivities.length === 0) {
+      return 3; // Hero point da amostra (34.80 km)
+    }
+    for (let i = stravaProgressPoints.length - 1; i >= 0; i--) {
+      if (stravaProgressPoints[i].distanceKm > 0) return i;
+    }
+    return Math.max(0, stravaProgressPoints.length - 1);
+  }, [stravaProgressPoints, stravaPeriod, effectiveStravaActivities.length]);
+
+  useEffect(() => {
+    setSelectedPointIndex(lastActiveStravaPointIdx);
+  }, [stravaPeriod, lastActiveStravaPointIdx]);
+
+  // Estatísticas da Semana Atual
+  const currentWeekStats = useMemo(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon, 0, 0, 0, 0);
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+    sunday.setHours(23, 59, 59, 999);
+
+    const parseActDate = (dateStr?: string | null): Date | null => {
+      if (!dateStr) return null;
+      const parts = parseDateParts(dateStr);
+      if (parts) return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0);
+      const iso = toSortableISO(dateStr);
+      if (iso) {
+        const p = iso.split("-").map(Number);
+        if (p.length === 3 && !isNaN(p[0]) && !isNaN(p[1]) && !isNaN(p[2])) {
+          return new Date(p[0], p[1] - 1, p[2], 12, 0, 0);
+        }
+      }
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const daysInfo: { letter: string; hasRun: boolean; isToday: boolean }[] = [];
+    const letters = ["S", "T", "Q", "Q", "S", "S", "D"];
+
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(monday.getTime() + i * 86400000);
+      const isToday =
+        now.getDate() === dayDate.getDate() &&
+        now.getMonth() === dayDate.getMonth() &&
+        now.getFullYear() === dayDate.getFullYear();
+
+      const dStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 0, 0, 0, 0).getTime();
+      const dEnd = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 23, 59, 59, 999).getTime();
+
+      const hasRun = effectiveStravaActivities.some((a) => {
+        const ad = parseActDate(a.date);
+        if (!ad) return false;
+        const t = ad.getTime();
+        return t >= dStart && t <= dEnd && (Number(a.distanceKm) || 0) > 0;
+      });
+
+      daysInfo.push({
+        letter: letters[i],
+        hasRun,
+        isToday
+      });
+    }
+
+    const weekActs = effectiveStravaActivities.filter((a) => {
+      const ad = parseActDate(a.date);
+      if (!ad) return false;
+      const t = ad.getTime();
+      return t >= monday.getTime() && t <= sunday.getTime();
+    });
+
+    const totalKm = weekActs.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0);
+    const totalMin = weekActs.reduce((s, a) => s + (Number(a.movingTimeMin) || 0), 0);
+    const totalElev = weekActs.reduce((s, a) => s + (Number(a.elevationGain) || 0), 0);
+
+    const finalKm = effectiveStravaActivities.length === 0 ? 8.5 : Math.round(totalKm * 10) / 10;
+    const finalMin = effectiveStravaActivities.length === 0 ? 46 : Math.round(totalMin);
+    const finalElev = effectiveStravaActivities.length === 0 ? 74 : Math.round(totalElev);
+
+    return {
+      daysInfo,
+      weeklyCurrentKm: finalKm,
+      weeklyHours: Math.floor(finalMin / 60),
+      weeklyMins: Math.round(finalMin % 60),
+      weeklyElev: finalElev
+    };
+  }, [effectiveStravaActivities]);
+
+  // Estatísticas Anuais (YTD) e Ritmo
+  const annualProgressStats = useMemo(() => {
+    const parseActDate = (dateStr?: string | null): Date | null => {
+      if (!dateStr) return null;
+      const parts = parseDateParts(dateStr);
+      if (parts) return new Date(parts.year, parts.month - 1, parts.day, 12, 0, 0);
+      const iso = toSortableISO(dateStr);
+      if (iso) {
+        const p = iso.split("-").map(Number);
+        if (p.length === 3 && !isNaN(p[0]) && !isNaN(p[1]) && !isNaN(p[2])) {
+          return new Date(p[0], p[1] - 1, p[2], 12, 0, 0);
+        }
+      }
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    let ytdKm = 0;
+    if (stravaStats && Number(stravaStats.ytdKm) > 0) {
+      ytdKm = Number(stravaStats.ytdKm);
+    } else {
+      const now = new Date();
+      const y = now.getFullYear();
+      const yStart = new Date(y, 0, 1).getTime();
+      const yEnd = new Date(y, 11, 31, 23, 59, 59).getTime();
+      const yActs = effectiveStravaActivities.filter((a) => {
+        const ad = parseActDate(a.date);
+        return ad && ad.getTime() >= yStart && ad.getTime() <= yEnd;
+      });
+      const sum = yActs.reduce((s, a) => s + (Number(a.distanceKm) || 0), 0);
+      ytdKm = sum > 0 ? Math.round(sum * 10) / 10 : (effectiveStravaActivities.length === 0 ? 142 : 0);
+    }
+
+    const annualGoal = annualRunGoalKm > 0 ? annualRunGoalKm : 500;
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / 86400000) + 1;
+    const totalDaysInYear =
+      (now.getFullYear() % 4 === 0 && now.getFullYear() % 100 !== 0) || now.getFullYear() % 400 === 0 ? 366 : 365;
+    const todayPct = Math.min(100, Math.max(0, (dayOfYear / totalDaysInYear) * 100));
+    const expectedKmByToday = (dayOfYear / totalDaysInYear) * annualGoal;
+    const paceDeltaKm = Math.round(ytdKm - expectedKmByToday);
+    const progressPct = Math.min(100, (ytdKm / Math.max(1, annualGoal)) * 100);
+
+    return {
+      ytdKm,
+      annualGoal,
+      todayPct,
+      expectedKmByToday,
+      paceDeltaKm,
+      progressPct
+    };
+  }, [stravaStats, effectiveStravaActivities, annualRunGoalKm]);
+
+  const handleSaveGoalsModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    const w = Math.max(1, parseFloat(editWeeklyGoal) || 15);
+    const a = Math.max(1, parseFloat(editAnnualGoal) || 500);
+    setWeeklyRunGoalKm(w);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("fincontrol_weekly_run_goal_km", String(w));
+      } catch {}
+    }
+    setAnnualRunGoalKm(a);
+    updateGoalsStorage(personalBudgetLimit, monthlyInvestmentGoal, patrimonyTarget, a);
+    setIsGoalsModalOpen(false);
+  };
 
   const inputClass =
     "w-full px-3.5 py-2.5 rounded-xl bg-slate-950/90 border border-white/10 text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all";
@@ -1676,119 +2067,19 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
       );
     };
 
-    const renderStravaChart = () => {
-      const chartType = stravaChartSettings.chartType || "bar";
-      const strokeColor = stravaChartSettings.color === "auto" ? "#FF9F0A" : stravaChartSettings.color;
-      const curveType = stravaChartSettings.curveType || "monotone";
-      const strokeWidth = stravaChartSettings.strokeWidth || 2.5;
-
-      const dataKey =
-        stravaMetric === "distance"
-          ? "distance"
-          : stravaMetric === "pace"
-          ? "paceSec"
-          : stravaMetric === "time"
-          ? "time"
-          : "calories";
-
-      const metricLabel =
-        stravaMetric === "distance"
-          ? "Distância (km)"
-          : stravaMetric === "pace"
-          ? "Pace Médio (/km)"
-          : stravaMetric === "time"
-          ? "Tempo (min)"
-          : "Calorias (kcal)";
-
-      const yTickFormatter = (v: number) => {
-        if (stravaMetric === "distance") return `${v.toFixed(0)}km`;
-        if (stravaMetric === "pace") return secondsToPaceString(v);
-        if (stravaMetric === "time") return `${Math.round(v)}m`;
-        return `${Math.round(v)}`;
+    const stravaYMaxRaw = Math.max(...stravaProgressPoints.map((p) => p.distanceKm), 10);
+    const stravaYTop = Math.max(10, Math.ceil((stravaYMaxRaw * 1.15) / 5) * 5);
+    const stravaYMid = Math.round(stravaYTop / 2);
+    const stravaYTicks = [0, stravaYMid, stravaYTop];
+    const activeStravaPoint =
+      stravaProgressPoints[selectedPointIndex] ||
+      stravaProgressPoints[lastActiveStravaPointIdx] ||
+      stravaProgressPoints[stravaProgressPoints.length - 1] || {
+        rangeLabel: "Semana Selecionada",
+        distanceKm: 0,
+        movingTimeMin: 0,
+        elevationGain: 0
       };
-
-      const weeklyGoalKm = Math.round(annualRunGoalKm / 52);
-      const showWeeklyGoal = stravaTimeScale === "Semana" && stravaMetric === "distance" && weeklyGoalKm > 0;
-
-      const commonAxesAndDefs = (
-        <>
-          <defs>
-            <linearGradient id="stravaColorMetric" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={strokeColor} stopOpacity={0.28} />
-              <stop offset="95%" stopColor={strokeColor} stopOpacity={0.0} />
-            </linearGradient>
-          </defs>
-          {stravaChartSettings.showGrid !== false && (
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-          )}
-          <XAxis
-            dataKey="label"
-            stroke="#64748b"
-            fontSize={11}
-          />
-          <YAxis
-            stroke="#64748b"
-            fontSize={11}
-            domain={["auto", "auto"]}
-            tickFormatter={yTickFormatter}
-          />
-          <Tooltip content={<StravaCustomTooltip />} cursor={false} />
-          {stravaChartSettings.showLegend !== false && <Legend wrapperStyle={{ fontSize: "11px" }} />}
-          {showWeeklyGoal && (
-            <ReferenceLine
-              y={weeklyGoalKm}
-              stroke="#f59e0b"
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
-              label={{ value: `Meta: ${weeklyGoalKm} km/sem`, fill: "#f59e0b", fontSize: 10, position: "insideTopRight" }}
-            />
-          )}
-        </>
-      );
-
-      if (chartType === "area") {
-        return (
-          <AreaChart data={aggregatedStravaData} accessibilityLayer={false}>
-            {commonAxesAndDefs}
-            <Area
-              type={curveType}
-              dataKey={dataKey}
-              name={metricLabel}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              fill="url(#stravaColorMetric)"
-              dot={stravaChartSettings.showDots ? { r: 3, fill: strokeColor } : false}
-              activeDot={{ r: 5 }}
-            />
-          </AreaChart>
-        );
-      }
-
-      if (chartType === "line") {
-        return (
-          <LineChart data={aggregatedStravaData} accessibilityLayer={false}>
-            {commonAxesAndDefs}
-            <Line
-              type={curveType}
-              dataKey={dataKey}
-              name={metricLabel}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              dot={stravaChartSettings.showDots ? { r: 3, fill: strokeColor } : false}
-              activeDot={{ r: 5 }}
-            />
-          </LineChart>
-        );
-      }
-
-      // Default: bar
-      return (
-        <BarChart data={aggregatedStravaData} barSize={stravaTimeScale === "Dia" ? 16 : 28} accessibilityLayer={false}>
-          {commonAxesAndDefs}
-          <Bar dataKey={dataKey} name={metricLabel} fill={strokeColor} radius={[6, 6, 0, 0]} />
-        </BarChart>
-      );
-    };
 
     return (
       <div className="space-y-6">
@@ -2040,235 +2331,599 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
         </div>
 
-        {/* SPRINT 38: CENTRAL ANALÍTICA DE CORRIDAS & PACE (STRAVA PROGRESS) */}
-        <div className="glass-card p-5 sm:p-6 rounded-3xl border border-white/[0.08] flex flex-col justify-between space-y-4">
-          {/* Cabeçalho de Controles, Métricas e Escala Temporal */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/5">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-orange-500/15 text-orange-400">
-                  <Flame className="w-4 h-4" />
-                </div>
-                <h3 className="text-sm font-extrabold text-white tracking-tight">
-                  Central Analítica de Corridas & Pace — Strava Progress
-                </h3>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Volume acumulado, ritmo médio e calorias por período com meta semanal.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Seletor de Métrica Principal */}
-              <select
-                value={stravaMetric}
-                onChange={(e) => setStravaMetric(e.target.value as any)}
-                className="px-2.5 py-1 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-slate-200 outline-none focus:border-orange-500 cursor-pointer"
+        {/* SPRINT 41: PAINEL STRAVA PROGRESS REDESIGN & WIDGET DE METAS */}
+        <div className="bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-xl space-y-5">
+          {/* Abas Superiores de Navegação Interna: Progresso vs Atividades */}
+          <div className="flex items-center justify-between border-b border-[var(--cupertino-border)] pb-3">
+            <div className="flex items-center gap-6">
+              <button
+                type="button"
+                onClick={() => setStravaInnerTab("progress")}
+                className={`relative pb-2 text-sm font-bold transition-colors cursor-pointer ${
+                  stravaInnerTab === "progress"
+                    ? "text-[var(--cupertino-text)] font-extrabold"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
               >
-                <option value="distance">Distância (km)</option>
-                <option value="pace">Pace Médio (/km)</option>
-                <option value="time">Tempo (min)</option>
-                <option value="calories">Calorias (kcal)</option>
-              </select>
+                Progresso
+                {stravaInnerTab === "progress" && (
+                  <span className="absolute bottom-[-13px] left-0 right-0 h-[3px] bg-[#FC4C02] rounded-full" />
+                )}
+              </button>
 
-              {/* Seletor de Escala Temporal */}
-              <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-900/90 border border-white/10 text-xs">
-                {(["Dia", "Semana", "Mês", "Ano"] as const).map((sc) => (
-                  <button
-                    key={sc}
-                    type="button"
-                    onClick={() => setStravaTimeScale(sc)}
-                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
-                      stravaTimeScale === sc
-                        ? "bg-orange-500 text-slate-950 shadow-sm"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    {sc}
-                  </button>
-                ))}
-              </div>
-
-              {/* Botão de Engrenagem / Popover */}
-              <div className="relative">
-                <button
-                  ref={stravaGearRef}
-                  type="button"
-                  onClick={() => setStravaSettingsOpen((prev) => !prev)}
-                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
-                  title="Configurações do gráfico Strava"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                </button>
-
-                <ChartSettingsPopover
-                  isOpen={stravaSettingsOpen}
-                  onClose={() => setStravaSettingsOpen(false)}
-                  anchorRef={stravaGearRef}
-                  chartKind={stravaChartSettings.chartType || "bar"}
-                  hasMultipleSeries={false}
-                  settings={stravaChartSettings}
-                  onChange={handleUpdateStravaChartSettings}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Gráfico Recharts Dinâmico */}
-          <div
-            style={{ height: getChartHeightPx(stravaChartSettings.height, 220) }}
-            className="w-full select-none"
-          >
-            {aggregatedStravaData.length === 0 ? (
-              <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 rounded-2xl bg-slate-950/40 border border-white/5">
-                <Flame className="w-8 h-8 text-orange-500/30 mb-2" />
-                <p className="text-xs text-slate-400">
-                  Nenhum treino disponível para a escala <strong>{stravaTimeScale}</strong>.
-                </p>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Sincronize pelo Strava para carregar suas atividades recentes.
-                </p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                {renderStravaChart()}
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          {/* Faixa Inferior de Telemetria com 4 Mini-Cards Executivos */}
-          <div className="pt-3 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Distância Total</span>
-              <p className="text-sm font-bold text-orange-400 font-mono tabular-nums mt-0.5">
-                {stravaTelemetry.totalKm > 0 ? `${stravaTelemetry.totalKm} km` : "—"}
-              </p>
-            </div>
-
-            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Melhor Pace</span>
-              <p className="text-sm font-bold text-emerald-400 font-mono tabular-nums mt-0.5">
-                {stravaTelemetry.bestPaceStr}
-              </p>
-            </div>
-
-            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Maior Distância</span>
-              <p className="text-sm font-bold text-sky-400 font-mono tabular-nums mt-0.5">
-                {stravaTelemetry.maxKm > 0 ? `Longão: ${stravaTelemetry.maxKm} km` : "—"}
-              </p>
-            </div>
-
-            <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Horas em Movimento</span>
-              <p className="text-sm font-bold text-amber-300 font-mono tabular-nums mt-0.5">
-                {stravaTelemetry.timeFormatted}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* SESSÃO 3: FEED DE CORRIDAS & ATIVIDADES STRAVA */}
-        <div className="glass-card p-6 rounded-3xl border border-white/[0.08] space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2.5 rounded-xl bg-orange-500/15 text-orange-400">
-                <Flame className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                  Minhas Corridas & Treinos Recentes
-                  {stravaActivities && stravaActivities.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                      {stravaActivities.length} {stravaActivities.length === 1 ? "registro" : "registros"}
-                    </span>
-                  )}
-                </h3>
-                <p className="text-xs text-slate-400">Telemetria oficial do Strava com pace por quilômetro, altimetria acumulada e estimativa calórica.</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setStravaInnerTab("activities")}
+                className={`relative pb-2 text-sm font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  stravaInnerTab === "activities"
+                    ? "text-[var(--cupertino-text)] font-extrabold"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Atividades
+                {stravaActivities && stravaActivities.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                    {stravaActivities.length}
+                  </span>
+                )}
+                {stravaInnerTab === "activities" && (
+                  <span className="absolute bottom-[-13px] left-0 right-0 h-[3px] bg-[#FC4C02] rounded-full" />
+                )}
+              </button>
             </div>
 
             <div className="flex items-center gap-2">
-              {stravaScopeMode === "read_only" && stravaOauthUrl && (
-                <button
-                  type="button"
-                  onClick={() => window.open(stravaOauthUrl, "strava_oauth", "width=600,height=750")}
-                  className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
-                >
-                  <span>🔓 Liberar Atividades Detalhadas (OAuth)</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => syncStravaFromApi()}
                 disabled={isSyncingStrava}
-                className="px-3.5 py-1.5 rounded-xl bg-orange-600/30 border border-orange-500/30 hover:bg-orange-600/50 text-orange-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                className="px-3 py-1 rounded-xl bg-orange-600/30 border border-orange-500/30 hover:bg-orange-600/50 text-orange-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
               >
                 {isSyncingStrava ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                <span>{isSyncingStrava ? "Sincronizando..." : "Atualizar Feed"}</span>
+                <span className="hidden sm:inline">{isSyncingStrava ? "Sincronizando..." : "Sincronizar Strava"}</span>
               </button>
             </div>
           </div>
 
-          {stravaActivities && stravaActivities.length > 0 ? (
-            <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-white/[0.08] bg-slate-950/60 text-slate-400">
-                    <th className="py-3 px-3">Data</th>
-                    <th className="py-3 px-3">Atividade</th>
-                    <th className="py-3 px-3">Tipo</th>
-                    <th className="py-3 px-3 text-right">Distância</th>
-                    <th className="py-3 px-3 text-right">Tempo</th>
-                    <th className="py-3 px-3 text-right">Pace Médio</th>
-                    <th className="py-3 px-3 text-right">Altimetria</th>
-                    <th className="py-3 px-3 text-right">Calorias</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/[0.05]">
-                  {stravaActivities.map((act) => (
-                    <tr key={act.id} className="hover:bg-white/[0.03] transition">
-                      <td className="py-3 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap">
-                        {act.date}
-                      </td>
-                      <td className="py-3 px-3 font-semibold text-white">
-                        {act.name}
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-300 border border-orange-500/30">
-                          {act.type}
+          {/* VISÃO 1: PROGRESSO (GRID 12 COLUNAS: 8 COL GRÁFICO + 4 COL METAS) */}
+          {stravaInnerTab === "progress" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+              {/* COLUNA ESQUERDA (lg:col-span-8): CARD DO GRÁFICO INTERATIVO STRAVA PROGRESS */}
+              <div className="lg:col-span-8 bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+                <div>
+                  {/* Barra de Pílulas no Topo do Card */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    {/* À esquerda: Pílula seletora de esporte */}
+                    <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/60 border border-[var(--cupertino-border)]">
+                      <button
+                        type="button"
+                        onClick={() => setStravaSport("run")}
+                        className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                          stravaSport === "run"
+                            ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        🏃 Corrida
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStravaSport("all")}
+                        className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                          stravaSport === "all"
+                            ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        🔥 Todos os Esportes
+                      </button>
+                    </div>
+
+                    {/* À direita: As 5 pílulas oficiais de período do Strava + Engrenagem */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1 p-0.5 rounded-xl bg-slate-900/60 border border-[var(--cupertino-border)]">
+                        {(["7D", "1M", "3M", "6M", "1Y"] as const).map((p) => {
+                          const isActive = stravaPeriod === p;
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setStravaPeriod(p)}
+                              className={`rounded-lg px-3 py-1 text-xs font-bold transition-all cursor-pointer border ${
+                                isActive
+                                  ? "border-[#FC4C02] bg-[#FC4C02]/10 text-[#FC4C02]"
+                                  : "border-transparent text-slate-400 hover:text-slate-200"
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Popover de Configurações */}
+                      <div className="relative">
+                        <button
+                          ref={stravaGearRef}
+                          type="button"
+                          onClick={() => setStravaSettingsOpen((prev) => !prev)}
+                          className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-[var(--cupertino-border)] transition cursor-pointer"
+                          title="Configurações do gráfico Strava"
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                        </button>
+
+                        <ChartSettingsPopover
+                          isOpen={stravaSettingsOpen}
+                          onClose={() => setStravaSettingsOpen(false)}
+                          anchorRef={stravaGearRef}
+                          chartKind="area"
+                          hasMultipleSeries={false}
+                          settings={stravaChartSettings}
+                          onChange={handleUpdateStravaChartSettings}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cabeçalho Dinâmico de Telemetria Acima do Gráfico */}
+                  <div className="mb-4">
+                    <h4 className="text-lg font-bold text-[var(--cupertino-text)] mb-3 tracking-tight">
+                      {activeStravaPoint.rangeLabel}
+                    </h4>
+
+                    <div className="grid grid-cols-3 gap-3 border-b border-[var(--cupertino-border)] pb-3">
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                          Distância
                         </span>
-                      </td>
-                      <td className="py-3 px-3 text-right font-extrabold font-mono tabular-nums text-orange-400 whitespace-nowrap">
-                        {act.distanceKm} km
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-slate-300 whitespace-nowrap">
-                        {act.movingTimeMin} min
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-emerald-400 font-bold whitespace-nowrap">
-                        {act.pace}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-indigo-300 whitespace-nowrap">
-                        {act.elevationGain > 0 ? `+${act.elevationGain} m` : "—"}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-amber-300 whitespace-nowrap">
-                        {act.calories > 0 ? `${act.calories} kcal` : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
+                          {activeStravaPoint.distanceKm.toFixed(2).replace(".", ",")}{" "}
+                          <span className="text-sm font-semibold text-slate-400">km</span>
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                          Tempo
+                        </span>
+                        <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
+                          {Math.floor(activeStravaPoint.movingTimeMin / 60)}h{" "}
+                          {String(Math.round(activeStravaPoint.movingTimeMin % 60)).padStart(2, "0")}m
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                          Ganho Elev.
+                        </span>
+                        <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
+                          {Math.round(activeStravaPoint.elevationGain)}{" "}
+                          <span className="text-sm font-semibold text-slate-400">m</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Área do Gráfico Recharts Estilo Strava Progress */}
+                <div
+                  style={{ height: getChartHeightPx(stravaChartSettings.height, 220) }}
+                  className="w-full select-none"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={stravaProgressPoints}
+                      margin={{ top: 12, right: 12, left: 4, bottom: 4 }}
+                      accessibilityLayer={false}
+                      onMouseMove={(state: any) => {
+                        if (state && typeof state.activeTooltipIndex === "number" && state.activeTooltipIndex >= 0) {
+                          setSelectedPointIndex(state.activeTooltipIndex);
+                        }
+                      }}
+                      onClick={(state: any) => {
+                        if (state && typeof state.activeTooltipIndex === "number" && state.activeTooltipIndex >= 0) {
+                          setSelectedPointIndex(state.activeTooltipIndex);
+                        }
+                      }}
+                    >
+                      <defs>
+                        <linearGradient id="stravaOrangeGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#FC4C02" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#FC4C02" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+
+                      <CartesianGrid vertical={false} stroke="rgba(148, 163, 184, 0.15)" />
+
+                      <XAxis
+                        dataKey="xKey"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#94a3b8", fontSize: 10, fontWeight: 700 }}
+                        tickFormatter={(_, idx) => {
+                          const pt = stravaProgressPoints[idx];
+                          if (!pt) return "";
+                          if (stravaPeriod === "7D") return pt.label;
+                          if (stravaPeriod === "1M" || stravaPeriod === "1Y") return pt.monthShort;
+                          if (idx === 0 || pt.monthShort !== stravaProgressPoints[idx - 1]?.monthShort) {
+                            return pt.monthShort;
+                          }
+                          return "";
+                        }}
+                      />
+
+                      <YAxis
+                        orientation="right"
+                        axisLine={false}
+                        tickLine={false}
+                        domain={[0, stravaYTop]}
+                        ticks={stravaYTicks}
+                        tick={{ fill: "#94a3b8", fontSize: 11 }}
+                        tickFormatter={(v) => `${Math.round(v)} km`}
+                      />
+
+                      <Tooltip content={() => null} cursor={false} />
+
+                      {stravaProgressPoints[selectedPointIndex] && (
+                        <ReferenceLine
+                          x={stravaProgressPoints[selectedPointIndex].xKey}
+                          stroke="#FC4C02"
+                          strokeWidth={2}
+                        />
+                      )}
+
+                      <Area
+                        type="linear"
+                        dataKey="distanceKm"
+                        name="Distância"
+                        stroke="#FC4C02"
+                        strokeWidth={2.5}
+                        fill="url(#stravaOrangeGrad)"
+                        dot={(dotProps: any) => {
+                          const { cx, cy, index } = dotProps;
+                          if (cx == null || cy == null || isNaN(cx) || isNaN(cy)) return null;
+                          const isSel = index === selectedPointIndex;
+                          if (isSel) {
+                            return (
+                              <g
+                                key={`strava-dot-${index}`}
+                                className="cursor-pointer"
+                                onClick={() => setSelectedPointIndex(index)}
+                              >
+                                <circle cx={cx} cy={cy} r={10} fill="rgba(252, 76, 2, 0.22)" />
+                                <circle cx={cx} cy={cy} r={5.5} fill="#FC4C02" stroke="#FFFFFF" strokeWidth={1.5} />
+                              </g>
+                            );
+                          }
+                          return (
+                            <circle
+                              key={`strava-dot-${index}`}
+                              cx={cx}
+                              cy={cy}
+                              r={4.5}
+                              fill="#131824"
+                              stroke="#FC4C02"
+                              strokeWidth={2.5}
+                              className="cursor-pointer transition-transform hover:scale-125"
+                              onClick={() => setSelectedPointIndex(index)}
+                            />
+                          );
+                        }}
+                        activeDot={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* COLUNA DIREITA (lg:col-span-4): CARD DUPLO DE METAS (ESTA SEMANA + ESTE ANO) */}
+              <div className="lg:col-span-4 bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-lg flex flex-col justify-between relative">
+                {/* Botão de Edição das Metas no Canto Superior Direito */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditWeeklyGoal(String(weeklyRunGoalKm));
+                    setEditAnnualGoal(String(annualProgressStats.annualGoal));
+                    setIsGoalsModalOpen(true);
+                  }}
+                  className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-[var(--cupertino-border)] transition cursor-pointer"
+                  title="Editar metas de corrida"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Metade Superior: ESTA SEMANA */}
+                <div className="flex flex-col items-center">
+                  <h5 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 text-center">
+                    ESTA SEMANA
+                  </h5>
+
+                  <div className="text-2xl font-extrabold tabular-nums text-center text-[var(--cupertino-text)] mt-1">
+                    {currentWeekStats.weeklyCurrentKm.toFixed(1).replace(".", ",")} / {weeklyRunGoalKm} km
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 my-4 w-full px-2">
+                    {/* Dias da Semana (S T Q Q S S D) */}
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      {currentWeekStats.daysInfo.map((d, i) => (
+                        <div key={i} className="flex flex-col items-center gap-1.5">
+                          <div
+                            className={`w-3.5 sm:w-4 h-1 rounded-full transition-colors ${
+                              d.hasRun || d.isToday ? "bg-[#FC4C02]" : "bg-slate-700"
+                            }`}
+                          />
+                          <span className="text-[10px] font-bold text-slate-400">{d.letter}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Anel Circular com Tênis de Corrida */}
+                    <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
+                      <svg className="w-16 h-16 -rotate-90 transform" viewBox="0 0 60 60">
+                        <circle
+                          cx="30"
+                          cy="30"
+                          r="24"
+                          stroke="rgba(148, 163, 184, 0.2)"
+                          strokeWidth="4"
+                          fill="none"
+                        />
+                        <circle
+                          cx="30"
+                          cy="30"
+                          r="24"
+                          stroke="#FC4C02"
+                          strokeWidth="4"
+                          strokeDasharray={2 * Math.PI * 24}
+                          strokeDashoffset={
+                            2 *
+                            Math.PI *
+                            24 *
+                            (1 - Math.min(1, currentWeekStats.weeklyCurrentKm / Math.max(1, weeklyRunGoalKm)))
+                          }
+                          strokeLinecap="round"
+                          fill="none"
+                          className="transition-all duration-500 ease-out"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center text-[#FC4C02]">
+                        <Footprints className="w-5 h-5" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Rodapé de ESTA SEMANA */}
+                  <p className="text-center text-xs text-slate-400 font-medium">
+                    {currentWeekStats.weeklyHours}h {currentWeekStats.weeklyMins}min • {currentWeekStats.weeklyElev} m de subida
+                  </p>
+                </div>
+
+                {/* Divisor Separando as Duas Metades */}
+                <div className="border-t border-[var(--cupertino-border)] pt-4 mt-4" />
+
+                {/* Metade Inferior: ESTE ANO (Com Barra de Ritmo e Marcador HOJE) */}
+                <div className="flex flex-col items-center">
+                  <h5 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 text-center">
+                    ESTE ANO
+                  </h5>
+
+                  <div className="text-2xl font-extrabold tabular-nums text-center text-[var(--cupertino-text)] mt-1">
+                    {Math.round(annualProgressStats.ytdKm)} / {annualProgressStats.annualGoal} km
+                  </div>
+
+                  {/* Barra de Progresso Anual com Marcador HOJE */}
+                  <div className="relative h-3.5 w-full bg-slate-800/90 rounded-sm overflow-visible my-5">
+                    <div
+                      className="bg-[#34D399] h-full rounded-l-sm transition-all duration-500"
+                      style={{ width: `${annualProgressStats.progressPct}%` }}
+                    />
+                    <div
+                      className="absolute -top-1 bottom-[-8px] w-[2px] bg-slate-300 pointer-events-none"
+                      style={{ left: `${annualProgressStats.todayPct}%` }}
+                    >
+                      <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-slate-300 whitespace-nowrap">
+                        HOJE
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Frase de Status do Ritmo */}
+                  <div className="text-center mt-3">
+                    {annualProgressStats.paceDeltaKm < 0 && (
+                      <span className="text-xs font-semibold text-[#FC4C02]">
+                        {Math.abs(annualProgressStats.paceDeltaKm)} km abaixo do ritmo
+                      </span>
+                    )}
+                    {annualProgressStats.paceDeltaKm > 0 && (
+                      <span className="text-xs font-semibold text-[#34D399]">
+                        {annualProgressStats.paceDeltaKm} km acima do ritmo
+                      </span>
+                    )}
+                    {annualProgressStats.paceDeltaKm === 0 && (
+                      <span className="text-xs font-semibold text-slate-300">
+                        Exatamente no ritmo da meta
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="p-8 text-center rounded-2xl bg-slate-950/40 border border-white/[0.05] space-y-3">
-              <Flame className="w-8 h-8 text-orange-500/40 mx-auto" />
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Nenhuma atividade sincronizada no feed ainda. Clique em <strong>&quot;Atualizar pelo Strava&quot;</strong> para consultar a API oficial.
-              </p>
+          )}
+
+          {/* VISÃO 2: ATIVIDADES (TABELA COMPLETA DE TREINOS COM FEED OFICIAL) */}
+          {stravaInnerTab === "activities" && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2.5 rounded-xl bg-orange-500/15 text-orange-400">
+                    <Flame className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                      Minhas Corridas & Treinos Recentes
+                      {stravaActivities && stravaActivities.length > 0 && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                          {stravaActivities.length} {stravaActivities.length === 1 ? "registro" : "registros"}
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-slate-400">Telemetria oficial do Strava com pace por quilômetro, altimetria acumulada e estimativa calórica.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {stravaScopeMode === "read_only" && stravaOauthUrl && (
+                    <button
+                      type="button"
+                      onClick={() => window.open(stravaOauthUrl, "strava_oauth", "width=600,height=750")}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <span>🔓 Liberar Atividades Detalhadas (OAuth)</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => syncStravaFromApi()}
+                    disabled={isSyncingStrava}
+                    className="px-3.5 py-1.5 rounded-xl bg-orange-600/30 border border-orange-500/30 hover:bg-orange-600/50 text-orange-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    {isSyncingStrava ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    <span>{isSyncingStrava ? "Sincronizando..." : "Atualizar Feed"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {stravaActivities && stravaActivities.length > 0 ? (
+                <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/[0.08] bg-slate-950/60 text-slate-400">
+                        <th className="py-3 px-3">Data</th>
+                        <th className="py-3 px-3">Atividade</th>
+                        <th className="py-3 px-3">Tipo</th>
+                        <th className="py-3 px-3 text-right">Distância</th>
+                        <th className="py-3 px-3 text-right">Tempo</th>
+                        <th className="py-3 px-3 text-right">Pace Médio</th>
+                        <th className="py-3 px-3 text-right">Altimetria</th>
+                        <th className="py-3 px-3 text-right">Calorias</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.05]">
+                      {stravaActivities.map((act) => (
+                        <tr key={act.id} className="hover:bg-white/[0.03] transition">
+                          <td className="py-3 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap">
+                            {act.date}
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-white">
+                            {act.name}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-300 border border-orange-500/30">
+                              {act.type}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right font-extrabold font-mono tabular-nums text-orange-400 whitespace-nowrap">
+                            {act.distanceKm} km
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono tabular-nums text-slate-300 whitespace-nowrap">
+                            {act.movingTimeMin} min
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono tabular-nums text-emerald-400 font-bold whitespace-nowrap">
+                            {act.pace}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono tabular-nums text-indigo-300 whitespace-nowrap">
+                            {act.elevationGain > 0 ? `+${act.elevationGain} m` : "—"}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono tabular-nums text-amber-300 whitespace-nowrap">
+                            {act.calories > 0 ? `${act.calories} kcal` : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-8 text-center rounded-2xl bg-slate-950/40 border border-white/[0.05] space-y-3">
+                  <Flame className="w-8 h-8 text-orange-500/40 mx-auto" />
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    Nenhuma atividade sincronizada no feed ainda. Clique em <strong>&quot;Atualizar pelo Strava&quot;</strong> para consultar a API oficial.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
+
+        {/* MODAL DE EDIÇÃO DE METAS DE CORRIDA */}
+        {isGoalsModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-cupertino-in">
+            <div className="bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-6 shadow-2xl w-full max-w-sm space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-[var(--cupertino-border)]">
+                <h4 className="text-sm font-extrabold text-[var(--cupertino-text)] flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-[#FC4C02]" />
+                  Metas de Corrida Strava
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setIsGoalsModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveGoalsModal} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Meta Semanal (km)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="1"
+                    required
+                    value={editWeeklyGoal}
+                    onChange={(e) => setEditWeeklyGoal(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-[var(--cupertino-border)] text-white text-sm outline-none focus:border-[#FC4C02]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Meta Anual (km)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    required
+                    value={editAnnualGoal}
+                    onChange={(e) => setEditAnnualGoal(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-[var(--cupertino-border)] text-white text-sm outline-none focus:border-[#FC4C02]"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsGoalsModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#FC4C02] hover:bg-[#e04302] shadow-md transition"
+                  >
+                    Salvar Metas
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

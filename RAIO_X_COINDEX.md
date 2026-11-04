@@ -761,6 +761,30 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Média de consumo ponderada real: `km/L = totalTrackedKm / totalTrackedLiters`.
       - TCO por km (`tcoPerKm`) consolida combustível e custos veiculares não-combustível (Manutenção, IPVA, Licenciamento, Seguro, Estacionamento) sem duplicar gastos de postos.
 
+  - **Hotfix Sprint 40.2 (Novembro de 2026 — Reformulação Completa do Seletor de Período da Topbar):**
+    - Padrão inicial `"ALL"` (Histórico Completo) no estado `selectedMonth` e persistência no `localStorage` (`coindex_selected_month`).
+    - Dropdown Popover Cupertino Glassmorphism substituindo `<select>` nativo na Topbar com 4 sessões:
+      1. Opção principal em destaque: `🌐 Todos (Histórico Completo)`.
+      2. Pílulas de atalho rápido: `[Mês Atual]`, `[Últimos 30 Dias]`, `[Este Ano]`.
+      3. Grade de meses específicos com badges cronológicos `(Atual)` e `(Futuro)`.
+      4. Intervalo customizado De/Até com validação estrita via `date-br.ts`.
+    - Função unificada pura `isTxInSelectedPeriod` e sincronização adaptativa de todos os KPIs, cotas diárias e gráficos.
+
+  - **Sprint 41 (Novembro de 2026 — Redesign Fiel do Painel Strava Progress + Widget de Metas "ESTA SEMANA / ESTE ANO" na Aba Bio & Strava):**
+    - **Passo 1 — Estrutura Split-View Lado a Lado (`Progresso` 2/3 + `Metas` 1/3) em `SecondaryTabs.tsx`:**
+      - Container unificado em Cupertino Glassmorphism (`bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-xl`).
+      - Abas superiores de navegação interna: `"Progresso"` (com sublinhado sólido Laranja Strava `#FC4C02` de 3px) e `"Atividades"` (com badge de contagem de treinos sincronizados).
+      - Grid responsivo de 12 colunas: `lg:col-span-8` para o gráfico interativo Strava Progress e `lg:col-span-4` para o card duplo de metas.
+    - **Passo 2 — Implementação Fiel do Card Esquerdo (Gráfico Estilo Strava Progress):**
+      - Seletor de esporte (`🏃 Corrida` vs. `🔥 Todos os Esportes`) e as 5 pílulas oficiais do Strava: `[7D]`, `[1M]`, `[3M]`, `[6M]`, `[1Y]`, com realce em `#FC4C02`.
+      - Motor de agrupamento de dados da API Strava com fallback inteligente: dia a dia para `7D`, semana a semana (Segunda a Domingo) para `1M`/`3M`/`6M`, e mês a mês para `1Y`.
+      - Cabeçalho dinâmico de telemetria no topo do gráfico atualizado em tempo real no hover/clique: intervalo ativo (ex: `19 de Out, 2026 - 25 de Out, 2026`), `Distância` (ex: `34,80 km`), `Tempo` (ex: `3h 12m`), e `Ganho Elev.` (ex: `342 m`).
+      - Recharts AreaChart com `type="linear"` (segmentos retos angulares idênticos ao Strava), degradê em Laranja Strava `#FC4C02` (`stopOpacity 0.35` a `0.02`), `CartesianGrid` sem linhas verticais, `YAxis` na direita (`orientation="right"`) com 3 ticks limpos (`0 km`, metade e topo), e bolinhas vazadas customizadas (`StravaProgressDot`) com centro escuro `#131824` e aro `#FC4C02`, halo pulsante no ponto ativo e `ReferenceLine` descendo verticalmente até a base do gráfico.
+    - **Passo 3 — Implementação Fiel do Card Direito (Metas "ESTA SEMANA" e "ESTE ANO"):**
+      - Card dividido em duas metades verticais com divisor sutil e botão de lápis para edição das metas semanais (`weeklyRunGoalKm`, padrão 15 km) e anuais (`annualRunGoalKm`, padrão 500 km) com persistência reativa em `localStorage`.
+      - Metade Superior (`ESTA SEMANA`): contador em destaque `{weeklyCurrentKm} / {weeklyRunGoalKm} km`, dias da semana `S T Q Q S S D` com pílulas laranjas se houve treino ou é hoje, SVG circular de progresso com arco proporcional e ícone de tênis de corrida / `Footprints` no centro, e rodapé com horas, minutos e elevação acumulada.
+      - Metade Inferior (`ESTE ANO`): contador acumulado `{Math.round(ytdKm)} / {annualGoal} km`, barra de progresso anual com marcador vertical e rótulo `HOJE` baseado na fração exata do dia no ano, e frase de status do ritmo (`X km abaixo do ritmo`, `X km acima do ritmo`, ou `Exatamente no ritmo da meta`).
+
 ---
 
 ## 8. Comandos de Manutenção & Verificação Rápida
