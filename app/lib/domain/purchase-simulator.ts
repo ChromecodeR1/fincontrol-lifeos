@@ -7,11 +7,11 @@ import { distributeInstallments, toCents, fromCents, formatBRL } from "./finance
 
 export interface PurchaseSimulationInput {
   itemPrice: number;
-  installments: number; // 1 a 12
+  installments: number; // 1 a 48
   freeMonthlyBalance: number; // Saldo livre estimado do mês (Rendas - Custos Fixos - Gastos Atuais)
   dailyQuota: number; // Cota Diária atual (R$/dia)
   remainingDays: number; // Dias restantes no mês corrente
-  cdiAnnualRate?: number; // CDI Anualizado (ex: 0.1215 para 12.15% a.a.)
+  cdiAnnualRate?: number; // CDI Anualizado (ex: 0.1215 para 12.15% a.a. ou 12.15)
 }
 
 export type PurchaseVerdictType =
@@ -28,6 +28,8 @@ export interface PurchaseSimulationResult {
   newDailyQuota: number;
   dailyQuotaReduction: number;
   cdi12mOpportunityCost: number; // Rendimento estimado a 115% do CDI em 12 meses
+  cashOpportunityCost12m: number; // Rendimento líquido do valor à vista no CDI 12 meses
+  installmentYieldAdvantage: number; // Rendimento gerado mantendo saldo na caixinha enquanto paga parcelas
   verdict: PurchaseVerdictType;
   verdictScore: number; // 0 a 100
   verdictBadgeColor: string; // Classes Tailwind
@@ -36,12 +38,13 @@ export interface PurchaseSimulationResult {
 }
 
 export function simulatePurchaseImpact(input: PurchaseSimulationInput): PurchaseSimulationResult {
-  const itemPrice = Math.max(0, input.itemPrice || 0);
-  const installments = Math.max(1, Math.min(12, Math.round(input.installments || 1)));
-  const freeMonthlyBalance = input.freeMonthlyBalance || 0;
-  const dailyQuota = Math.max(0, input.dailyQuota || 0);
-  const remainingDays = Math.max(1, input.remainingDays || 1);
-  const cdiRate = input.cdiAnnualRate && input.cdiAnnualRate > 0 ? input.cdiAnnualRate : 0.1215; // 12.15% fallback oficial BCB
+  const itemPrice = Math.max(0, Number(input.itemPrice) || 0);
+  const installments = Math.max(1, Math.min(48, Math.floor(Number(input.installments) || 1)));
+  const freeMonthlyBalance = Number(input.freeMonthlyBalance) || 0;
+  const dailyQuota = Math.max(0, Number(input.dailyQuota) || 0);
+  const remainingDays = Math.max(1, Number(input.remainingDays) || 1);
+  const rawCdi = Number(input.cdiAnnualRate) || 0;
+  const cdiRate = rawCdi > 1 ? rawCdi / 100 : rawCdi > 0 ? rawCdi : 0.1215; // Suporta 12.15 e 0.1215 com fallback
 
   // Distribui parcelas exatas em centavos
   const slices = distributeInstallments(itemPrice, installments);
@@ -54,10 +57,25 @@ export function simulatePurchaseImpact(input: PurchaseSimulationInput): Purchase
   const newDailyQuota = fromCents(Math.max(0, toCents(dailyQuota) - toCents(dailyQuotaReduction)));
 
   // Custo de Oportunidade CDI em 12 meses (Caixinha Turbo a 115% do CDI)
-  // Rendimento composto a 115% do CDI com desconto médio de IR (17.5% para 365 dias)
+  // Rendimento composto a 115% do CDI com desconto de IR da tabela regressiva (17.5% para 365 dias)
   const grossTurboRate = cdiRate * 1.15;
-  const netTurboRate = grossTurboRate * (1 - 0.175); // IR de 17.5% sobre rendimento
-  const cdi12mOpportunityCost = fromCents(toCents(itemPrice * netTurboRate));
+  const netTurboRate = grossTurboRate * (1 - 0.175);
+  const cashOpportunityCost12m = fromCents(toCents(itemPrice * netTurboRate));
+  const cdi12mOpportunityCost = cashOpportunityCost12m;
+
+  // Rendimento ganho ao parcelar: capital inicial rende juros compostos enquanto as parcelas são debitadas
+  const monthlyCompoundedRate = Math.pow(1 + grossTurboRate, 1 / 12) - 1;
+  let runningBalance = itemPrice;
+  let totalYieldInstallments = 0;
+  for (let m = 0; m < installments; m++) {
+    const monthYield = runningBalance * monthlyCompoundedRate;
+    totalYieldInstallments += monthYield;
+    const currentInstallment = installmentAmounts[m] || installmentAmount;
+    runningBalance = Math.max(0, runningBalance + monthYield - currentInstallment);
+  }
+  const installmentYieldAdvantage = fromCents(
+    Math.max(0, toCents(totalYieldInstallments * (1 - 0.175)))
+  );
 
   // Veredito Comportamental Inteligente
   let verdict: PurchaseVerdictType;
@@ -79,8 +97,8 @@ export function simulatePurchaseImpact(input: PurchaseSimulationInput): Purchase
     verdictMessage = `Sua margem de segurança financeira absorve esta compra sem estresse. Ela compromete apenas ${balanceConsumptionPct.toFixed(0)}% do seu saldo livre deste mês.`;
     recommendation =
       installments === 1
-        ? `Se pagar à vista gerar desconto maior que ${formatBRL(cdi12mOpportunityCost)}, pague à vista. Caso contrário, invista os ${formatBRL(itemPrice)} na Caixinha Turbo!`
-        : `Parcelamento de ${installments}x de ${formatBRL(installmentAmount)} mantém sua cota diária saudável em ${formatBRL(newDailyQuota)}/dia.`;
+        ? `Se pagar à vista gerar desconto maior que ${formatBRL(cashOpportunityCost12m)}, pague à vista. Caso contrário, invista os ${formatBRL(itemPrice)} na Caixinha Turbo!`
+        : `Parcelamento de ${installments}x de ${formatBRL(installmentAmount)} mantém sua cota diária saudável em ${formatBRL(newDailyQuota)}/dia. Rendimento estimado na caixinha durante o parcelamento: ${formatBRL(installmentYieldAdvantage)}.`;
   } else if (balanceConsumptionPct <= 90 && newDailyQuota >= 12) {
     verdict = "ATENÇÃO AO TETO MENSAL";
     verdictScore = Math.max(50, Math.round(80 - balanceConsumptionPct * 0.35));
@@ -110,6 +128,8 @@ export function simulatePurchaseImpact(input: PurchaseSimulationInput): Purchase
     newDailyQuota,
     dailyQuotaReduction,
     cdi12mOpportunityCost,
+    cashOpportunityCost12m,
+    installmentYieldAdvantage,
     verdict,
     verdictScore,
     verdictBadgeColor,

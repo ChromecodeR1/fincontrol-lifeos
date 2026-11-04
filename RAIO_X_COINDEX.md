@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.29.0`  
-> **Última Atualização:** 3 de Novembro de 2026 (Pós-Sprint 38 — Correção da Digitação de Data no TransactionModal, Reforma Slim de Valores a Receber e Central Analítica de Bioimpedância & Strava Progress)  
+> **Versão da Aplicação:** `0.30.0`  
+> **Última Atualização:** 3 de Novembro de 2026 (Pós-Sprint 40 — Inspeção Premium & Blindagem Matemática Zero-Defect em Splits, Cartões, CDI, TCO e Strava)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -41,15 +41,18 @@ fincontrol-lifeos/
 │   │   ├── domain/
 │   │   │   ├── date-br.ts                 # Motor de Datas Brasileiro Puro (DD-MM-YYYY, anti-UTC shift)
 │   │   │   ├── finance.ts                 # Motor Contábil Puro (Centavos inteiros, restos exatos, competência/caixa)
-│   │   │   ├── investment-yield.ts        # Motor de Rendimento Automático CDI e Capitalização Diária (Sprint 30)
+│   │   │   ├── investment-yield.ts        # Motor de Rendimento Automático CDI e Capitalização Diária (Sprint 30/40)
+│   │   │   ├── bank-ingest.ts             # Parser seguro client-side para extratos CSV (Nubank, Inter, BTG) e OFX
+│   │   │   ├── purchase-simulator.ts      # Motor Preditivo de Simulação de Compras "Posso Comprar?"
+│   │   │   ├── vehicle-math.ts            # Motor Ponderado de Consumo km/L e TCO sem duplicidade contábil
 │   │   │   └── user-storage.ts            # Isolamento de Cache por Usuário (userId namespace, tombstones & soft delete)
 │   │   ├── services/coindex-supabase.ts   # CRUD completo e persistência no Supabase PostgreSQL
 │   │   ├── services/spotify-supabase.ts   # Persistência de tokens e preferências Spotify
 │   │   └── supabase/                      # Clientes Supabase Client & Server
 │   ├── components/
-│   │   ├── TransactionModal.tsx           # Modal completo de novo lançamento/edição (com indexador % CDI)
+│   │   ├── TransactionModal.tsx           # Modal completo de novo lançamento/edição (com SmartDateInputBR e Posto Express)
 │   │   ├── SpotifyModule.tsx              # Player cibernético, telemetria e rateio familiar do Spotify
-│   │   ├── VehiclesTab.tsx                # Telemetria automotiva, consumo km/L e Inmetro
+│   │   ├── VehiclesTab.tsx                # Telemetria automotiva, consumo km/L, Inmetro e TCO por km
 │   │   ├── BanksTab.tsx                   # Gestão de contas bancárias, cartões e limites
 │   │   ├── ChartSettingsPopover.tsx       # Popover de customização de cores/curvas/tipos de gráficos
 │   │   ├── CoindexAuthScreen.tsx          # Tela de login/cadastro Supabase RLS cibernética
@@ -59,7 +62,10 @@ fincontrol-lifeos/
 │   │   └── SpotifyLogo.tsx                # Ícone vetorial do Spotify
 │   ├── api/
 │   │   ├── auth/route.ts                  # Rota Next.js de autenticação e sessão
-│   │   └── market-rates/route.ts          # Rota oficial BCB SGS (Taxa CDI 252 d.u. com cache 1h)
+│   │   ├── market-rates/route.ts          # Rota oficial BCB SGS (Taxa CDI 252 d.u. com cache 1h)
+│   │   └── strava/
+│   │       ├── route.ts                   # Rota de sincronização oficial Strava v3 (POST/GET)
+│   │       └── callback/route.ts          # Callback OAuth2 do Strava com troca de code por tokens
 ```
 
 ### Mapeamento Detalhado de Linhas:
@@ -721,6 +727,39 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Suporte ao `ChartSettingsPopover` (`strava_runs_chart`), altura dinâmica reativa e linha de meta semanal pontilhada (`ReferenceLine` com `annualRunGoalKm / 52` km/semana).
       - Tooltip de alta telemetria esportiva (`StravaCustomTooltip`) com data, nome da atividade, distância, pace formatado, tempo, calorias e altimetria acumulada.
       - Faixa inferior com 4 mini-cards executivos: Distância Total no Período, Melhor Pace Registrado, Maior Distância Única (Longão) e Total de Horas em Movimento (`Xh XXm`).
+
+  - **Hotfix Sprint 38.1 (Novembro de 2026 — Sincronização Atômica do Abastecimento "Posto Express" e Reconciliação de Órfãos):**
+    - Fluxo atômico síncrono em `app/page.tsx`, `app/components/TransactionModal.tsx` e `app/components/VehiclesTab.tsx`.
+    - Registro atômico e espelhado: qualquer abastecimento via Posto Express salva instantaneamente na telemetria veicular (`lifeos_fuel_logs_v1`) e na tabela contábil principal de transações (`lifeos_txs_v8`).
+    - Algoritmo de auto-reconciliação de inicialização: reconcilia logs órfãos do `localStorage` com transações financeiras sem duplicidade de IDs.
+
+  - **Sprint 39 (Novembro de 2026 — Refinamento Estrutural e Arquitetura de Domínio Isolada):**
+    - Estruturação dos motores puros em `app/lib/domain/` (`bank-ingest.ts`, `purchase-simulator.ts`, `finance.ts`, `date-br.ts`).
+    - Padronização das rotas backend oficiais Next.js App Router para Strava (`app/api/strava/route.ts` e `callback/route.ts`).
+    - Preparação das bases matemáticas para auditoria de zero-defeito.
+
+  - **Sprint 40 (Novembro de 2026 — Inspeção Premium & Blindagem Matemática Zero-Defect em Splits, Cartões, CDI, TCO e Strava):**
+    - **Passo 1 — Unificação Matemática de Despesas Divididas (`isSplit`), Competência de Faturas e Limite Real de Cartões (`finance.ts`, `lifeos-data.tsx`, `page.tsx`):**
+      - Funções puras `getEffectivePersonalAmount(tx)` e `getEffectiveCardLiabilityAmount(tx)` em `app/lib/domain/finance.ts`.
+      - Despesas divididas computam apenas o `personalAmount` do usuário no orçamento, ritmo e gráficos, zerando filhos de split, transferências, faturas e recebimentos neutros.
+      - `calculateCardExposure` e `calculateBankExposure` passam a computar separadamente o Limite Comprometido Total (todas as compras pendentes do cartão) e o Valor da Fatura da Competência Atual (`selectedMonth`), com limite disponível real estrito `Math.max(0, safeSub(cardLimit, totalCommittedLimit))`.
+    - **Passo 2 — Blindagem de Resgates Pro-Rata e Prazo Médio Ponderado de IR no Motor CDI (`investment-yield.ts`):**
+      - Resgates agora abatem proporcionalmente (pro-rata) o saldo total acumulado do bucket (`bTotal = b.principal + b.yieldGross`): `ratio = deduct / bTotal; b.principal *= (1 - ratio); b.yieldGross *= (1 - ratio); b.yieldNet *= (1 - ratio)`. Resgates de 100% zeram o principal e os rendimentos órfãos simultaneamente.
+      - Prazo médio ponderado de IR: cálculo do timestamp de depósito ponderado pelos aportes ($\overline{T}_{next} = \frac{S \times \overline{T} + A \times T_{new}}{S + A}$), determinando dias corridos reais para a tabela regressiva da Receita Federal (22.5%, 20.0%, 17.5%, 15.0%).
+    - **Passo 3 — Refinamento Matemático do Simulador Preditivo "Posso Comprar?" (`purchase-simulator.ts`):**
+      - Proteção contra NaNs e Infinity: parcelamento de 1 a 48 vezes com distribuição exata em centavos inteiros via `distributeInstallments`.
+      - Custo de oportunidade de 12 meses (`cashOpportunityCost12m`) e vantagem de rendimento composta durante o parcelamento (`installmentYieldAdvantage`) calculados com juros compostos mensais sobre o saldo residual na Caixinha Turbo (115% do CDI) com desconto de IR.
+    - **Passo 4 — Overpayment Guard em Valores a Receber e Matemáticas de Bio & Strava (`SecondaryTabs.tsx`, `page.tsx`):**
+      - Em `handlePartialPaymentReceivable`: `safePaid = Math.min(totalAmount, Math.max(0, safeAdd(currPaid, addAmount)))`, com quitação automática para `"Pago"` quando `safeRemaining === 0`.
+      - Em `receivablesAnalytics`: totalização estrita em centavos inteiros (`toCents`/`fromCents`), garantindo a identidade contábil `totalLoaned === totalPaid + totalOpen`.
+      - Em `bioTelemetry`: ordenação cronológica ascendente estrita antes de calcular variação de peso, e preservação do último `bf > 0` válido anterior para cálculo contínuo de massa magra (`leanMass`).
+      - Em `secondsToPaceString`: arredondamento de segundos antes do módulo (`const rounded = Math.round(totalSec); const mins = Math.floor(rounded / 60); const secs = rounded % 60`), eliminando o bug `:60` e garantindo `0 <= secs <= 59`.
+      - No card "Melhor Pace": busca o menor pace em segundos (`Math.min`) filtrando distâncias e paces válidos.
+    - **Passo 5 — Criação do Motor Puro de Telemetria Automotiva & TCO (`vehicle-math.ts`, `VehiclesTab.tsx`, `page.tsx`):**
+      - Criação de `app/lib/domain/vehicle-math.ts` com `calculateVehicleConsumption` e `calculateVehicleTco`.
+      - 1º abastecimento (menor odômetro) tratado como Marco Zero Base sem contaminação matemática.
+      - Média de consumo ponderada real: `km/L = totalTrackedKm / totalTrackedLiters`.
+      - TCO por km (`tcoPerKm`) consolida combustível e custos veiculares não-combustível (Manutenção, IPVA, Licenciamento, Seguro, Estacionamento) sem duplicar gastos de postos.
 
 ---
 

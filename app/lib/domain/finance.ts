@@ -287,3 +287,69 @@ export function isNeutralFlow(tx: {
   if (tx.category === "Transferência entre Contas") return true;
   return false;
 }
+
+/**
+ * Retorna o valor de despesa efetivamente pessoal do usuário (Sprint 40).
+ * - Se for split child, transferência, pagamento de fatura, liquidação ou neutro: retorna 0.
+ * - Se for despesa dividida (isSplit): retorna personalAmount se informado, ou amount - thirdPartyAmount.
+ * - Caso contrário: retorna amount integral em centavos normalizados.
+ */
+export function getEffectivePersonalAmount(tx: {
+  amount?: number | string | null;
+  personalAmount?: number | string | null;
+  thirdPartyAmount?: number | string | null;
+  isSplit?: boolean;
+  isSplitChild?: boolean;
+  isTransfer?: boolean;
+  isInvoicePayment?: boolean;
+  isReceivableSettlement?: boolean;
+  flowType?: string;
+  category?: string;
+}): number {
+  if (
+    tx.isSplitChild ||
+    tx.isTransfer ||
+    tx.isInvoicePayment ||
+    tx.isReceivableSettlement ||
+    tx.flowType === "NEUTRAL" ||
+    tx.category === "Transferência entre Contas"
+  ) {
+    return 0;
+  }
+
+  if (tx.isSplit) {
+    if (tx.personalAmount !== undefined && tx.personalAmount !== null && tx.personalAmount !== "") {
+      return fromCents(Math.max(0, toCents(tx.personalAmount)));
+    }
+    return Math.max(0, safeSub(tx.amount, tx.thirdPartyAmount ?? 0));
+  }
+
+  return fromCents(Math.max(0, toCents(tx.amount)));
+}
+
+/**
+ * Retorna o valor de responsabilidade na Fatura / Limite do Cartão de Crédito (Sprint 40).
+ * Uma despesa dividida (isSplit: true) no cartão do usuário cobra o valor INTEGRAL (tx.amount)
+ * na fatura emitida pelo banco, excluindo apenas splits children para nunca duplicar.
+ */
+export function getEffectiveCardLiabilityAmount(tx: {
+  amount?: number | string | null;
+  isSplit?: boolean;
+  isSplitChild?: boolean;
+  isTransfer?: boolean;
+  isInvoicePayment?: boolean;
+  flowType?: string;
+  category?: string;
+}): number {
+  if (
+    tx.isSplitChild ||
+    tx.isTransfer ||
+    tx.isInvoicePayment ||
+    tx.flowType === "NEUTRAL" ||
+    tx.category === "Transferência entre Contas"
+  ) {
+    return 0;
+  }
+
+  return fromCents(Math.max(0, toCents(tx.amount)));
+}

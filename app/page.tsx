@@ -144,9 +144,12 @@ import {
   todayBR,
   todayISO,
   daysInMonth,
+  addMonthsSafe,
   toSortableISO,
   compareDatesBR,
   getYearMonthKey,
+  getEffectivePersonalAmount,
+  getEffectiveCardLiabilityAmount,
   distributeInstallments,
   generateInstallmentSeriesId,
   calculateInvoiceAndCashMonths,
@@ -226,6 +229,11 @@ import SpotifyLogo from "./components/SpotifyLogo";
 import SpotifyModule from "./components/SpotifyModule";
 import { TransactionModal } from "./components/TransactionModal";
 import { ProfileModal } from "./components/ProfileModal";
+import {
+  calculateVehicleConsumption,
+  calculateVehicleTco,
+  isFuelTransaction
+} from "./lib/domain/vehicle-math";
 
 type QuickFilterType = "ALL" | "FIXO" | "VARIAVEL" | "CARTAO" | "PIX";
 
@@ -2198,7 +2206,7 @@ export default function CoindexApp() {
       const expense = safeAdd(
         ...nonTransferList
           .filter((t) => (t.flowType || getFlowType(t.category)) === "EXPENSE")
-          .map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+          .map((t) => getEffectivePersonalAmount(t))
       );
 
       const investmentTxs = nonTransferList.filter((t) => (t.flowType || getFlowType(t.category)) === "INVESTMENT");
@@ -2217,7 +2225,7 @@ export default function CoindexApp() {
       const personalSpent = safeAdd(
         ...nonTransferList
           .filter((t) => t.category === "Gastos Pessoais" || t.category === "Gastos Pessoais / Besteiras")
-          .map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+          .map((t) => getEffectivePersonalAmount(t))
       );
 
       return {
@@ -2385,7 +2393,7 @@ export default function CoindexApp() {
         return getFlowType(t.category) === "EXPENSE";
       })
       .forEach((t) => {
-        const val = t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount;
+        const val = getEffectivePersonalAmount(t);
         map.set(t.category, safeAdd(map.get(t.category) || 0, val));
       });
     // SPRINT 27: Paleta Apple Cupertino para Donut de Categorias
@@ -2422,14 +2430,14 @@ export default function CoindexApp() {
 
   const creditChartData = useMemo(() => {
     return cards.map((c) => {
-      const exposure = calculateCardExposure(c, transactions);
+      const exposure = calculateCardExposure(c, transactions, selectedMonth);
       return {
         name: c.name,
         usado: exposure.used,
         disponivel: exposure.available
       };
     });
-  }, [cards, transactions]);
+  }, [cards, transactions, selectedMonth]);
 
   // Safe-to-Spend: Indicador de Saldo Livre Projetado no Mês (Sprint 12 - Regra Contábil Estrita)
   const safeToSpend = useMemo(() => {
@@ -2641,7 +2649,7 @@ export default function CoindexApp() {
         t.costType === "Fixo"
     );
     const fixedTotal = safeAdd(
-      ...fixedTxs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+      ...fixedTxs.map((t) => getEffectivePersonalAmount(t))
     );
 
     const varTxs = regimeTransactions.filter(
@@ -2652,7 +2660,7 @@ export default function CoindexApp() {
         t.costType !== "Fixo"
     );
     const variableTotal = safeAdd(
-      ...varTxs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+      ...varTxs.map((t) => getEffectivePersonalAmount(t))
     );
 
     const investTotal = monthSummary.aportes;
@@ -2714,7 +2722,7 @@ export default function CoindexApp() {
           d = parseInt(parts[0], 10);
         }
       }
-      const amt = t.isSplit && t.personalAmount != null ? t.personalAmount : (t.thirdPartyAmount != null ? Math.max(0, t.amount - t.thirdPartyAmount) : t.amount);
+      const amt = getEffectivePersonalAmount(t);
       spentByDay.set(d, (spentByDay.get(d) || 0) + amt);
     }
 
@@ -2793,14 +2801,9 @@ export default function CoindexApp() {
     const monthNamesShort = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
     for (let i = 1; i <= 6; i++) {
-      let y = currentYear;
-      let m = currentMonth + i;
-      while (m > 12) {
-        m -= 12;
-        y += 1;
-      }
-      const key = `${y}-${String(m).padStart(2, "0")}`;
-      const label = `${monthNamesShort[m - 1]}/${String(y).slice(2)}`;
+      const ym = addMonthsSafe(currentYear, currentMonth, i);
+      const key = ym.key;
+      const label = ym.shortLabel;
 
       const cardTxs = transactions.filter((t) => {
         if (t.isSplitChild || isNeutralFlow(t)) return false;
@@ -2814,7 +2817,7 @@ export default function CoindexApp() {
       });
 
       const cardTotal = safeAdd(
-        ...cardTxs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+        ...cardTxs.map((t) => getEffectivePersonalAmount(t))
       );
 
       // Deduplicação inteligente de custos fixos já lançados na fatura ou transações futuras (AUD-11)
@@ -2827,7 +2830,7 @@ export default function CoindexApp() {
               fixedTitles.has((t.description || "").trim().toLowerCase()) ||
               fixedTitles.has((t.category || "").trim().toLowerCase())
           )
-          .map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+          .map((t) => getEffectivePersonalAmount(t))
       );
       const effectiveFixedMonthly = Math.max(0, safeSub(fixedMonthlyTotal, fixedAlreadyInCard));
       const totalCommitted = safeAdd(effectiveFixedMonthly, cardTotal);
@@ -2957,7 +2960,7 @@ export default function CoindexApp() {
       let daysToDue = dueDay - currentDay;
       if (daysToDue < 0) daysToDue += 30;
 
-      const exposure = calculateCardExposure(card, transactions);
+      const exposure = calculateCardExposure(card, transactions, targetMonth);
 
       return {
         card,
@@ -3241,68 +3244,36 @@ export default function CoindexApp() {
   const autoMetrics = useMemo(() => {
     const autoCategories = new Set(categoriesCatalog.filter((c) => c.isAuto).map((c) => c.name));
     const autoTxs = transactions
-      .filter((t) => autoCategories.has(t.category) || t.km != null)
+      .filter((t) => autoCategories.has(t.category) || t.km != null || isFuelTransaction(t))
       .sort((a, b) => compareDatesBR(a.date, b.date));
 
-    const kms = autoTxs.map((t) => t.km || 0).filter((k) => k > 0);
-    const maxKm = kms.length ? Math.max(...kms) : 0;
-    const minKm = kms.length ? Math.min(...kms) : 0;
-    const distanceDriven = Math.max(0, maxKm - minKm);
-    const totalLiters = autoTxs.reduce((a, b) => a + (b.liters || 0), 0);
-    const avgKmPerLiter = totalLiters > 0 && distanceDriven > 0 ? distanceDriven / totalLiters : 11.4;
-
-    const isFuelCat = (c: string) => {
-      const lower = c.toLowerCase();
-      return lower.includes("combustível") || lower.includes("combustivel") || lower.includes("gasolina") || lower.includes("etanol");
-    };
-
-    let fuelTotal = 0;
-    let maintenanceTotal = 0;
-    let ipvaTotal = 0;
-    let licenciamentoTotal = 0;
-    let seguroTotal = 0;
-    let estacionamentoTotal = 0;
-
-    for (const t of autoTxs) {
-      const lower = t.category.toLowerCase();
-      if (isFuelCat(t.category) || (t.liters && t.liters > 0)) {
-        fuelTotal += t.amount;
-      } else if (lower.includes("ipva")) {
-        ipvaTotal += t.amount;
-      } else if (lower.includes("licenciamento")) {
-        licenciamentoTotal += t.amount;
-      } else if (lower.includes("seguro")) {
-        seguroTotal += t.amount;
-      } else if (lower.includes("estacionamento") || lower.includes("pedágio") || lower.includes("pedagio")) {
-        estacionamentoTotal += t.amount;
-      } else {
-        maintenanceTotal += t.amount;
-      }
-    }
-
-    const totalAutoSpent = fuelTotal + maintenanceTotal;
-    const totalTCO = fuelTotal + maintenanceTotal + ipvaTotal + licenciamentoTotal + seguroTotal + estacionamentoTotal;
-    const costPerKm = distanceDriven > 0 && Number.isFinite(totalAutoSpent / distanceDriven) ? totalAutoSpent / distanceDriven : 0;
-    const tcoPerKm = distanceDriven > 0 && Number.isFinite(totalTCO / distanceDriven) ? totalTCO / distanceDriven : 0;
+    const inmetroCfg = autoInmetroConfig || DEFAULT_AUTO_INMETRO_CONFIG;
+    const consumption = calculateVehicleConsumption(autoTxs, inmetroCfg);
+    const tco = calculateVehicleTco(autoTxs, consumption.totalFuelCost, consumption.distanceDriven);
 
     return {
       autoTxs: autoTxs.slice().reverse(),
       kmRecords: autoTxs.filter((t) => t.km).map((t) => ({ date: t.date, km: t.km })),
-      maxKm,
-      distanceDriven,
-      avgKmPerLiter,
-      fuelTotal,
-      maintenanceTotal,
-      ipvaTotal,
-      licenciamentoTotal,
-      seguroTotal,
-      estacionamentoTotal,
-      totalAutoSpent,
-      totalTCO,
-      costPerKm,
-      tcoPerKm
+      maxKm: consumption.maxKm,
+      distanceDriven: consumption.distanceDriven,
+      avgKmPerLiter: consumption.avgKmPerLiter,
+      fuelTotal: tco.fuelTotal,
+      maintenanceTotal: tco.maintenanceTotal,
+      ipvaTotal: tco.ipvaTotal,
+      licenciamentoTotal: tco.licenciamentoTotal,
+      seguroTotal: tco.seguroTotal,
+      estacionamentoTotal: tco.estacionamentoTotal,
+      totalAutoSpent: safeAdd(tco.fuelTotal, tco.maintenanceTotal),
+      totalTCO: tco.totalTCO,
+      costPerKm:
+        consumption.distanceDriven > 0
+          ? Number((safeAdd(tco.fuelTotal, tco.maintenanceTotal) / consumption.distanceDriven).toFixed(2))
+          : 0,
+      tcoPerKm: tco.tcoPerKm,
+      tcoItems: tco.tcoItems,
+      consumptionPoints: consumption.consumptionPoints
     };
-  }, [transactions, categoriesCatalog]);
+  }, [transactions, categoriesCatalog, autoInmetroConfig]);
 
   const receivableItems = useMemo(() => {
     return transactions
@@ -3316,27 +3287,40 @@ export default function CoindexApp() {
   }, [transactions, debtorMap]);
 
   const receivablesAnalytics = useMemo(() => {
-    let totalOpen = 0;
-    let totalPaid = 0;
-    let totalLoaned = 0;
+    let openCents = 0;
+    let paidCents = 0;
     const byPersonMap = new Map<
       string,
-      { person: string; aberto: number; pago: number; totalEmprestado: number }
+      { person: string; abertoCents: number; pagoCents: number; totalEmprestadoCents: number }
     >();
 
     receivableItems.forEach((item) => {
-      totalOpen += item.remaining;
-      totalPaid += item.effectivePaid;
-      totalLoaned += item.amount;
+      const itemRemainingCents = toCents(item.remaining);
+      const itemPaidCents = toCents(item.effectivePaid);
+      const itemTotalCents = itemRemainingCents + itemPaidCents;
+
+      openCents += itemRemainingCents;
+      paidCents += itemPaidCents;
+
       const pName = item.debtorName.trim() ? item.debtorName.trim() : "Não Atribuído";
-      const curr = byPersonMap.get(pName) || { person: pName, aberto: 0, pago: 0, totalEmprestado: 0 };
-      curr.aberto = Number((curr.aberto + item.remaining).toFixed(2));
-      curr.pago = Number((curr.pago + item.effectivePaid).toFixed(2));
-      curr.totalEmprestado = Number((curr.totalEmprestado + item.amount).toFixed(2));
+      const curr = byPersonMap.get(pName) || { person: pName, abertoCents: 0, pagoCents: 0, totalEmprestadoCents: 0 };
+      curr.abertoCents += itemRemainingCents;
+      curr.pagoCents += itemPaidCents;
+      curr.totalEmprestadoCents += itemTotalCents;
       byPersonMap.set(pName, curr);
     });
 
-    const list = Array.from(byPersonMap.values());
+    const totalOpen = fromCents(openCents);
+    const totalPaid = fromCents(paidCents);
+    const totalLoaned = fromCents(openCents + paidCents);
+
+    const list = Array.from(byPersonMap.values()).map((p) => ({
+      person: p.person,
+      aberto: fromCents(p.abertoCents),
+      pago: fromCents(p.pagoCents),
+      totalEmprestado: fromCents(p.totalEmprestadoCents)
+    }));
+
     return { totalOpen, totalPaid, totalLoaned, openByPerson: list, historyByPerson: list };
   }, [receivableItems]);
 
@@ -4338,19 +4322,18 @@ export default function CoindexApp() {
     }
     const cleanAmount = fromCents(toCents(addAmount));
     const targetBank = destBank || banks[0]?.name || "Nubank";
-    const currPaidCents = toCents(tx.paidAmount || 0);
-    const addCents = toCents(cleanAmount);
-    const txAmountCents = toCents(tx.amount);
-    const nextPaidCents = Math.min(txAmountCents, currPaidCents + addCents);
-    const nextPaid = fromCents(nextPaidCents);
-    const nextStatus: TxStatus = nextPaidCents >= txAmountCents ? "Pago" : "Pendente / Na Fatura";
+    const totalAmount = tx.amount;
+    const currPaid = tx.paidAmount || 0;
+    const safePaid = Math.min(totalAmount, Math.max(0, safeAdd(currPaid, cleanAmount)));
+    const safeRemaining = Math.max(0, safeSub(totalAmount, safePaid));
+    const nextStatus: TxStatus = safeRemaining === 0 ? "Pago" : "Pendente";
     const nowIso = todayISO();
     const todayStr = todayBR();
     const debtorName = tx.debtor || debtorMap[tx.id] || "Devedor";
 
     const changedTx: Transaction = {
       ...tx,
-      paidAmount: nextPaid,
+      paidAmount: safePaid,
       status: nextStatus,
       updatedAt: nowIso
     };
@@ -7491,7 +7474,7 @@ export default function CoindexApp() {
                                 <div className="relative pt-1 pb-2">
                                   {cards.map((card, idx) => {
                                     const isSelected = selectedWalletCardId ? selectedWalletCardId === card.id : idx === 0;
-                                    const exposure = calculateCardExposure(card, transactions);
+                                    const exposure = calculateCardExposure(card, transactions, selectedMonth);
                                     const cardGradient = getCardGradient(card.name, card.bankName);
                                     const isFirst = idx === 0;
 

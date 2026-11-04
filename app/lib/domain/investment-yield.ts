@@ -219,15 +219,18 @@ export function calculatePortfolioCdiYield(
     principal: number; // float em reais
     yieldGross: number; // float em reais
     yieldNet: number; // float em reais
+    weightedDepositTimestamp: number; // timestamp em ms ponderado pelos aportes para IR
   }
 
+  const initialTimestamp = new Date(startParts.year, startParts.month - 1, startParts.day).getTime();
   const buckets = new Map<number, YieldBucket>();
   if (initialReserveBalance > 0) {
     buckets.set(defaultCdiPct, {
       cdiPercentage: defaultCdiPct,
       principal: initialReserveBalance,
       yieldGross: 0,
-      yieldNet: 0
+      yieldNet: 0,
+      weightedDepositTimestamp: initialTimestamp
     });
   }
 
@@ -250,7 +253,6 @@ export function calculatePortfolioCdiYield(
   let curYear = startParts.year;
   let curMonth = startParts.month;
   let curDay = startParts.day;
-  let daysElapsed = 0;
 
   // Itera dia a dia cronologicamente calculando os rendimentos compostos com 8+ casas de precisão (AUD-01)
   while (
@@ -260,6 +262,7 @@ export function calculatePortfolioCdiYield(
   ) {
     const ymKey = `${curYear}-${String(curMonth).padStart(2, "0")}`;
     const dateKey = `${ymKey}-${String(curDay).padStart(2, "0")}`;
+    const currentDayTimestamp = new Date(curYear, curMonth - 1, curDay).getTime();
 
     // Processa transações do dia por bucket
     const dailyTxs = txByDate.get(dateKey);
@@ -277,34 +280,45 @@ export function calculatePortfolioCdiYield(
             const bTotal = b.principal + b.yieldGross;
             if (bTotal <= 0) continue;
             const deduct = Math.min(bTotal, remainingToResgate);
-            if (b.principal >= deduct) {
-              b.principal -= deduct;
-            } else {
-              const fromYield = deduct - b.principal;
-              b.principal = 0;
-              b.yieldGross = Math.max(0, b.yieldGross - fromYield);
-              b.yieldNet = Math.max(0, b.yieldNet - fromYield * 0.85);
-            }
+            const ratio = deduct / bTotal;
+            b.principal = Math.max(0, b.principal * (1 - ratio));
+            b.yieldGross = Math.max(0, b.yieldGross * (1 - ratio));
+            b.yieldNet = Math.max(0, b.yieldNet * (1 - ratio));
             remainingToResgate -= deduct;
           }
         } else {
           let b = buckets.get(pct);
           if (!b) {
-            b = { cdiPercentage: pct, principal: 0, yieldGross: 0, yieldNet: 0 };
+            b = {
+              cdiPercentage: pct,
+              principal: amt,
+              yieldGross: 0,
+              yieldNet: 0,
+              weightedDepositTimestamp: currentDayTimestamp
+            };
             buckets.set(pct, b);
+          } else {
+            const prevTotal = b.principal + b.yieldGross;
+            if (prevTotal > 0) {
+              b.weightedDepositTimestamp = Math.round(
+                (prevTotal * b.weightedDepositTimestamp + amt * currentDayTimestamp) / (prevTotal + amt)
+              );
+            } else {
+              b.weightedDepositTimestamp = currentDayTimestamp;
+            }
+            b.principal += amt;
           }
-          b.principal += amt;
         }
       }
     }
 
-    // Capitalização diária em dias úteis com taxa de cada bucket
-    daysElapsed++;
+    // Capitalização diária em dias úteis com taxa e alíquota de IR ponderada de cada bucket
     if (isBusinessDay(curYear, curMonth, curDay)) {
-      const irRate = getRegressiveIRRate(daysElapsed);
       for (const b of buckets.values()) {
         const balance = b.principal + b.yieldGross;
         if (balance > 0) {
+          const weightedDaysElapsed = Math.max(1, Math.round((currentDayTimestamp - b.weightedDepositTimestamp) / 86400000));
+          const irRate = getRegressiveIRRate(weightedDaysElapsed);
           const dailyFactor = calculateDailyCdiFactor(cdiAnnual, b.cdiPercentage);
           const dayGross = balance * dailyFactor;
           b.yieldGross += dayGross;

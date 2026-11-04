@@ -26,7 +26,9 @@ import {
   generateInstallmentSeriesId,
   calculateInvoiceAndCashMonths,
   getCardInvoiceCompetence,
-  isNeutralFlow
+  isNeutralFlow,
+  getEffectivePersonalAmount,
+  getEffectiveCardLiabilityAmount
 } from "./lib/domain/finance";
 import {
   InvestmentYieldConfig,
@@ -522,7 +524,9 @@ export {
   generateInstallmentSeriesId,
   calculateInvoiceAndCashMonths,
   getCardInvoiceCompetence,
-  isNeutralFlow
+  isNeutralFlow,
+  getEffectivePersonalAmount,
+  getEffectiveCardLiabilityAmount
 };
 
 // Gerenciamento de Armazenamento por Usuário & Tombstones (Sprint 22 & 33)
@@ -1578,32 +1582,51 @@ export function ThemeSegmentedControl({
 export interface CardExposure {
   cardName: string;
   limit: number;
-  used: number;
-  available: number;
+  used: number; // Valor da fatura da competência atual (ou pendente)
+  available: number; // Limite real restante descontando todo o comprometimento
   usagePercent: number;
+  currentInvoiceAmount?: number;
+  totalCommittedLimit?: number;
 }
 
 export function calculateCardExposure(
   card: CreditCardItem,
-  transactions: Transaction[]
+  transactions: Transaction[],
+  selectedMonth?: string
 ): CardExposure {
-  const pendingTxs = transactions.filter(
-    (t) =>
-      !t.isSplitChild &&
-      t.paymentMethod === "Cartão de Crédito" &&
-      t.cardUsed === card.name &&
-      t.status === "Pendente / Na Fatura"
-  );
-  const used = safeAdd(...pendingTxs.map((t) => t.amount));
   const cardLimit = card.limit ?? 0;
-  const available = Math.max(0, safeSub(cardLimit, used));
-  const usagePercent = cardLimit > 0 ? Math.min(100, Math.max(0, Math.round((used / cardLimit) * 100))) : 0;
+
+  const isMatchingCard = (t: Transaction) =>
+    !t.isSplitChild &&
+    !t.deletedAt &&
+    (t.cardUsed === card.name || (t.cardId && card.id && t.cardId === card.id)) &&
+    (t.paymentMethod === "Cartão de Crédito" || Boolean(t.invoiceMonth));
+
+  // 1. Limite Total Comprometido: TODAS as transações não pagas do cartão (inclusive meses futuros)
+  const unpaidTxs = transactions.filter((t) => isMatchingCard(t) && t.status !== "Pago");
+  const totalCommittedLimit = safeAdd(...unpaidTxs.map((t) => getEffectiveCardLiabilityAmount(t)));
+  const available = Math.max(0, safeSub(cardLimit, totalCommittedLimit));
+  const usagePercent = cardLimit > 0 ? Math.min(100, Math.max(0, Math.round((totalCommittedLimit / cardLimit) * 100))) : 0;
+
+  // 2. Fatura da competência selecionada
+  const invoiceTxs = transactions.filter((t) => {
+    if (!isMatchingCard(t)) return false;
+    if (selectedMonth && selectedMonth !== "ALL") {
+      const comp = t.invoiceMonth || getCardInvoiceCompetence(t.date, card.closingDay, card.dueDay);
+      return comp === selectedMonth;
+    }
+    return t.status !== "Pago";
+  });
+  const currentInvoiceAmount = safeAdd(...invoiceTxs.map((t) => getEffectiveCardLiabilityAmount(t)));
+
   return {
     cardName: card.name,
     limit: cardLimit,
-    used,
+    used: currentInvoiceAmount,
     available,
-    usagePercent
+    usagePercent,
+    currentInvoiceAmount,
+    totalCommittedLimit
   };
 }
 
@@ -1632,12 +1655,13 @@ export function calculateBankExposure(
       .filter(
         (t) =>
           !t.isSplitChild &&
+          !t.deletedAt &&
           (cardNames.has(t.cardUsed || "") ||
             (t.paymentMethod === "Cartão de Crédito" &&
               t.cardUsed?.toLowerCase().includes(bank.name.toLowerCase()))) &&
-          t.status === "Pendente / Na Fatura"
+          t.status !== "Pago"
       )
-      .map((t) => t.amount)
+      .map((t) => getEffectiveCardLiabilityAmount(t))
   );
   const available = Math.max(0, safeSub(calcLimit, used));
   return {

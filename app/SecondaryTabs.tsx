@@ -70,8 +70,9 @@ export function paceStringToSeconds(paceStr: string): number {
  */
 export function secondsToPaceString(totalSec: number): string {
   if (!totalSec || totalSec <= 0 || !isFinite(totalSec)) return "—";
-  const mins = Math.floor(totalSec / 60);
-  const secs = Math.round(totalSec % 60);
+  const rounded = Math.round(totalSec);
+  const mins = Math.floor(rounded / 60);
+  const secs = rounded % 60;
   return `${mins}:${String(secs).padStart(2, "0")} /km`;
 }
 
@@ -508,18 +509,31 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         leanMass: null as number | null
       };
     }
-    const initialLog = filteredBioLogs[0];
-    const currentLog = filteredBioLogs[filteredBioLogs.length - 1];
+    const sorted = [...filteredBioLogs].sort((a, b) => compareDatesBR(a.date, b.date));
+    const initialLog = sorted[0];
+    const currentLog = sorted[sorted.length - 1];
     const initialWeight = Number(initialLog.weight) || 0;
     const currentWeight = Number(currentLog.weight) || 0;
-    const deltaWeight = currentWeight - initialWeight;
+    const deltaWeight = safeSub(currentWeight, initialWeight);
     const deltaPct = initialWeight > 0 ? (deltaWeight / initialWeight) * 100 : 0;
     const currentBf = currentLog.bf != null ? Number(currentLog.bf) : null;
 
-    const weights = filteredBioLogs.map((l) => Number(l.weight) || 0).filter((w) => w > 0);
+    // Se a pesagem atual não tiver percentual de gordura (bf), busca o último bf válido anterior
+    let validBf: number | null = currentBf && currentBf > 0 ? currentBf : null;
+    if (validBf == null) {
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const bVal = sorted[i].bf != null ? Number(sorted[i].bf) : 0;
+        if (bVal > 0) {
+          validBf = bVal;
+          break;
+        }
+      }
+    }
+
+    const weights = sorted.map((l) => Number(l.weight) || 0).filter((w) => w > 0);
     const minWeight = weights.length > 0 ? Math.min(...weights) : currentWeight;
     const avgWeight = weights.length > 0 ? weights.reduce((acc, w) => acc + w, 0) / weights.length : currentWeight;
-    const leanMass = currentBf != null && currentWeight > 0 ? currentWeight * (1 - currentBf / 100) : null;
+    const leanMass = validBf != null && currentWeight > 0 ? +(currentWeight * (1 - validBf / 100)).toFixed(1) : null;
 
     return {
       currentWeight,
@@ -693,23 +707,16 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     const hours = Math.floor(totalTimeMin / 60);
     const mins = Math.round(totalTimeMin % 60);
 
-    let bestPaceSec = Infinity;
-    let bestPaceStr = "—";
-    let maxKm = 0;
-
-    acts.forEach((a) => {
-      const km = Number(a.distanceKm) || 0;
-      if (km > maxKm) maxKm = km;
-      const sec = paceStringToSeconds(a.pace);
-      if (sec > 0 && sec < bestPaceSec) {
-        bestPaceSec = sec;
-        bestPaceStr = a.pace || secondsToPaceString(sec);
-      }
-    });
+    const validActs = acts.filter((a) => (Number(a.distanceKm) || 0) > 0 && paceStringToSeconds(a.pace) > 0);
+    const validPaceSeconds = validActs.map((a) => paceStringToSeconds(a.pace));
+    const bestPaceSec = validPaceSeconds.length > 0 ? Math.min(...validPaceSeconds) : Infinity;
+    const bestAct = validActs.find((a) => paceStringToSeconds(a.pace) === bestPaceSec);
+    const bestPaceStr = bestAct ? (bestAct.pace || secondsToPaceString(bestPaceSec)) : "—";
+    const maxKm = acts.reduce((max, a) => Math.max(max, Number(a.distanceKm) || 0), 0);
 
     return {
       totalKm: Math.round(totalKm * 10) / 10,
-      bestPaceStr: bestPaceSec < Infinity ? bestPaceStr : "—",
+      bestPaceStr,
       maxKm: Math.round(maxKm * 10) / 10,
       timeFormatted: `${hours}h ${String(mins).padStart(2, "0")}m`
     };

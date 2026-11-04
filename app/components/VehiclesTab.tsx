@@ -56,6 +56,11 @@ import {
   ChartWidgetSize,
   DEFAULT_CHART_WIDGET_SETTINGS
 } from "./ChartSettingsPopover";
+import {
+  calculateVehicleConsumption,
+  calculateVehicleTco,
+  isFuelTransaction
+} from "../lib/domain/vehicle-math";
 
 export interface VehiclesTabProps {
   autoMetrics: {
@@ -307,111 +312,18 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
     null
   );
 
-  // Consumo Real (km/l) por abastecimento consecutivo e comparação com INMETRO (AUD-05 e AUD-08)
+  // Consumo Real (km/l) por abastecimento consecutivo e comparação com INMETRO (AUD-05 e AUD-08 via vehicle-math)
   const sortedFuelAsc = [...fuelTxs].sort((a, b) => compareDatesBR(a.date, b.date));
-  const fuelWithKmAndLiters = sortedFuelAsc.filter(
-    (t: Transaction) => typeof t.km === "number" && t.km > 0 && typeof t.liters === "number" && t.liters > 0
+  const consumptionResult = useMemo(
+    () => calculateVehicleConsumption(autoMetrics.autoTxs, inmetroCfg),
+    [autoMetrics.autoTxs, inmetroCfg]
   );
-
-  const consumptionPoints: Array<{
-    date: string;
-    label: string;
-    kmPerLiter: number;
-    inmetroRef: number;
-    fuelType: string;
-    pricePerLiter: number;
-    color: string;
-    statusLabel: string;
-    pctOfInmetro: number;
-    distKm: number;
-    liters: number;
-    totalAmount: number;
-    description: string;
-  }> = [];
-
-  let accumulatedPartialLiters = 0;
-  let accumulatedPartialCost = 0;
-  let lastAnchorKm = fuelWithKmAndLiters.length > 0 ? (fuelWithKmAndLiters[0].km || 0) : 0;
-
-  for (let i = 1; i < fuelWithKmAndLiters.length; i++) {
-    const curr = fuelWithKmAndLiters[i];
-    const lit = curr.liters || 0;
-    const cost = curr.amount || 0;
-
-    const isPartial = curr.fullTank === false;
-    accumulatedPartialLiters += lit;
-    accumulatedPartialCost += cost;
-
-    // Se tanque cheio (padrão) ou for o último registro com dados, calcula o ciclo acumulado (AUD-08)
-    if (!isPartial || i === fuelWithKmAndLiters.length - 1) {
-      const dist = (curr.km || 0) - lastAnchorKm;
-      const totalPeriodLiters = accumulatedPartialLiters;
-
-      if (dist > 0 && totalPeriodLiters > 0) {
-        const kml = Number((dist / totalPeriodLiters).toFixed(2));
-        const isEtanol =
-          curr.fuelType === "Etanol" ||
-          curr.description.toLowerCase().includes("etanol") ||
-          curr.description.toLowerCase().includes("álcool") ||
-          curr.category.toLowerCase().includes("etanol");
-        const ref = isEtanol ? inmetroCfg.ethanolKmPerLiter : inmetroCfg.gasolineKmPerLiter;
-        const pct = Math.round((kml / Math.max(0.1, ref)) * 100);
-
-        let col = "#ef4444"; // Vermelho
-        let status = "Ruim";
-        if (pct >= inmetroCfg.greenThresholdPct) {
-          col = "#10b981"; // Verde
-          status = "Bom";
-        } else if (pct >= inmetroCfg.yellowThresholdPct) {
-          col = "#f59e0b"; // Amarelo
-          status = "Mediano";
-        }
-
-        const priceL = totalPeriodLiters > 0 ? Number((accumulatedPartialCost / totalPeriodLiters).toFixed(2)) : 0;
-        consumptionPoints.push({
-          date: curr.date,
-          label: formatDateBR(curr.date),
-          kmPerLiter: kml,
-          inmetroRef: ref,
-          fuelType: isEtanol ? "Etanol" : "Gasolina",
-          pricePerLiter: priceL,
-          color: col,
-          statusLabel: `${status} (${pct}% do INMETRO)`,
-          pctOfInmetro: pct,
-          distKm: dist,
-          liters: totalPeriodLiters,
-          totalAmount: accumulatedPartialCost,
-          description: curr.description
-        });
-      }
-
-      lastAnchorKm = curr.km || 0;
-      accumulatedPartialLiters = 0;
-      accumulatedPartialCost = 0;
-    }
-  }
-
-  const lastConsumption =
-    consumptionPoints.length > 0 ? consumptionPoints[consumptionPoints.length - 1] : null;
-
-  // Consumo do último abastecimento ou estimativa com base na distância percorrida e litros
-  let effectiveLastKmL = lastConsumption?.kmPerLiter;
-  let effectiveLastFuelType = lastConsumption?.fuelType || "Gasolina";
-  let effectiveLastPct = lastConsumption?.pctOfInmetro;
-
-  if (!effectiveLastKmL && fuelWithKmAndLiters.length >= 1 && autoMetrics.distanceDriven > 0) {
-    const latestFuel = fuelWithKmAndLiters[fuelWithKmAndLiters.length - 1];
-    if (latestFuel.liters && latestFuel.liters > 0) {
-      effectiveLastKmL = Number((autoMetrics.distanceDriven / latestFuel.liters).toFixed(2));
-      const isEtanol =
-        latestFuel.description.toLowerCase().includes("etanol") ||
-        latestFuel.description.toLowerCase().includes("álcool") ||
-        latestFuel.category.toLowerCase().includes("etanol");
-      effectiveLastFuelType = isEtanol ? "Etanol" : "Gasolina";
-      const ref = isEtanol ? inmetroCfg.ethanolKmPerLiter : inmetroCfg.gasolineKmPerLiter;
-      effectiveLastPct = Math.round((effectiveLastKmL / Math.max(0.1, ref)) * 100);
-    }
-  }
+  const consumptionPoints = consumptionResult.consumptionPoints;
+  const lastConsumption = consumptionResult.lastConsumption;
+  const effectiveLastKmL = consumptionResult.effectiveLastKmL;
+  const effectiveLastFuelType = consumptionResult.effectiveLastFuelType;
+  const effectiveLastPct = consumptionResult.effectiveLastPct;
+  const avgPctOfInmetro = consumptionResult.avgPctOfInmetro;
 
   let lastSemaforoBadge = "—";
   let lastSemaforoColor = "text-slate-400 border-white/10 bg-white/5";
@@ -429,9 +341,6 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
   }
 
   // Semáforo do Consumo Médio Geral
-  const avgPctOfInmetro = Math.round(
-    (autoMetrics.avgKmPerLiter / Math.max(0.1, inmetroCfg.gasolineKmPerLiter)) * 100
-  );
   let avgSemaforoColor = "text-rose-400 border-rose-500/30 bg-rose-500/15";
   let avgSemaforoBadge = "🔴 Ruim";
   if (avgPctOfInmetro >= inmetroCfg.greenThresholdPct) {
@@ -997,23 +906,26 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
         const tankKm = 50 * (isEtanolAdvantage ? inmetroCfg.ethanolKmPerLiter : inmetroCfg.gasolineKmPerLiter);
         const tankSavings = costDiffPerKm * tankKm;
 
-        const totalTCO = autoMetrics.totalTCO ?? autoMetrics.totalAutoSpent;
-        const tcoPerKm = autoMetrics.tcoPerKm ?? (autoMetrics.distanceDriven > 0 && Number.isFinite(totalTCO / autoMetrics.distanceDriven) ? totalTCO / autoMetrics.distanceDriven : autoMetrics.costPerKm);
-        const ipvaVal = Number(autoMetrics.ipvaTotal || 0);
-        const licVal = Number(autoMetrics.licenciamentoTotal || 0);
-        const seguroVal = Number(autoMetrics.seguroTotal || 0);
-        const estacVal = Number(autoMetrics.estacionamentoTotal || 0);
-        const fuelVal = autoMetrics.fuelTotal || 0;
-        const maintVal = autoMetrics.maintenanceTotal || 0;
-
-        const tcoItems = [
-          { label: "Combustível", amount: fuelVal, color: "#f59e0b", icon: Fuel },
-          { label: "Manutenção & Revisões", amount: maintVal, color: "#ef4444", icon: Wrench },
-          { label: "IPVA", amount: ipvaVal, color: "#a855f7", icon: FileCheck },
-          { label: "Licenciamento", amount: licVal, color: "#06b6d4", icon: FileCheck },
-          { label: "Seguro Auto", amount: seguroVal, color: "#3b82f6", icon: ShieldCheck },
-          { label: "Estacionamento / Pedágio", amount: estacVal, color: "#10b981", icon: Coins }
-        ].filter((i) => i.amount > 0);
+        const tcoCalc = calculateVehicleTco(
+          autoMetrics.autoTxs,
+          autoMetrics.fuelTotal,
+          autoMetrics.distanceDriven
+        );
+        const totalTCO = tcoCalc.totalTCO || autoMetrics.totalTCO || autoMetrics.totalAutoSpent;
+        const tcoPerKm = tcoCalc.tcoPerKm || autoMetrics.tcoPerKm || autoMetrics.costPerKm;
+        const tcoItems = tcoCalc.tcoItems.map((item) => ({
+          ...item,
+          icon:
+            item.label === "Combustível"
+              ? Fuel
+              : item.label === "Manutenção & Revisões"
+              ? Wrench
+              : item.label === "IPVA" || item.label === "Licenciamento"
+              ? FileCheck
+              : item.label === "Seguro Auto"
+              ? ShieldCheck
+              : Coins
+        }));
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
