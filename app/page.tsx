@@ -31,6 +31,8 @@ import {
   ArrowDownRight,
   Check,
   X,
+  ChevronDown,
+  Globe,
   UserCheck,
   ChevronLeft,
   ChevronRight,
@@ -227,7 +229,7 @@ import {
 } from "./components/ChartSettingsPopover";
 import SpotifyLogo from "./components/SpotifyLogo";
 import SpotifyModule from "./components/SpotifyModule";
-import { TransactionModal } from "./components/TransactionModal";
+import { TransactionModal, SmartDateInputBR } from "./components/TransactionModal";
 import { ProfileModal } from "./components/ProfileModal";
 import {
   calculateVehicleConsumption,
@@ -600,14 +602,18 @@ export default function CoindexApp() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedWalletCardId, setSelectedWalletCardId] = useState<string | null>(null);
   const [cashflowActiveTab, setCashflowActiveTab] = useState<"fluxo" | "recentes">("fluxo");
-  const [selectedMonth, setSelectedMonth] = useState("2026-10");
+  const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [periodDropdownOpen, setPeriodDropdownOpen] = useState(false);
+  const periodDropdownRef = useRef<HTMLDivElement>(null);
 
   // Data de referência estável para SSR/Prerender (Next.js 16)
   const [currentCalendarDate, setCurrentCalendarDate] = useState({
     year: 2026,
-    month: 10,
-    day: 15,
-    yearMonth: "2026-10"
+    month: 11,
+    day: 3,
+    yearMonth: "2026-11"
   });
 
   useEffect(() => {
@@ -622,6 +628,105 @@ export default function CoindexApp() {
       yearMonth: `${y}-${String(m).padStart(2, "0")}`
     });
   }, []);
+
+  // Inicialização e persistência de período no localStorage (padrão estrito: 'ALL')
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("coindex_selected_month");
+      if (!saved) {
+        localStorage.setItem("coindex_selected_month", "ALL");
+      } else if (saved !== selectedMonth) {
+        setSelectedMonth(saved);
+      }
+      const savedRange = localStorage.getItem("coindex_custom_date_range");
+      if (savedRange) {
+        const parsed = JSON.parse(savedRange);
+        if (parsed?.start) setCustomStartDate(parsed.start);
+        if (parsed?.end) setCustomEndDate(parsed.end);
+      }
+    } catch {}
+  }, []);
+
+  const handleSelectPeriod = (newPeriod: string) => {
+    setSelectedMonth(newPeriod);
+    try {
+      localStorage.setItem("coindex_selected_month", newPeriod);
+    } catch {}
+    if (newPeriod !== "CUSTOM") {
+      setPeriodDropdownOpen(false);
+    }
+  };
+
+  const handleApplyCustomRange = () => {
+    if (!customStartDate && !customEndDate) return;
+    setSelectedMonth("CUSTOM");
+    try {
+      localStorage.setItem("coindex_selected_month", "CUSTOM");
+      localStorage.setItem(
+        "coindex_custom_date_range",
+        JSON.stringify({ start: customStartDate, end: customEndDate })
+      );
+    } catch {}
+    setPeriodDropdownOpen(false);
+  };
+
+  useEffect(() => {
+    if (!periodDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (periodDropdownRef.current && !periodDropdownRef.current.contains(e.target as Node)) {
+        setPeriodDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPeriodDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [periodDropdownOpen]);
+
+  const formatMonthFullLabel = useCallback((ymKey: string) => {
+    if (!ymKey || !ymKey.includes("-")) return ymKey;
+    const [y, m] = ymKey.split("-");
+    const mNum = parseInt(m, 10);
+    const monthNamesBR = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+    const monthName = monthNamesBR[mNum - 1] || m;
+    return `${monthName} / ${y}`;
+  }, []);
+
+  const selectedPeriodLabel = useMemo(() => {
+    if (selectedMonth === "ALL") {
+      return "🌐 Todos (Histórico Completo)";
+    }
+    if (selectedMonth === "THIS_YEAR") {
+      return `📅 Este Ano (${currentCalendarDate.year})`;
+    }
+    if (selectedMonth === "LAST_30_DAYS") {
+      return "⚡ Últimos 30 Dias";
+    }
+    if (selectedMonth === "CUSTOM") {
+      if (customStartDate && customEndDate) {
+        return `🎯 ${customStartDate.replace(/-/g, "/")} a ${customEndDate.replace(/-/g, "/")}`;
+      }
+      if (customStartDate) {
+        return `🎯 A partir de ${customStartDate.replace(/-/g, "/")}`;
+      }
+      if (customEndDate) {
+        return `🎯 Até ${customEndDate.replace(/-/g, "/")}`;
+      }
+      return "🎯 Intervalo Personalizado";
+    }
+    const label = formatMonthFullLabel(selectedMonth);
+    const isCurrent = selectedMonth === currentCalendarDate.yearMonth;
+    return `${label}${isCurrent ? " (Atual)" : ""}`;
+  }, [selectedMonth, currentCalendarDate, customStartDate, customEndDate, formatMonthFullLabel]);
+
   const [accountingRegime, setAccountingRegime] = useState<"competencia" | "caixa">("competencia");
   const [patrimonyTimeRange, setPatrimonyTimeRange] = useState<"6M" | "1A" | "ALL">("ALL");
   const [quickFilter, setQuickFilter] = useState<QuickFilterType>("ALL");
@@ -683,6 +788,34 @@ export default function CoindexApp() {
 
   // Dados Principais do Sistema
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
+
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set<string>();
+    const curYM = currentCalendarDate.yearMonth;
+    monthSet.add(curYM);
+
+    // Futuros (1 a 2 meses à frente)
+    const [curY, curM] = curYM.split("-").map(Number);
+    monthSet.add(addMonthsSafe(curY, curM, 1).key);
+    monthSet.add(addMonthsSafe(curY, curM, 2).key);
+
+    // Passados (12 meses para trás)
+    for (let i = 1; i <= 12; i++) {
+      monthSet.add(addMonthsSafe(curY, curM, -i).key);
+    }
+
+    // Todos os meses reais com transações
+    for (const t of transactions) {
+      if (!t.deletedAt && t.date) {
+        const ym = getYearMonthKey(t.date);
+        if (/^\d{4}-\d{2}$/.test(ym)) {
+          monthSet.add(ym);
+        }
+      }
+    }
+
+    return Array.from(monthSet).sort((a, b) => b.localeCompare(a));
+  }, [transactions, currentCalendarDate.yearMonth]);
   const [debtorMap, setDebtorMap] = useState<Record<string, string>>(INITIAL_DEBTOR_MAP);
   const [banks, setBanks] = useState<BankItem[]>(INITIAL_BANKS);
   const [cards, setCards] = useState<CreditCardItem[]>(INITIAL_CARDS);
@@ -2140,9 +2273,57 @@ export default function CoindexApp() {
     [categoriesCatalog]
   );
 
+  const getTxMonthForRegime = useCallback((t: Transaction, regime: "competencia" | "caixa") => {
+    if (regime === "caixa") {
+      if (t.paymentMethod === "Cartão de Crédito") {
+        return t.cashMonth || t.invoiceMonth || getYearMonthKey(t.date);
+      }
+      return t.cashMonth || getYearMonthKey(t.date);
+    }
+    return getYearMonthKey(t.date);
+  }, []);
+
+  const isTxInSelectedPeriod = useCallback(
+    (t: Transaction, regime: "competencia" | "caixa") => {
+      if (selectedMonth === "ALL") return true;
+
+      if (selectedMonth === "THIS_YEAR") {
+        const txDateISO = toSortableISO(t.date);
+        const targetYear = String(currentCalendarDate.year);
+        return txDateISO.startsWith(targetYear);
+      }
+
+      if (selectedMonth === "LAST_30_DAYS") {
+        const txDateISO = toSortableISO(t.date);
+        const now = new Date();
+        const past30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const past30ISO = `${past30.getFullYear()}-${String(past30.getMonth() + 1).padStart(2, "0")}-${String(past30.getDate()).padStart(2, "0")}`;
+        const today = todayISO();
+        return txDateISO >= past30ISO && txDateISO <= today;
+      }
+
+      if (selectedMonth === "CUSTOM") {
+        const txDateISO = toSortableISO(t.date);
+        const startISO = customStartDate ? toSortableISO(customStartDate) : "";
+        const endISO = customEndDate ? toSortableISO(customEndDate) : "";
+        if (startISO && txDateISO < startISO) return false;
+        if (endISO && txDateISO > endISO) return false;
+        return true;
+      }
+
+      // Regime Caixa vs Competência para Mês Específico ("YYYY-MM")
+      if (regime === "caixa") {
+        const txMonth = getTxMonthForRegime(t, "caixa");
+        return txMonth === selectedMonth;
+      }
+      return getYearMonthKey(t.date) === selectedMonth;
+    },
+    [selectedMonth, currentCalendarDate.year, customStartDate, customEndDate, getTxMonthForRegime]
+  );
+
   const filteredTransactions = useMemo(() => {
     return transactions
-      .filter((t) => (selectedMonth === "ALL" ? true : getYearMonthKey(t.date) === selectedMonth))
+      .filter((t) => isTxInSelectedPeriod(t, "competencia"))
       .filter((t) => {
         if (quickFilter === "FIXO") return t.costType === "Fixo";
         if (quickFilter === "VARIAVEL") return t.costType === "Variável";
@@ -2161,25 +2342,14 @@ export default function CoindexApp() {
         );
       })
       .sort((a, b) => compareDatesBR(b.date, a.date));
-  }, [transactions, selectedMonth, quickFilter, searchQuery]);
-
-  const getTxMonthForRegime = useCallback((t: Transaction, regime: "competencia" | "caixa") => {
-    if (regime === "caixa") {
-      if (t.paymentMethod === "Cartão de Crédito") {
-        return t.cashMonth || t.invoiceMonth || getYearMonthKey(t.date);
-      }
-      return t.cashMonth || getYearMonthKey(t.date);
-    }
-    return getYearMonthKey(t.date);
-  }, []);
+  }, [transactions, isTxInSelectedPeriod, quickFilter, searchQuery]);
 
   const regimeTransactions = useMemo(() => {
     if (accountingRegime === "competencia" || selectedMonth === "ALL") {
       return filteredTransactions;
     }
     return transactions.filter((t) => {
-      const txMonth = getTxMonthForRegime(t, "caixa");
-      if (txMonth !== selectedMonth) return false;
+      if (!isTxInSelectedPeriod(t, "caixa")) return false;
       if (quickFilter === "FIXO" && t.costType !== "Fixo") return false;
       if (quickFilter === "VARIAVEL" && t.costType !== "Variável") return false;
       if (quickFilter === "CARTAO" && t.paymentMethod !== "Cartão de Crédito") return false;
@@ -2195,7 +2365,7 @@ export default function CoindexApp() {
       }
       return true;
     });
-  }, [transactions, filteredTransactions, selectedMonth, accountingRegime, quickFilter, searchQuery, getTxMonthForRegime]);
+  }, [transactions, filteredTransactions, isTxInSelectedPeriod, accountingRegime, selectedMonth, quickFilter, searchQuery]);
 
   const monthSummary = useMemo(() => {
     const calcFor = (list: Transaction[]) => {
@@ -2217,8 +2387,13 @@ export default function CoindexApp() {
 
       // SPRINT 19 (Correção 2): No "Histórico Completo", o Balanço Operacional Real é (Entradas Totais - Saídas Operacionais)
       // No mês selecionado, considera o fluxo de caixa líquido abatendo os investimentos líquidos do mês
+      const isMultiMonthOrAll =
+        selectedMonth === "ALL" ||
+        selectedMonth === "THIS_YEAR" ||
+        selectedMonth === "LAST_30_DAYS" ||
+        selectedMonth === "CUSTOM";
       const balance =
-        selectedMonth === "ALL"
+        isMultiMonthOrAll
           ? safeSub(income, expense)
           : safeSub(income, safeAdd(expense, netInvested));
 
@@ -2241,7 +2416,7 @@ export default function CoindexApp() {
     };
 
     const current = calcFor(regimeTransactions);
-    const prevPrefix = getPreviousMonthPrefix(selectedMonth);
+    const prevPrefix = /^\d{4}-\d{2}$/.test(selectedMonth) ? getPreviousMonthPrefix(selectedMonth) : "";
     const prevList = prevPrefix ? transactions.filter((t) => getTxMonthForRegime(t, accountingRegime) === prevPrefix) : [];
     const prev = calcFor(prevList);
 
@@ -2367,7 +2542,7 @@ export default function CoindexApp() {
 
   // UPDATE 2: Meses distintos no período e limite acumulado proporcional
   const filterMonthsCount = useMemo(() => {
-    if (selectedMonth !== "ALL") return 1;
+    if (selectedMonth !== "ALL" && !["THIS_YEAR", "LAST_30_DAYS", "CUSTOM"].includes(selectedMonth)) return 1;
     const monthsSet = new Set(
       filteredTransactions.map((t) => getYearMonthKey(t.date)).filter((m) => /^\d{4}-\d{2}$/.test(m))
     );
@@ -2476,13 +2651,13 @@ export default function CoindexApp() {
     // 4. Faturas Abertas de Cartão considerando mês de caixa (cashMonth)
     const pendingInvoices = safeAdd(
       ...cards.map((c) => {
-        if (selectedMonth !== "ALL") {
+        if (selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)) {
           const cardCashTxs = transactions.filter(
             (t) =>
               !t.isSplitChild &&
               t.paymentMethod === "Cartão de Crédito" &&
               t.cardUsed === c.name &&
-              t.status === "Pendente / Na Fatura" &&
+              t.status !== "Pago" &&
               (t.cashMonth
                 ? t.cashMonth === selectedMonth
                 : t.invoiceMonth
@@ -2491,7 +2666,7 @@ export default function CoindexApp() {
           );
           return safeAdd(...cardCashTxs.map((t) => t.amount));
         }
-        const exp = calculateCardExposure(c, transactions);
+        const exp = calculateCardExposure(c, transactions, selectedMonth);
         return exp.used;
       })
     );
@@ -2559,7 +2734,10 @@ export default function CoindexApp() {
 
   // SPRINT 29: Mini-Sparklines SVG (Últimos 6 meses para os 4 Slim KPI Cards)
   const kpiSparklines = useMemo(() => {
-    const refMonth = selectedMonth !== "ALL" ? selectedMonth : currentCalendarDate.yearMonth;
+    const refMonth =
+      selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)
+        ? selectedMonth
+        : currentCalendarDate.yearMonth;
     const [yStr, mStr] = refMonth.split("-");
     let y = parseInt(yStr, 10);
     let m = parseInt(mStr, 10);
@@ -2615,7 +2793,10 @@ export default function CoindexApp() {
   // SPRINT 29: Cota Diária Livre (R$/dia)
   const dailyQuotaInfo = useMemo(() => {
     const currentYearMonth = currentCalendarDate.yearMonth;
-    const targetMonth = selectedMonth !== "ALL" ? selectedMonth : currentYearMonth;
+    const targetMonth =
+      selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)
+        ? selectedMonth
+        : currentYearMonth;
     const [yStr, mStr] = targetMonth.split("-");
     const totalDays = daysInMonth(parseInt(yStr, 10), parseInt(mStr, 10));
 
@@ -2688,7 +2869,10 @@ export default function CoindexApp() {
   // SPRINT 29: Multi-View - Curva de Ritmo de Gastos Diária (Pace)
   const paceChartData = useMemo(() => {
     const currentYearMonth = currentCalendarDate.yearMonth;
-    const targetMonth = selectedMonth !== "ALL" ? selectedMonth : currentYearMonth;
+    const targetMonth =
+      selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)
+        ? selectedMonth
+        : currentYearMonth;
     const [yStr, mStr] = targetMonth.split("-");
     const yearNum = parseInt(yStr, 10);
     const monthNum = parseInt(mStr, 10);
@@ -2881,7 +3065,7 @@ export default function CoindexApp() {
       ...txs.map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
     );
 
-    const prevPrefix = getPreviousMonthPrefix(selectedMonth);
+    const prevPrefix = /^\d{4}-\d{2}$/.test(selectedMonth) ? getPreviousMonthPrefix(selectedMonth) : "";
     const prevTxs = prevPrefix
       ? transactions.filter(
           (t) =>
@@ -2984,7 +3168,7 @@ export default function CoindexApp() {
   // Lançador rápido individual de item fixo no radar
   const handleLaunchSingleFixed = useCallback((item: StaticStatusItem) => {
     const targetMonth =
-      selectedMonth && selectedMonth !== "ALL"
+      selectedMonth && selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)
         ? selectedMonth
         : todayISO().slice(0, 7);
 
@@ -5820,27 +6004,220 @@ export default function CoindexApp() {
         <header className="sticky top-0 z-30 border-b border-[var(--cupertino-border)] bg-[var(--cupertino-sidebar)]/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2.5">
-              <select
-                value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-white font-bold outline-none focus:border-indigo-500 transition cursor-pointer"
+              {/* SELETOR INTELIGENTE CUPERTINO DE PERÍODO (Sprint 40.2) */}
+              <div className="relative" ref={periodDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setPeriodDropdownOpen((prev) => !prev)}
+                  aria-expanded={periodDropdownOpen}
+                  aria-haspopup="true"
+                  className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[var(--cupertino-card)] hover:bg-[var(--cupertino-card-hover)] border border-[var(--cupertino-border)] text-xs text-white font-bold outline-none flex items-center gap-2 cursor-pointer transition shadow-sm select-none"
+                  title="Alterar período de visualização"
                 >
-                  <option value="2026-10">Outubro / 2026 (Atual)</option>
-                  <option value="2026-09">Setembro / 2026</option>
-                  <option value="2026-08">Agosto / 2026</option>
-                  <option value="2026-07">Julho / 2026</option>
-                  <option value="2026-06">Junho / 2026</option>
-                  <option value="2026-05">Maio / 2026</option>
-                  <option value="2026-04">Abril / 2026</option>
-                  <option value="2026-03">Março / 2026</option>
-                  <option value="2026-02">Fevereiro / 2026</option>
-                  <option value="2026-01">Janeiro / 2026</option>
-                  <option value="2025-12">Dezembro / 2025</option>
-                  <option value="2026-11">Novembro / 2026 (Futuro)</option>
-                  <option value="2026-12">Dezembro / 2026 (Futuro)</option>
-                  <option value="ALL">Histórico Completo</option>
-                </select>
+                  <div className="flex items-center gap-1.5 truncate max-w-[210px] sm:max-w-[280px]">
+                    {selectedMonth === "ALL" ? (
+                      <Globe className="w-3.5 h-3.5 text-[#0A84FF] shrink-0" />
+                    ) : selectedMonth === "LAST_30_DAYS" ? (
+                      <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    ) : selectedMonth === "THIS_YEAR" ? (
+                      <Calendar className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    ) : selectedMonth === "CUSTOM" ? (
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    ) : (
+                      <Calendar className="w-3.5 h-3.5 text-[#0A84FF] shrink-0" />
+                    )}
+                    <span className="truncate">{selectedPeriodLabel}</span>
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${
+                      periodDropdownOpen ? "rotate-180 text-white" : ""
+                    }`}
+                  />
+                </button>
+
+                {/* Dropdown Popover */}
+                {periodDropdownOpen && (
+                  <div
+                    role="menu"
+                    className="absolute left-0 top-full mt-2 z-50 w-80 sm:w-96 rounded-2xl bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-2xl p-3.5 space-y-3 animate-in fade-in zoom-in-95 duration-150 text-xs"
+                  >
+                    {/* 1. Opção Principal em Destaque: TODOS */}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectPeriod("ALL")}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                          selectedMonth === "ALL"
+                            ? "bg-[#0A84FF]/20 border-[#0A84FF]/50 text-white shadow-sm"
+                            : "bg-white/5 hover:bg-white/10 text-slate-200 border-white/5"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">🌐</span>
+                          <div className="text-left">
+                            <span className="block font-bold">Todos (Histórico Completo)</span>
+                            <span className="block text-[10px] text-slate-400 font-normal">
+                              Visualizar todos os lançamentos sem restrição de data
+                            </span>
+                          </div>
+                        </div>
+                        {selectedMonth === "ALL" && (
+                          <div className="w-5 h-5 rounded-full bg-[#0A84FF] text-white flex items-center justify-center shrink-0">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* 2. Seção de Períodos Rápidos */}
+                    <div className="space-y-1.5 pt-1 border-t border-white/5">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Períodos Rápidos
+                      </span>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {/* Mês Atual */}
+                        <button
+                          type="button"
+                          onClick={() => handleSelectPeriod(currentCalendarDate.yearMonth)}
+                          className={`py-1.5 px-2 rounded-lg text-center transition cursor-pointer border ${
+                            selectedMonth === currentCalendarDate.yearMonth
+                              ? "bg-[#0A84FF] text-white border-[#0A84FF] font-bold shadow-sm"
+                              : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border-white/5 font-medium"
+                          }`}
+                        >
+                          <span className="block text-[11px] truncate">Mês Atual</span>
+                          <span className="block text-[9px] opacity-70 truncate">
+                            {formatMonthFullLabel(currentCalendarDate.yearMonth).split("/")[0].trim()}
+                          </span>
+                        </button>
+
+                        {/* Últimos 30 Dias */}
+                        <button
+                          type="button"
+                          onClick={() => handleSelectPeriod("LAST_30_DAYS")}
+                          className={`py-1.5 px-2 rounded-lg text-center transition cursor-pointer border ${
+                            selectedMonth === "LAST_30_DAYS"
+                              ? "bg-[#0A84FF] text-white border-[#0A84FF] font-bold shadow-sm"
+                              : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border-white/5 font-medium"
+                          }`}
+                        >
+                          <span className="block text-[11px] truncate">Últimos 30 Dias</span>
+                          <span className="block text-[9px] opacity-70 truncate">Móvel</span>
+                        </button>
+
+                        {/* Este Ano */}
+                        <button
+                          type="button"
+                          onClick={() => handleSelectPeriod("THIS_YEAR")}
+                          className={`py-1.5 px-2 rounded-lg text-center transition cursor-pointer border ${
+                            selectedMonth === "THIS_YEAR"
+                              ? "bg-[#0A84FF] text-white border-[#0A84FF] font-bold shadow-sm"
+                              : "bg-slate-800/60 hover:bg-slate-800 text-slate-300 border-white/5 font-medium"
+                          }`}
+                        >
+                          <span className="block text-[11px] truncate">Este Ano</span>
+                          <span className="block text-[9px] opacity-70 truncate">{currentCalendarDate.year}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 3. Seção de Meses Específicos */}
+                    <div className="space-y-1.5 pt-1 border-t border-white/5">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Meses Específicos
+                      </span>
+                      <div className="max-h-40 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                        {availableMonths.map((ym) => {
+                          const isSelected = selectedMonth === ym;
+                          const isCurrent = ym === currentCalendarDate.yearMonth;
+                          const isFuture = ym > currentCalendarDate.yearMonth;
+                          const label = formatMonthFullLabel(ym);
+
+                          return (
+                            <button
+                              key={ym}
+                              type="button"
+                              onClick={() => handleSelectPeriod(ym)}
+                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer border ${
+                                isSelected
+                                  ? "bg-[#0A84FF]/20 border-[#0A84FF]/50 text-white font-bold"
+                                  : "bg-transparent hover:bg-white/5 text-slate-300 border-transparent"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <span className="truncate">{label}</span>
+                                {isCurrent && (
+                                  <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
+                                    Atual
+                                  </span>
+                                )}
+                                {isFuture && (
+                                  <span className="px-1.5 py-0.2 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/25 text-[9px] font-medium">
+                                    Futuro
+                                  </span>
+                                )}
+                              </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-[#0A84FF] shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 4. Modo Data Personalizada (Custom Range) */}
+                    <div className="pt-2 border-t border-white/5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <SlidersHorizontal className="w-3 h-3 text-[#0A84FF]" /> Intervalo Personalizado
+                        </span>
+                        {selectedMonth === "CUSTOM" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomStartDate("");
+                              setCustomEndDate("");
+                              handleSelectPeriod("ALL");
+                            }}
+                            className="text-[10px] text-rose-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" /> Limpar
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[9px] text-slate-400 block mb-1">De (Data Inicial):</label>
+                          <SmartDateInputBR
+                            value={customStartDate}
+                            onChange={(dateBR) => setCustomStartDate(dateBR)}
+                            className="text-xs py-1.5 px-2 bg-slate-950/80 border-white/10 rounded-lg text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-slate-400 block mb-1">Até (Data Final):</label>
+                          <SmartDateInputBR
+                            value={customEndDate}
+                            onChange={(dateBR) => setCustomEndDate(dateBR)}
+                            className="text-xs py-1.5 px-2 bg-slate-950/80 border-white/10 rounded-lg text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleApplyCustomRange}
+                        disabled={!customStartDate && !customEndDate}
+                        className="w-full py-1.5 px-3 rounded-lg bg-[#0A84FF] hover:bg-[#0A84FF]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
+                      >
+                        <Filter className="w-3.5 h-3.5" />
+                        <span>Aplicar Intervalo por Data</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
+            </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
                 {/* Indicador de Sincronização em Tempo Real (Sprint 22) */}
@@ -6081,10 +6458,18 @@ export default function CoindexApp() {
                   <div>
                     <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-[#0A84FF]" />
-                      {selectedMonth === "ALL" ? "Resumo Financeiro — Histórico Geral" : "Resumo Financeiro do Mês"}
+                      {selectedMonth === "ALL"
+                        ? "Resumo Financeiro — Histórico Geral"
+                        : selectedMonth === "THIS_YEAR"
+                        ? `Resumo Financeiro — Ano ${currentCalendarDate.year}`
+                        : selectedMonth === "LAST_30_DAYS"
+                        ? "Resumo Financeiro — Últimos 30 Dias"
+                        : selectedMonth === "CUSTOM"
+                        ? "Resumo Financeiro — Intervalo Personalizado"
+                        : "Resumo Financeiro do Mês"}
                     </h3>
                     <p className="text-xs text-slate-400">
-                      {selectedMonth === "ALL"
+                      {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM"
                         ? "Consolidado geral de todas as entradas, despesas operacionais e patrimônio guardado"
                         : "Visão executiva com tendências históricas de 6 meses (sparklines)"}
                     </p>
@@ -6140,7 +6525,7 @@ export default function CoindexApp() {
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span className="kpi-title">{selectedMonth === "ALL" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
+                          <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
                           <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#30D158]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
@@ -6158,7 +6543,7 @@ export default function CoindexApp() {
                       </p>
                     </div>
                     <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
-                      {selectedMonth === "ALL" ? (
+                      {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
                         <span>Média mensal: {formatBRL(monthSummary.income / filterMonthsCount)}</span>
                       ) : (
                         <span className="flex items-center gap-1">
@@ -6178,7 +6563,7 @@ export default function CoindexApp() {
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span className="kpi-title">{selectedMonth === "ALL" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
+                          <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
                           <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#FF453A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
@@ -6196,7 +6581,7 @@ export default function CoindexApp() {
                       </p>
                     </div>
                     <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
-                      {selectedMonth === "ALL" ? (
+                      {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
                         <span>Média mensal: {formatBRL(monthSummary.expense / filterMonthsCount)}</span>
                       ) : (
                         <span className="flex items-center gap-1">
@@ -6216,7 +6601,7 @@ export default function CoindexApp() {
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span className="kpi-title">{selectedMonth === "ALL" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
+                          <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
                           <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#0A84FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
@@ -6234,7 +6619,7 @@ export default function CoindexApp() {
                       </p>
                     </div>
                     <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
-                      {selectedMonth === "ALL" ? (
+                      {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
                         <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)}`}>
                           Reserva: <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong>
                         </span>
@@ -6250,7 +6635,7 @@ export default function CoindexApp() {
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span className="kpi-title">{selectedMonth === "ALL" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
+                          <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
                           <div className="relative group/tip inline-flex items-center hover:z-[9999]">
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-60 p-2 rounded-xl bg-slate-900/95 border border-[#64D2FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
@@ -6273,7 +6658,7 @@ export default function CoindexApp() {
                     </div>
 
                     <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] tabular-nums">
-                      {selectedMonth === "ALL" ? (
+                      {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
                         <span className="text-slate-400 flex items-center gap-1 font-sans">
                           <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
                           <span>Caixinhas: {formatBRL(allTimeReserva.liquido)}</span>

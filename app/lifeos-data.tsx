@@ -1611,7 +1611,7 @@ export function calculateCardExposure(
   // 2. Fatura da competência selecionada
   const invoiceTxs = transactions.filter((t) => {
     if (!isMatchingCard(t)) return false;
-    if (selectedMonth && selectedMonth !== "ALL") {
+    if (selectedMonth && selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)) {
       const comp = t.invoiceMonth || getCardInvoiceCompetence(t.date, card.closingDay, card.dueDay);
       return comp === selectedMonth;
     }
