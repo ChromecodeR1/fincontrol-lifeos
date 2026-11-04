@@ -270,8 +270,36 @@ export function getCardInvoiceCompetence(
 }
 
 /**
+ * Helper canônico para determinar se uma transação representa um fluxo positivo de entrada visual
+ * (Recebimento de Empréstimo, Reembolso, Salário, Rendimentos, Receita Extra ou flowType === "INCOME").
+ * Sprint 42: Garante o sinal "+ R$" e a cor Verde Esmeralda (#30D158 / text-emerald-400).
+ */
+export function isPositiveInflowDisplay(tx: {
+  flowType?: string;
+  category?: string;
+  isReceivableSettlement?: boolean;
+  description?: string;
+}): boolean {
+  if (tx.isReceivableSettlement) return true;
+  const cat = (tx.category || "").toLowerCase();
+  if (
+    cat.includes("recebimento de empréstimo") ||
+    cat.includes("recebimento de emprestimo") ||
+    cat === "reembolso" ||
+    cat === "salário" ||
+    cat === "salario" ||
+    cat === "rendimentos" ||
+    cat === "receita extra"
+  ) {
+    return true;
+  }
+  return tx.flowType === "INCOME";
+}
+
+/**
  * Valida se um lançamento é neutro do ponto de vista do orçamento operacional
- * (Transferência entre contas, pagamento de fatura ou liquidação de empréstimo/split).
+ * (Transferência entre contas ou pagamento de fatura bancária).
+ * Nota: Liquidações de empréstimo/reembolso entram como crédito redutor de despesas operacionais.
  */
 export function isNeutralFlow(tx: {
   flowType?: string;
@@ -280,18 +308,20 @@ export function isNeutralFlow(tx: {
   isReceivableSettlement?: boolean;
   category?: string;
 }): boolean {
-  if (tx.flowType === "NEUTRAL") return true;
   if (tx.isTransfer) return true;
   if (tx.isInvoicePayment) return true;
-  if (tx.isReceivableSettlement) return true;
   if (tx.category === "Transferência entre Contas") return true;
+  if (tx.flowType === "NEUTRAL" && !tx.isReceivableSettlement) return true;
   return false;
 }
 
 /**
- * Retorna o valor de despesa efetivamente pessoal do usuário (Sprint 40).
- * - Se for split child, transferência, pagamento de fatura, liquidação ou neutro: retorna 0.
- * - Se for despesa dividida (isSplit): retorna personalAmount se informado, ou amount - thirdPartyAmount.
+ * Retorna o valor de despesa efetivamente pessoal do usuário (Sprint 40 e Sprint 42).
+ * - Se for split child, transferência, pagamento de fatura ou fluxo neutro puro: retorna 0.
+ * - Se for liquidação de empréstimo / reembolso (isReceivableSettlement: true): retorna o valor negativo
+ *   (-amount em centavos normalizados), atuando como crédito que abate as saídas operacionais.
+ * - Se for compra dividida (isSplit): entra pelo desembolso bruto total (amount integral), refletindo
+ *   o que efetivamente saiu da conta/cartão até que ocorra o recebimento do devedor.
  * - Caso contrário: retorna amount integral em centavos normalizados.
  */
 export function getEffectivePersonalAmount(tx: {
@@ -310,18 +340,28 @@ export function getEffectivePersonalAmount(tx: {
     tx.isSplitChild ||
     tx.isTransfer ||
     tx.isInvoicePayment ||
-    tx.isReceivableSettlement ||
-    tx.flowType === "NEUTRAL" ||
     tx.category === "Transferência entre Contas"
   ) {
     return 0;
   }
 
+  // Recebimento de empréstimo / liquidação abate a despesa pessoal como crédito
+  if (
+    tx.isReceivableSettlement ||
+    (tx.category || "").toLowerCase().includes("recebimento de empréstimo") ||
+    (tx.category || "").toLowerCase().includes("recebimento de emprestimo") ||
+    (tx.category || "").toLowerCase() === "reembolso"
+  ) {
+    return -fromCents(Math.max(0, toCents(tx.amount)));
+  }
+
+  if (tx.flowType === "NEUTRAL") {
+    return 0;
+  }
+
   if (tx.isSplit) {
-    if (tx.personalAmount !== undefined && tx.personalAmount !== null && tx.personalAmount !== "") {
-      return fromCents(Math.max(0, toCents(tx.personalAmount)));
-    }
-    return Math.max(0, safeSub(tx.amount, tx.thirdPartyAmount ?? 0));
+    // A compra dividida entra com o desembolso bruto total realizado pelo usuário
+    return fromCents(Math.max(0, toCents(tx.amount)));
   }
 
   return fromCents(Math.max(0, toCents(tx.amount)));

@@ -1813,14 +1813,24 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                           )}
                         </td>
                         <td className="py-1.5 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleStartEditTransaction(item)}
-                            className="p-1 rounded-lg bg-white/10 text-slate-300 hover:text-white hover:bg-indigo-600 transition"
-                            title="Editar lançamento"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditTransaction(item)}
+                              className="p-1 rounded-lg bg-white/10 text-slate-300 hover:text-white hover:bg-indigo-600 transition cursor-pointer"
+                              title="Editar lançamento"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTransaction(item.id)}
+                              className="p-1 rounded-lg bg-rose-500/15 text-rose-400 hover:bg-rose-500/30 hover:text-rose-300 border border-rose-500/25 transition cursor-pointer"
+                              title="Excluir lançamento de devedor"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

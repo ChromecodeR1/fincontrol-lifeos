@@ -32,7 +32,8 @@ import {
   compareDatesBR,
   parseInstallmentInfo,
   renderCategorySemanticIcon,
-  normalizeSearchText
+  normalizeSearchText,
+  isPositiveInflowDisplay
 } from "./lifeos-data";
 import {
   parseBankStatementFile,
@@ -242,8 +243,8 @@ const TransactionRow = React.memo<TransactionRowProps>(({
         className={`py-3.5 px-3 text-right font-mono tabular-nums font-extrabold whitespace-nowrap ${moneyBlur} ${
           tx.isTransfer || tx.category === "Transferência entre Contas"
             ? "text-sky-400"
-            : flow === "INCOME"
-            ? "text-emerald-400"
+            : isPositiveInflowDisplay(tx)
+            ? "text-[#30D158]"
             : flow === "INVESTMENT"
             ? "text-indigo-400"
             : "text-rose-400"
@@ -252,7 +253,7 @@ const TransactionRow = React.memo<TransactionRowProps>(({
         <div>
           {tx.isTransfer || tx.category === "Transferência entre Contas"
             ? `⇆ ${formatBRL(tx.amount)}`
-            : `${flow === "INCOME" ? "+" : "-"} ${formatBRL(tx.amount)}`}
+            : `${isPositiveInflowDisplay(tx) ? "+" : "-"} ${formatBRL(tx.amount)}`}
           {tx.isSplit && (
             <span className="block text-[10px] text-amber-400 font-normal font-mono tabular-nums">
               Sua parte: {formatBRL(tx.personalAmount ?? (tx.amount - (tx.thirdPartyAmount || 0)))}
@@ -764,7 +765,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
             const inst = parseInstallmentInfo(tx);
             const label = tx.installmentInfo || (inst.current && inst.total ? `${inst.current}/${inst.total}` : null);
             const displayName = inst.isInstallment && label ? inst.baseDescription : tx.description;
-            const isIncome = flow === "INCOME";
+            const isPositive = isPositiveInflowDisplay(tx);
             const isInvestment = flow === "INVESTMENT";
             const catColor = categoryColors[tx.category] || "#6366f1";
 
@@ -833,14 +834,14 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                   <div className="text-right shrink-0">
                     <strong
                       className={`text-sm font-bold font-mono tabular-nums block ${
-                        isIncome
-                          ? "text-emerald-400"
+                        isPositive
+                          ? "text-[#30D158]"
                           : isInvestment
                           ? "text-blue-400"
                           : "text-white"
                       } ${moneyBlur}`}
                     >
-                      {isIncome ? "+" : isInvestment ? "⚡ " : ""}
+                      {tx.isTransfer ? "⇆ " : isPositive ? "+" : isInvestment ? "⚡ " : "- "}
                       {formatBRL(tx.amount)}
                     </strong>
                     <span className="text-[10px] text-slate-400 font-medium">
@@ -1573,9 +1574,9 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                             />
                           </td>
                           <td className={`p-2.5 text-right font-bold font-mono tabular-nums whitespace-nowrap ${
-                            t.flowType === "INCOME" ? "text-emerald-400" : "text-white"
+                            isPositiveInflowDisplay(t) ? "text-[#30D158]" : "text-white"
                           }`}>
-                            {t.flowType === "INCOME" ? "+" : "-"} {formatBRL(t.amount)}
+                            {isPositiveInflowDisplay(t) ? "+" : "-"} {formatBRL(t.amount)}
                           </td>
                         </tr>
                       ))}

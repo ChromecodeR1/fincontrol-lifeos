@@ -143,6 +143,7 @@ import {
   ThemeSegmentedControl,
   renderCategorySemanticIcon,
   formatDateBR,
+  formatMonthShortLabelBR,
   todayBR,
   todayISO,
   daysInMonth,
@@ -152,6 +153,7 @@ import {
   getYearMonthKey,
   getEffectivePersonalAmount,
   getEffectiveCardLiabilityAmount,
+  isPositiveInflowDisplay,
   distributeInstallments,
   generateInstallmentSeriesId,
   calculateInvoiceAndCashMonths,
@@ -231,6 +233,7 @@ import SpotifyLogo from "./components/SpotifyLogo";
 import SpotifyModule from "./components/SpotifyModule";
 import { TransactionModal, SmartDateInputBR } from "./components/TransactionModal";
 import { ProfileModal } from "./components/ProfileModal";
+import KpiAuditModal from "./components/KpiAuditModal";
 import {
   calculateVehicleConsumption,
   calculateVehicleTco,
@@ -828,6 +831,8 @@ export default function CoindexApp() {
   const [milestones] = useState<ChartMilestone[]>(INITIAL_MILESTONES);
   const [dashboardLayout, setDashboardLayout] = useState<DashboardWidgetConfig[]>(DEFAULT_DASHBOARD_LAYOUT);
   const [showPatrimonyAportesCurve, setShowPatrimonyAportesCurve] = useState<boolean>(false);
+  // SPRINT 42: Modal Interativo de Auditoria Célula a Célula dos 4 Cards de Resumo Financeiro
+  const [activeKpiAudit, setActiveKpiAudit] = useState<"INCOME" | "EXPENSE" | "INVESTMENT" | "BALANCE" | null>(null);
 
   // SPRINT 30: Motor de Rendimento Automático CDI via API do Banco Central
   const [marketRates, setMarketRates] = useState<{
@@ -2369,23 +2374,57 @@ export default function CoindexApp() {
 
   const monthSummary = useMemo(() => {
     const calcFor = (list: Transaction[]) => {
-      const nonTransferList = list.filter(
-        (t) => !isNeutralFlow(t) && !t.isSplitChild && getFlowType(t.category) !== "NEUTRAL"
+      // 1. Entradas (apenas receitas ativas, excluindo fluxos neutros, transferências e recebimentos de empréstimo)
+      const incomeTxs = list.filter(
+        (t) =>
+          !t.isTransfer &&
+          !t.isInvoicePayment &&
+          !t.isSplitChild &&
+          !t.isReceivableSettlement &&
+          t.category !== "Recebimento de Empréstimo" &&
+          t.category !== "Transferência entre Contas" &&
+          (t.flowType === "INCOME" || (getFlowType(t.category) === "INCOME" && t.flowType !== "NEUTRAL"))
       );
-      const income = safeAdd(...nonTransferList.filter((t) => (t.flowType || getFlowType(t.category)) === "INCOME").map((t) => t.amount));
-      const expense = safeAdd(
-        ...nonTransferList
-          .filter((t) => (t.flowType || getFlowType(t.category)) === "EXPENSE")
-          .map((t) => getEffectivePersonalAmount(t))
-      );
+      const income = safeAdd(...incomeTxs.map((t) => t.amount));
 
-      const investmentTxs = nonTransferList.filter((t) => (t.flowType || getFlowType(t.category)) === "INVESTMENT");
+      // 2. Despesas brutas operacionais (compras normais e compras divididas entram com tx.amount desembolsado)
+      const expenseTxs = list.filter(
+        (t) =>
+          !t.isTransfer &&
+          !t.isInvoicePayment &&
+          !t.isSplitChild &&
+          t.category !== "Transferência entre Contas" &&
+          (t.flowType === "EXPENSE" || getFlowType(t.category) === "EXPENSE")
+      );
+      const grossExpense = safeAdd(...expenseTxs.map((t) => t.amount));
+
+      // 3. Abatimentos de Saídas: liquidações de empréstimos e reembolsos recebidos no período
+      const settlementTxs = list.filter(
+        (t) =>
+          !t.isSplitChild &&
+          (t.isReceivableSettlement ||
+            (t.category || "").toLowerCase().includes("recebimento de empréstimo") ||
+            (t.category || "").toLowerCase().includes("recebimento de emprestimo") ||
+            (t.category || "").toLowerCase() === "reembolso")
+      );
+      const settlementsTotal = safeAdd(...settlementTxs.map((t) => t.amount));
+
+      // Saídas & Despesas Líquidas = Despesas Brutas - Reembolsos/Liquidações Recebidas
+      const expense = Math.max(0, safeSub(grossExpense, settlementsTotal));
+
+      // 4. Aportes e Investimentos
+      const investmentTxs = list.filter(
+        (t) =>
+          !t.isSplitChild &&
+          !t.isTransfer &&
+          (t.flowType === "INVESTMENT" || getFlowType(t.category) === "INVESTMENT")
+      );
       const aportesMes = safeAdd(...investmentTxs.filter((t) => !isResgateCategory(t.category)).map((t) => t.amount));
       const resgatesMes = safeAdd(...investmentTxs.filter((t) => isResgateCategory(t.category)).map((t) => t.amount));
 
       const netInvested = safeSub(aportesMes, resgatesMes);
 
-      // SPRINT 19 (Correção 2): No "Histórico Completo", o Balanço Operacional Real é (Entradas Totais - Saídas Operacionais)
+      // SPRINT 19 & SPRINT 42: No "Histórico Completo", o Balanço Operacional Real é (Entradas - Saídas Líquidas)
       // No mês selecionado, considera o fluxo de caixa líquido abatendo os investimentos líquidos do mês
       const isMultiMonthOrAll =
         selectedMonth === "ALL" ||
@@ -2397,15 +2436,22 @@ export default function CoindexApp() {
           ? safeSub(income, expense)
           : safeSub(income, safeAdd(expense, netInvested));
 
-      const personalSpent = safeAdd(
-        ...nonTransferList
-          .filter((t) => t.category === "Gastos Pessoais" || t.category === "Gastos Pessoais / Besteiras")
-          .map((t) => getEffectivePersonalAmount(t))
+      const personalExpenseTxs = expenseTxs.filter(
+        (t) => t.category === "Gastos Pessoais" || t.category === "Gastos Pessoais / Besteiras"
       );
+      const grossPersonalSpent = safeAdd(...personalExpenseTxs.map((t) => t.amount));
+      const personalSettlements = safeAdd(
+        ...settlementTxs
+          .filter((t) => (t.description || "").toLowerCase().includes("pessoal") || (t.category || "").toLowerCase().includes("pessoal"))
+          .map((t) => t.amount)
+      );
+      const personalSpent = Math.max(0, safeSub(grossPersonalSpent, personalSettlements));
 
       return {
         income,
         expense,
+        grossExpense,
+        settlementsTotal,
         invested: aportesMes,
         aportes: aportesMes,
         resgates: resgatesMes,
@@ -2432,6 +2478,14 @@ export default function CoindexApp() {
       investedDiff: pctDiff(current.invested, prev.invested)
     };
   }, [regimeTransactions, transactions, selectedMonth, accountingRegime, getFlowType, getTxMonthForRegime]);
+
+  const selectedMonthLabel = useMemo(() => {
+    if (selectedMonth === "ALL") return "Todos (Histórico Geral)";
+    if (selectedMonth === "THIS_YEAR") return `Ano ${currentCalendarDate.year}`;
+    if (selectedMonth === "LAST_30_DAYS") return "Últimos 30 Dias";
+    if (selectedMonth === "CUSTOM") return "Intervalo Personalizado";
+    return formatMonthShortLabelBR(selectedMonth) || selectedMonth;
+  }, [selectedMonth, currentCalendarDate.year]);
 
   const allTimeReserva = useMemo(() => {
     const investTxs = transactions.filter(
@@ -2614,14 +2668,26 @@ export default function CoindexApp() {
     });
   }, [cards, transactions, selectedMonth]);
 
-  // Safe-to-Spend: Indicador de Saldo Livre Projetado no Mês (Sprint 12 - Regra Contábil Estrita)
+  // Safe-to-Spend: Indicador de Saldo Livre Projetado no Mês (Sprint 12 e Sprint 42 - Regra Contábil Estrita)
   const safeToSpend = useMemo(() => {
     // 1. Saldo Atual em Contas: somatório de saldos reais de todas as contas bancárias cadastradas
     const currentCash = safeAdd(...banks.map((b) => calculateBankBalance(b, transactions, getFlowType)));
 
-    // 2. Receitas Pendentes do Mês (excluindo fluxos neutros e transferências)
+    // Determina o mês de referência: se selectedMonth for ALL ou formato especial, usa o mês corrente (YYYY-MM)
+    const currentMonthKey = currentCalendarDate.yearMonth;
+    const targetMonth =
+      selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)
+        ? selectedMonth
+        : currentMonthKey;
+
+    const targetTxs = transactions.filter((t) => {
+      const ym = getTxMonthForRegime(t, accountingRegime);
+      return ym === targetMonth;
+    });
+
+    // 2. Receitas Pendentes do Mês Alvo (excluindo fluxos neutros e transferências)
     const pendingIncome = safeAdd(
-      ...filteredTransactions
+      ...targetTxs
         .filter(
           (t) =>
             !isNeutralFlow(t) &&
@@ -2633,9 +2699,9 @@ export default function CoindexApp() {
         .map((t) => t.amount)
     );
 
-    // 3. Despesas / Contas Fixas Pendentes do Mês (exceto compras de cartão que entram na fatura para evitar dupla contagem)
+    // 3. Despesas / Contas Fixas Pendentes do Mês Alvo (exceto compras de cartão que entram na fatura para evitar dupla contagem)
     const pendingDirectExpenses = safeAdd(
-      ...filteredTransactions
+      ...targetTxs
         .filter(
           (t) =>
             !isNeutralFlow(t) &&
@@ -2645,29 +2711,25 @@ export default function CoindexApp() {
             t.status !== "Pago" &&
             t.paymentMethod !== "Cartão de Crédito"
         )
-        .map((t) => (t.isSplit && t.personalAmount != null ? t.personalAmount : t.amount))
+        .map((t) => t.amount)
     );
 
-    // 4. Faturas Abertas de Cartão considerando mês de caixa (cashMonth)
+    // 4. Faturas Abertas de Cartão considerando mês de caixa (cashMonth) para o mês alvo
     const pendingInvoices = safeAdd(
       ...cards.map((c) => {
-        if (selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)) {
-          const cardCashTxs = transactions.filter(
-            (t) =>
-              !t.isSplitChild &&
-              t.paymentMethod === "Cartão de Crédito" &&
-              t.cardUsed === c.name &&
-              t.status !== "Pago" &&
-              (t.cashMonth
-                ? t.cashMonth === selectedMonth
-                : t.invoiceMonth
-                ? t.invoiceMonth === selectedMonth
-                : getYearMonthKey(t.date) === selectedMonth)
-          );
-          return safeAdd(...cardCashTxs.map((t) => t.amount));
-        }
-        const exp = calculateCardExposure(c, transactions, selectedMonth);
-        return exp.used;
+        const cardCashTxs = transactions.filter(
+          (t) =>
+            !t.isSplitChild &&
+            t.paymentMethod === "Cartão de Crédito" &&
+            t.cardUsed === c.name &&
+            t.status !== "Pago" &&
+            (t.cashMonth
+              ? t.cashMonth === targetMonth
+              : t.invoiceMonth
+              ? t.invoiceMonth === targetMonth
+              : getYearMonthKey(t.date) === targetMonth)
+        );
+        return safeAdd(...cardCashTxs.map((t) => t.amount));
       })
     );
 
@@ -2682,9 +2744,10 @@ export default function CoindexApp() {
       pendingIncome,
       pendingDirectExpenses,
       pendingInvoices,
-      projected
+      projected,
+      targetMonth
     };
-  }, [banks, cards, transactions, filteredTransactions, getFlowType]);
+  }, [banks, cards, transactions, selectedMonth, currentCalendarDate.yearMonth, accountingRegime, getFlowType, getTxMonthForRegime]);
 
   // Ranking e Análise de Limites por Banco (Requisito 7, Sprint 8 & SSOT Sprint 10)
   const bankLimitsAnalytics = useMemo(() => {
@@ -4361,11 +4424,13 @@ export default function CoindexApp() {
       onConfirm: async () => {
         const childId = tx.linkedReceivableId;
         const parentId = tx.linkedSplitParentId;
+        const orphanSettlements = transactions.filter((t) => t.linkedReceivableId === id);
+        const orphanIds = new Set(orphanSettlements.map((t) => t.id));
         const previousTransactions = [...transactions];
-        const txsToRestore = transactions.filter((t) => t.id === id || t.id === childId);
+        const txsToRestore = transactions.filter((t) => t.id === id || t.id === childId || orphanIds.has(t.id));
 
         const updated = transactions
-          .filter((t) => t.id !== id && t.id !== childId)
+          .filter((t) => t.id !== id && t.id !== childId && !orphanIds.has(t.id))
           .map((t) => {
             if (parentId && t.id === parentId) {
               return {
@@ -4384,11 +4449,15 @@ export default function CoindexApp() {
         if (childId) {
           recordTombstone(childId, currentUserId);
         }
+        orphanIds.forEach((oid) => recordTombstone(oid, currentUserId));
         setTransactions(updated);
         setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
         await deleteTransactionInDb(id);
         if (childId) {
           await deleteTransactionInDb(childId);
+        }
+        for (const oid of orphanIds) {
+          await deleteTransactionInDb(oid);
         }
         notify(
           "Lançamento Removido",
@@ -4400,6 +4469,7 @@ export default function CoindexApp() {
             if (childId) {
               removeTombstone(childId, currentUserId);
             }
+            orphanIds.forEach((oid) => removeTombstone(oid, currentUserId));
             const cleanRestored = txsToRestore.map((t) => {
               const c = { ...t };
               delete c.deletedAt;
@@ -4530,6 +4600,7 @@ export default function CoindexApp() {
       category: "Recebimento de Empréstimo",
       flowType: "NEUTRAL",
       isReceivableSettlement: true,
+      linkedReceivableId: tx.id,
       costType: "Variável",
       paymentMethod: "PIX",
       bankAccount: targetBank,
@@ -6521,12 +6592,19 @@ export default function CoindexApp() {
 
                 <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${moneyBlur}`}>
                   {/* Card 1: Entradas */}
-                  <div className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
+                  <div
+                    onClick={() => setActiveKpiAudit("INCOME")}
+                    className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
+                  >
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[9px] font-medium text-emerald-300 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-emerald-500/20 pointer-events-none z-10">
+                      <Search className="w-2.5 h-2.5" />
+                      <span>🔍 Raio-X</span>
+                    </div>
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
-                          <div className="relative group/tip inline-flex items-center hover:z-[9999]">
+                          <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#30D158]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                               <strong className="text-[#30D158] mb-0.5">Fórmula de Entradas:</strong>
@@ -6559,16 +6637,23 @@ export default function CoindexApp() {
                   </div>
 
                   {/* Card 2: Saídas & Despesas */}
-                  <div className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
+                  <div
+                    onClick={() => setActiveKpiAudit("EXPENSE")}
+                    className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
+                  >
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[9px] font-medium text-rose-300 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-rose-500/20 pointer-events-none z-10">
+                      <Search className="w-2.5 h-2.5" />
+                      <span>🔍 Raio-X</span>
+                    </div>
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
-                          <div className="relative group/tip inline-flex items-center hover:z-[9999]">
+                          <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#FF453A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                               <strong className="text-[#FF453A] mb-0.5">Fórmula de Saídas:</strong>
-                              <span>Soma de débitos e faturas (FlowType = EXPENSE), respeitando a cota pessoal em despesas divididas (split).</span>
+                              <span>Soma de débitos e faturas (FlowType = EXPENSE), deduzindo recebimentos de empréstimo e reembolsos como crédito.</span>
                             </div>
                           </div>
                         </div>
@@ -6597,12 +6682,19 @@ export default function CoindexApp() {
                   </div>
 
                   {/* Card 3: Aportes Brutos */}
-                  <div className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
+                  <div
+                    onClick={() => setActiveKpiAudit("INVESTMENT")}
+                    className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
+                  >
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[9px] font-medium text-sky-300 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-sky-500/20 pointer-events-none z-10">
+                      <Search className="w-2.5 h-2.5" />
+                      <span>🔍 Raio-X</span>
+                    </div>
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
-                          <div className="relative group/tip inline-flex items-center hover:z-[9999]">
+                          <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#0A84FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                               <strong className="text-[#0A84FF] mb-0.5">Fórmula de Aportes:</strong>
@@ -6631,12 +6723,19 @@ export default function CoindexApp() {
                   </div>
 
                   {/* Card 4: Saldo Livre Líquido */}
-                  <div className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover">
+                  <div
+                    onClick={() => setActiveKpiAudit("BALANCE")}
+                    className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
+                  >
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[9px] font-medium text-sky-300 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-sky-500/20 pointer-events-none z-10">
+                      <Search className="w-2.5 h-2.5" />
+                      <span>🔍 Memória / Raio-X</span>
+                    </div>
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
-                          <div className="relative group/tip inline-flex items-center hover:z-[9999]">
+                          <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
                             <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
                             <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-60 p-2 rounded-xl bg-slate-900/95 border border-[#64D2FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
                               <strong className="text-[#64D2FF] mb-0.5">Resultado Operacional:</strong>
@@ -6659,10 +6758,27 @@ export default function CoindexApp() {
 
                     <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] tabular-nums">
                       {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
-                        <span className="text-slate-400 flex items-center gap-1 font-sans">
-                          <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
-                          <span>Caixinhas: {formatBRL(allTimeReserva.liquido)}</span>
-                        </span>
+                        <div className="flex items-center gap-2 text-slate-400 font-sans">
+                          <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)}`}>
+                            Caixinhas: <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong>
+                          </span>
+                          <span>•</span>
+                          <div className="flex items-center gap-1 text-slate-400">
+                            <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
+                            <span>Safe:</span>
+                            <span
+                              className={`font-semibold px-1 py-0.2 rounded text-[10px] border tabular-nums ${
+                                safeToSpend.projected > 200
+                                  ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
+                                  : safeToSpend.projected >= 0
+                                  ? "bg-[#FF9F0A]/15 text-[#FF9F0A] border-[#FF9F0A]/30"
+                                  : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
+                              }`}
+                            >
+                              {formatBRL(safeToSpend.projected)}
+                            </span>
+                          </div>
+                        </div>
                       ) : (
                         <div className="flex items-center gap-1 text-slate-400 font-sans">
                           <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
@@ -8084,7 +8200,7 @@ export default function CoindexApp() {
                                 ) : (
                                   recentTransactions.map((tx) => {
                                     const flow = tx.flowType || getFlowType(tx.category);
-                                    const isIncome = flow === "INCOME";
+                                    const isPositive = isPositiveInflowDisplay(tx);
                                     const isInvest = flow === "INVESTMENT";
                                     const isPaid = tx.status === "Pago";
 
@@ -8096,14 +8212,14 @@ export default function CoindexApp() {
                                         <div className="flex items-center gap-2.5 min-w-0">
                                           <div
                                             className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                                              isIncome
+                                              isPositive
                                                 ? "bg-[#30D158]/15 text-[#30D158]"
                                                 : isInvest
                                                 ? "bg-[#0A84FF]/15 text-[#0A84FF]"
                                                 : "bg-[#FF453A]/15 text-[#FF453A]"
                                             }`}
                                           >
-                                            {renderCategorySemanticIcon(tx.category, isIncome ? "#30D158" : isInvest ? "#0A84FF" : "#FF453A")}
+                                            {renderCategorySemanticIcon(tx.category, isPositive ? "#30D158" : isInvest ? "#0A84FF" : "#FF453A")}
                                           </div>
                                           <div className="min-w-0">
                                             <strong className="text-white block truncate">{tx.description}</strong>
@@ -8120,14 +8236,14 @@ export default function CoindexApp() {
                                         <div className="flex items-center gap-2 shrink-0">
                                           <span
                                             className={`font-mono font-bold tabular-nums text-xs sm:text-sm ${
-                                              isIncome
+                                              isPositive
                                                 ? "text-[#30D158]"
                                                 : isInvest
                                                 ? "text-[#0A84FF]"
                                                 : "text-[#FF453A]"
                                             } ${moneyBlur}`}
                                           >
-                                            {isIncome ? "+" : "-"}{formatBRL(tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount)}
+                                            {tx.isTransfer ? "⇆ " : isPositive ? "+" : isInvest ? "⚡ " : "- "}{formatBRL(tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount)}
                                           </span>
                                           <button
                                             type="button"
@@ -8811,6 +8927,31 @@ export default function CoindexApp() {
         </div>,
         document.body
       )}
+
+      {/* MODAL RAIO-X CONTÁBIL CÉLULA A CÉLULA DOS 4 KPIS (SPRINT 42) */}
+      <KpiAuditModal
+        isOpen={activeKpiAudit !== null}
+        activeKpiAudit={activeKpiAudit}
+        onClose={() => setActiveKpiAudit(null)}
+        monthSummary={monthSummary}
+        safeToSpend={safeToSpend}
+        selectedMonth={selectedMonth}
+        selectedMonthLabel={selectedMonthLabel}
+        accountingRegime={accountingRegime}
+        regimeTransactions={regimeTransactions}
+        transactions={transactions}
+        banks={banks}
+        cards={cards}
+        moneyBlur={moneyBlur}
+        onEditTransaction={(tx) => {
+          setActiveKpiAudit(null);
+          handleStartEditTransaction(tx);
+        }}
+        onDeleteTransaction={(id) => {
+          handleDeleteTransaction(id);
+        }}
+        getFlowType={getFlowType}
+      />
     </div>
   );
 }

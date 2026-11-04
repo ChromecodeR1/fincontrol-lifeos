@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.30.0`  
-> **Última Atualização:** 3 de Novembro de 2026 (Pós-Sprint 40 — Inspeção Premium & Blindagem Matemática Zero-Defect em Splits, Cartões, CDI, TCO e Strava)  
+> **Versão da Aplicação:** `0.31.0`  
+> **Última Atualização:** 4 de Novembro de 2026 (Pós-Sprint 42 — Correção Visual e Contábil + R$ Verde em Empréstimos, Exclusão Direta em Devedores e Modal Raio-X Célula por Célula nos 4 KPIs)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -57,6 +57,7 @@ fincontrol-lifeos/
 │   │   ├── ChartSettingsPopover.tsx       # Popover de customização de cores/curvas/tipos de gráficos
 │   │   ├── CoindexAuthScreen.tsx          # Tela de login/cadastro Supabase RLS cibernética
 │   │   ├── ProfileModal.tsx               # Modal de perfil, avatar base64 e backup JSON
+│   │   ├── KpiAuditModal.tsx              # Modal de auditoria analítica "Raio-X Célula a Célula" dos 4 KPIs (Sprint 42)
 │   │   ├── CoindexLogo.tsx                # Componente da logo Fintech Prism (isométrica)
 │   │   ├── ChartCard.tsx                  # Container arrastável (Drag-and-Drop) de cards Recharts
 │   │   └── SpotifyLogo.tsx                # Ícone vetorial do Spotify
@@ -784,6 +785,24 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Card dividido em duas metades verticais com divisor sutil e botão de lápis para edição das metas semanais (`weeklyRunGoalKm`, padrão 15 km) e anuais (`annualRunGoalKm`, padrão 500 km) com persistência reativa em `localStorage`.
       - Metade Superior (`ESTA SEMANA`): contador em destaque `{weeklyCurrentKm} / {weeklyRunGoalKm} km`, dias da semana `S T Q Q S S D` com pílulas laranjas se houve treino ou é hoje, SVG circular de progresso com arco proporcional e ícone de tênis de corrida / `Footprints` no centro, e rodapé com horas, minutos e elevação acumulada.
       - Metade Inferior (`ESTE ANO`): contador acumulado `{Math.round(ytdKm)} / {annualGoal} km`, barra de progresso anual com marcador vertical e rótulo `HOJE` baseado na fração exata do dia no ano, e frase de status do ritmo (`X km abaixo do ritmo`, `X km acima do ritmo`, ou `Exatamente no ritmo da meta`).
+
+  - **Sprint 42 (Novembro de 2026 — Correção Visual e Contábil + R$ Verde em Empréstimos, Exclusão Direta em Devedores e Modal Raio-X Célula por Célula nos 4 KPIs):**
+    - **Passo 1 — Correção do Sinal (`+ R$` em Verde `#30D158`) para "Recebimento de Empréstimo" e Reconciliação Contábil:**
+      - Criação da função pura `isPositiveInflowDisplay` em `app/lib/domain/finance.ts`, padronizando que lançamentos com `isReceivableSettlement: true`, categorias de empréstimo/reembolso (`"Recebimento de Empréstimo"`, `"Reembolso"`) ou receitas (`"Salário"`, `"Rendimentos"`, `"Receita Extra"`) renderizem obrigatoriamente com prefixo `+ R$` e cor Verde Esmeralda Cupertino (`text-[#30D158]` / `text-emerald-400`).
+      - Aplicação de `isPositiveInflowDisplay` em `app/TransactionsTableAdvanced.tsx` (tabela desktop, cards mobile e prévia de importação CSV/OFX) e no feed de atividades recentes em `app/page.tsx`.
+      - Alinhamento da matemática contábil de compras divididas (`isSplit`): a compra principal entra pelo desembolso bruto total (`tx.amount`), e o recebimento de empréstimo (`isReceivableSettlement: true`) atua como crédito redutor das Saídas Operacionais no período (`Math.max(0, safeSub(grossExpense, settlementsTotal))`). Ao somar algebricamente célula a célula na tabela (`-30,00 + 10,00 = -20,00`), o valor bate no centavo exato com o card `SAÍDAS & DESPESAS`, sem dupla contagem.
+    - **Passo 2 — Exclusão Direta de Lançamento de Devedor na Janela de Devedores (`SecondaryTabs.tsx` e `page.tsx`):**
+      - Adicionado botão nítido de **Excluir (`Trash2`)** em cada linha da tabela de atribuição de devedores na aba `receivables` (`app/SecondaryTabs.tsx`).
+      - Ao excluir um recebível, remove-se o registro, grava-se o tombstone (`recordTombstone`), deleta-se do Supabase, limpam-se eventuais baixas órfãs vinculadas (`linkedReceivableId === id`), reverte-se a flag `isSplit` na transação pai caso seja split child, e ativa-se o Toast flutuante com botão `"↩ Desfazer"` de 5 segundos.
+    - **Passo 3 — Cards de Resumo Financeiro 100% Interativos com Modal "Raio-X Contábil — Célula por Célula":**
+      - Os 4 Slim KPI Cards do topo (`ENTRADAS`, `SAÍDAS & DESPESAS`, `APORTES` e `SALDO LIVRE LÍQUIDO`) tornaram-se interativos (`cursor-pointer group relative cupertino-card-hover`), com badge sutil de hover `"🔍 Raio-X"`.
+      - Criação de `app/components/KpiAuditModal.tsx` renderizado via `createPortal(..., document.body)` em Cupertino Glassmorphism executivo.
+      - Cabeçalho dinâmico com título temático, badges de período ativo, regime contábil (`Competência` vs. `Caixa`) e total do card em fonte grande `tabular-nums`.
+      - Barra de busca interna e pílulas de filtro rápido por categoria com contagem de itens.
+      - Tabela analítica completa célula a célula: `#`, `Data`, `Descrição`, `Categoria`, `Método/Origem`, `Status`, `Valor na Soma (Célula)`, `% do Total` e botões rápidos de **Editar (`Pencil`)** e **Excluir (`Trash2`)**.
+      - Rodapé com prova real matemática (`Sum Check`): `Total de Células: N lançamentos | Soma Algébrica Exata: R$ XXX,XX (100% reconciliado com o Card)`.
+      - Sub-aba exclusiva de **"Memória de Cálculo do Safe-to-Spend"** para o Card 4 (Balanço), detalhando Saldo em Contas (banco a banco), Receitas Pendentes, Contas Diretas Pendentes e Faturas de Cartão de Crédito.
+      - Correção do `Safe-to-Spend` no modo `"ALL"` (`Histórico Geral`): utiliza a data de referência segura do mês corrente (`currentCalendarDate.yearMonth`), evitando o falso déficit de anos passados e garantindo compatibilidade total com o pré-renderizador do Next.js 16.
 
 ---
 

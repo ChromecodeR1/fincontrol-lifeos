@@ -27,6 +27,7 @@ import {
   calculateInvoiceAndCashMonths,
   getCardInvoiceCompetence,
   isNeutralFlow,
+  isPositiveInflowDisplay,
   getEffectivePersonalAmount,
   getEffectiveCardLiabilityAmount
 } from "./lib/domain/finance";
@@ -525,6 +526,7 @@ export {
   calculateInvoiceAndCashMonths,
   getCardInvoiceCompetence,
   isNeutralFlow,
+  isPositiveInflowDisplay,
   getEffectivePersonalAmount,
   getEffectiveCardLiabilityAmount
 };
