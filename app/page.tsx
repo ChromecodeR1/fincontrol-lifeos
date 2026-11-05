@@ -6596,10 +6596,6 @@ export default function CoindexApp() {
                     onClick={() => setActiveKpiAudit("INCOME")}
                     className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
                   >
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[9px] font-medium text-emerald-300 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-emerald-500/20 pointer-events-none z-10">
-                      <Search className="w-2.5 h-2.5" />
-                      <span>🔍 Raio-X</span>
-                    </div>
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
@@ -6641,10 +6637,6 @@ export default function CoindexApp() {
                     onClick={() => setActiveKpiAudit("EXPENSE")}
                     className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
                   >
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[9px] font-medium text-rose-300 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-rose-500/20 pointer-events-none z-10">
-                      <Search className="w-2.5 h-2.5" />
-                      <span>🔍 Raio-X</span>
-                    </div>
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
@@ -6686,10 +6678,6 @@ export default function CoindexApp() {
                     onClick={() => setActiveKpiAudit("INVESTMENT")}
                     className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
                   >
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[9px] font-medium text-sky-300 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-sky-500/20 pointer-events-none z-10">
-                      <Search className="w-2.5 h-2.5" />
-                      <span>🔍 Raio-X</span>
-                    </div>
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
@@ -6727,10 +6715,6 @@ export default function CoindexApp() {
                     onClick={() => setActiveKpiAudit("BALANCE")}
                     className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
                   >
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[9px] font-medium text-sky-300 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-sky-500/20 pointer-events-none z-10">
-                      <Search className="w-2.5 h-2.5" />
-                      <span>🔍 Memória / Raio-X</span>
-                    </div>
                     <div>
                       <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
                         <div className="flex items-center gap-1.5">
