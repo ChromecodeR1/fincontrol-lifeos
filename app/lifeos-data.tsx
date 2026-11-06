@@ -387,13 +387,13 @@ export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
     version: "0.34.0",
     date: "Nov/2026",
-    title: "Sprint 46: Motor de Motions 120Hz Apple Spring, Number Ticker CountUp, Loaders Shimmer Contextuais e Nova Identidade Vetorial Minimalista",
+    title: "Sprint 46: Nova Logo Oficial 'The Equilibrium Link' com Motion Orbital na Sidebar e Favicon, Motor de Motions 120Hz e Loaders",
     highlights: [
-      "Nova Identidade Vetorial Minimalista: 4 conceitos geométricos em vetor SVG puro (Kinetic Arc [Padrão Apple Copilot], Equilibrium Rings [Audi], Ascending Bars [Adidas/Bauhaus] e Precision Quadrant [BMW/Braun]) com seletor em tempo real.",
-      "Number Ticker 120Hz (AnimatedNumber): Animação fluida de transição numérica com interpolação ease-out quártica nos 4 Slim KPIs, Patrimônio Líquido, Donut e Metas Strava.",
-      "Loaders Shimmer Contextuais: Shimmer contínuo nos estados de carregamento do Supabase, painel Strava Progress, taxa CDI BCB e importação bancária CSV/OFX.",
-      "Micro-Interações Táteis Apple Spring: Resposta tátil ao clique (.apple-press scale 0.97), animação de traçado SVG (@keyframes svgDrawIn) e flash de linha atualizada (@keyframes rowSuccessFlash).",
-      "Garantia Anti-Modal Trap: Remoção estrita de transforms residuais em containers pais garantindo integridade das modais de 100dvh."
+      "Nova Logo Oficial The Equilibrium Link (Opção 1): Dois elos entrelaçados em over-under weave com gap de 3.5px, elo 'C' em Titânio (#F8FAFC) e anel em Apple Blue (#0A84FF).",
+      "Motion Orbital e Física Magnética: Pulso contínuo de luz orbital em loop de 5.5s, traçado de entrada suave e repulsão magnética elástica no hover (+/-1.5px).",
+      "Favicon Oficial Atualizado (app/icon.svg): Squircle premium Midnight (#0B0E14) com a geometria vetorial exata do Equilibrium Link em alta definição.",
+      "Number Ticker 120Hz (AnimatedNumber): Animação fluida de transição numérica nos 4 Slim KPIs, Patrimônio Líquido, Donut e Metas Strava com curva quártica.",
+      "Loaders Shimmer Contextuais: Shimmer contínuo nos estados de carregamento do Supabase, painel Strava Progress, taxa CDI BCB e importação bancária CSV/OFX."
     ]
   },
   {

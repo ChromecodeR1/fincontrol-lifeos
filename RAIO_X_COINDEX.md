@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
 > **Versão da Aplicação:** `0.34.0`  
-> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 46 — Motor de Motions 120Hz Apple Spring, Number Ticker CountUp, Loaders Shimmer Contextuais e Nova Identidade Vetorial Minimalista)  
+> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 46 — Implantação da Nova Logo Oficial "The Equilibrium Link" com Motion Orbital na Sidebar e Favicon, Motor de Motions 120Hz Apple Spring, Number Ticker CountUp e Loaders Shimmer Contextuais)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -842,16 +842,20 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - `--cupertino-card` ajustado para `rgba(19, 24, 36, 0.78)` no modo escuro e `rgba(255, 255, 255, 0.84)` no modo claro, ambos com `backdrop-filter: blur(20px) saturate(160%)`.
       - Contêineres de página (`.dashboard-root-wrapper` e `.dashboard-main-content`) configurados como transparentes, permitindo difração luminosa autêntica sob os cards Bento Grid sem degradação de contraste ou legibilidade.
 
-  - **Sprint 46 (Novembro de 2026 — Motor de Motions 120Hz Apple Spring, Number Ticker CountUp, Loaders Shimmer Contextuais e Nova Identidade Vetorial Minimalista):**
-    - **Passo 1 — Nova Identidade Vetorial Minimalista (`CoindexLogo.tsx` e `icon.svg`):**
-      - Substituição do antigo hexágono "Fintech Prism" por 4 conceitos geométricos vetoriais puros em SVG:
-        1. `kinetic_arc` (Padrão — Inspiração Nike / Apple Copilot): Arco fluido aerodinâmico em vetor contínuo formando um "C" ascendente em degradê `#0A84FF` -> `#5E5CE6`.
-        2. `equilibrium_rings` (Inspiração Audi / Bauhaus): Dois anéis geométricos entrelaçados com espessura uniforme e espaço negativo limpo formando um "C" simétrico (`#0A84FF` e `#F8FAFC`).
-        3. `ascending_bars` (Inspiração Adidas / Precision): Três barras paralelas a 35 graus com cantos arredondados na curvatura de um "C" ascendente (`#F8FAFC` e `#30D158`).
-        4. `precision_quadrant` (Inspiração BMW / Braun): Emblema circular técnico dividido em quadrantes de precisão com abertura angular formando "C" e índice.
-      - Wordmark **`COINDEX`** em tipografia geométrica pura (`font-extrabold tracking-[0.08em] uppercase`) com micro-interação tátil de escala e hover glow.
-      - Seletor em tempo real na aba Configurações com persistência em `localStorage` (`coindex_logo_variant`) e evento global `coindex_logo_change`.
-      - Atualização sincronizada de `app/icon.svg` com a base `#0B0E14` e símbolo minimalista.
+  - **Sprint 46 (Novembro de 2026 — Nova Logo Oficial "The Equilibrium Link" com Motion Orbital, Motor de Motions 120Hz Apple Spring, Number Ticker CountUp e Loaders Shimmer Contextuais):**
+    - **Passo 1 — Nova Logo Oficial "The Equilibrium Link" (Opção 1) (`CoindexLogo.tsx` e `icon.svg`):**
+      - Geometria vetorial exata em `viewBox="0 0 120 84"`:
+        1. **Elo Esquerdo (Letra "C" em Titânio `#F8FAFC`):** Círculo centrado em `cx=44, cy=42, r=26` com `strokeWidth=10`, aberto de `-38°` a `+38°` com terminais limpos dentro do elo direito.
+        2. **Elo Direito (Anel Completo Apple Blue `#0A84FF` -> `#38BDF8`):** Círculo centrado em `cx=76, cy=42, r=26` com `strokeWidth=10`.
+        3. **Entrelaçamento Físico Real (Over-Under Weave):**
+           - Na intersecção superior (`x ≈ 60, y ≈ 21`), o elo azul passa por cima do elo branco com recorte de `3.5px` (`strokeWidth=17`).
+           - Na intersecção inferior (`x ≈ 60, y ≈ 63`), o elo branco ("C") passa por cima do elo azul com recorte de `3.5px` (`strokeWidth=17`).
+      - Motions e Efeitos Especiais na Logo:
+        - **Entrada Cinética (`coindex-ring-draw`):** Traçado suave de `650ms cubic-bezier(0.16, 1, 0.3, 1)`.
+        - **Pulso de Luz Orbital Contínuo (`coindex-orbital-glow`):** Trilha specular secundária (`strokeDasharray="18 150"`) percorrendo os anéis em loop contínuo de `5.5s linear infinite`.
+        - **Física Magnética no Hover:** Elo esquerdo translada `-1.5px` e elo direito `+1.5px` (`320ms cubic-bezier(0.22, 1, 0.36, 1)`) com halo luminoso `drop-shadow(0 0 12px rgba(10, 132, 255, 0.45))`.
+        - **Wordmark `COINDEX`:** Tipografia geométrica pura (`font-extrabold tracking-[0.12em] uppercase`) com micro-shimmer metálico no hover.
+      - **Favicon Oficial do Navegador (`app/icon.svg`):** Squircle premium Midnight `#0B0E14` (`viewBox="0 0 120 120"`, `rx=28`) com a geometria exata do Equilibrium Link centralizada para máxima nitidez em qualquer resolução (16px a 180px).
     - **Passo 2 — Motor de Interpolação Numérica `useAnimatedNumber` (120Hz CountUp) & Micro-Motions:**
       - Hook puro `useAnimatedNumber` com interpolação quártica `1 - Math.pow(1 - t, 4)` e respeito a `prefers-reduced-motion`.
       - Componentes `<AnimatedBRL />` e `<AnimatedMetric />` aplicados nos 4 Slim KPI cards, Total do Patrimônio Acumulado, Total Central do Donut de Despesas e métricas de distância do painel Strava Progress.

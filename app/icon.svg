@@ -1,60 +1,70 @@
-<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Superfície Fundo Apple Dark Slate -->
-    <linearGradient id="cxBg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stopColor="#161A23" />
-      <stop offset="100%" stopColor="#0B0E14" />
+    <!-- Gradiente Oficial Apple Blue para o Elo Direito -->
+    <linearGradient id="cxBlueGradIcon" x1="50" y1="16" x2="102" y2="68" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="60%" stop-color="#0A84FF" />
+      <stop offset="100%" stop-color="#0066CC" />
     </linearGradient>
 
-    <!-- Borda Sutil do Card -->
-    <linearGradient id="cxBorder" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stopColor="#0A84FF" stopOpacity="0.45" />
-      <stop offset="50%" stopColor="#5E5CE6" stopOpacity="0.30" />
-      <stop offset="100%" stopColor="#30D158" stopOpacity="0.25" />
-    </linearGradient>
-
-    <!-- Gradiente Kinetic Arc (Azul -> Roxo Cupertino) -->
-    <linearGradient id="cxKinetic" x1="12" y1="52" x2="52" y2="12" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stopColor="#0A84FF" />
-      <stop offset="65%" stopColor="#5E5CE6" />
-      <stop offset="100%" stopColor="#64D2FF" />
+    <!-- Gradiente Especular Titânio para o Elo Esquerdo "C" -->
+    <linearGradient id="cxTitaniumGradIcon" x1="18" y1="16" x2="65" y2="68" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#E2E8F0" />
     </linearGradient>
   </defs>
 
-  <!-- Cartão Squircle de Base Apple (rx=16) -->
-  <rect width="64" height="64" rx="16" fill="url(#cxBg)" />
-  <rect
-    x="1"
-    y="1"
-    width="62"
-    height="62"
-    rx="15"
-    stroke="url(#cxBorder)"
-    strokeWidth="1.2"
-  />
+  <!-- Cartão Base Squircle Apple Midnight (#0B0E14, rx=28) -->
+  <rect width="120" height="120" rx="28" fill="#0B0E14" />
+  <rect x="1" y="1" width="118" height="118" rx="27" stroke="rgba(255,255,255,0.08)" stroke-width="1.2" fill="none" />
 
-  <!-- Halo de Brilho Traseiro -->
-  <circle cx="32" cy="32" r="18" fill="#0A84FF" fillOpacity="0.08" />
+  <!-- Símbolo The Equilibrium Link (Opção 1) Centralizado Verticalmente (y=18) -->
+  <g transform="translate(0, 18)">
+    <!-- Camada 1: Elo Esquerdo "C" em Titânio (#F8FAFC) cx=44, cy=42, r=26 -->
+    <path
+      d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
+      stroke="url(#cxTitaniumGradIcon)"
+      stroke-width="10"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
 
-  <!-- Arco Dinâmico em 'C' Minimalista -->
-  <path
-    d="M48 20 C 44 14, 20 12, 16 32 C 12 50, 42 54, 48 44"
-    stroke="url(#cxKinetic)"
-    strokeWidth="5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  />
+    <!-- Intersecção Superior: Recorte de 3.5px (stroke-width=17) com a cor do fundo -->
+    <path
+      d="M 76 16 A 26 26 0 0 0 52 32"
+      stroke="#0B0E14"
+      stroke-width="17"
+      stroke-linecap="butt"
+      fill="none"
+    />
 
-  <!-- Núcleo Interno de Velocidade -->
-  <path
-    d="M42 24 C 38 19, 24 18, 22 32 C 20 44, 38 46, 42 40"
-    stroke="#FFFFFF"
-    strokeOpacity="0.4"
-    strokeWidth="1.6"
-    strokeLinecap="round"
-  />
+    <!-- Camada 2: Elo Direito Anel Completo em Apple Blue (#0A84FF) cx=76, cy=42, r=26 -->
+    <circle
+      cx="76"
+      cy="42"
+      r="26"
+      stroke="url(#cxBlueGradIcon)"
+      stroke-width="10"
+      fill="none"
+    />
 
-  <!-- Ponto Focal de Impulso no Ápice -->
-  <circle cx="48" cy="20" r="3.2" fill="#30D158" />
-  <circle cx="48" cy="20" r="5" stroke="#30D158" strokeWidth="1" strokeOpacity="0.4" />
+    <!-- Intersecção Inferior: Recorte de 3.5px no azul (stroke-width=17) -->
+    <path
+      d="M 44 68 A 26 26 0 0 0 64.49 58.01"
+      stroke="#0B0E14"
+      stroke-width="17"
+      stroke-linecap="round"
+      fill="none"
+    />
+
+    <!-- Camada 3: Arco do Elo Branco ("C") passando por cima na base -->
+    <path
+      d="M 44 68 A 26 26 0 0 0 64.49 58.01"
+      stroke="url(#cxTitaniumGradIcon)"
+      stroke-width="10"
+      stroke-linecap="round"
+      fill="none"
+    />
+  </g>
 </svg>

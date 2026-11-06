@@ -403,6 +403,39 @@ select:focus-visible {
    SPRINT 46: APPLE SPRING MOTIONS, SKELETON SHIMMER & MICRO-INTERAÇÕES
    ============================================================================ */
 
+/* Traçado suave de entrada cinética da logo Equilibrium Link */
+@keyframes coindexRingDraw {
+  from {
+    stroke-dashoffset: 200;
+    opacity: 0.1;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.coindex-ring-draw {
+  stroke-dasharray: 200;
+  animation: coindexRingDraw 650ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Pulso de luz orbital contínuo nos anéis da logo Equilibrium Link */
+@keyframes coindexOrbitalPulse {
+  0% {
+    stroke-dashoffset: 168;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.coindex-orbital-glow {
+  stroke-dasharray: 18 150;
+  animation: coindexOrbitalPulse 5.5s linear infinite;
+  pointer-events: none;
+}
+
 /* Micro-interação tátil de clique / toque Apple */
 .apple-press {
   transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease;
@@ -425,7 +458,7 @@ select:focus-visible {
   animation: svgDrawIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Flash suave de linha atualizada ou criada */
+/* Flash suave de linha atualizada ou criada (rowSuccessFlash & rowFlashGreen) */
 @keyframes rowSuccessFlash {
   0% {
     background-color: rgba(48, 209, 88, 0.22);
@@ -436,6 +469,18 @@ select:focus-visible {
 }
 .row-success-flash {
   animation: rowSuccessFlash 900ms ease-out forwards;
+}
+
+@keyframes rowFlashGreen {
+  0% {
+    background-color: rgba(48, 209, 88, 0.22);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.row-flash-green {
+  animation: rowFlashGreen 900ms ease-out forwards;
 }
 
 /* Skeleton Shimmer Contextual Cupertino (Dark & Light) */

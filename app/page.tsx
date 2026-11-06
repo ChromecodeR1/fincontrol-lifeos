@@ -5934,7 +5934,7 @@ export default function CoindexApp() {
   if (!isHydrated) {
     return (
       <div className="min-h-screen bg-[#060913] flex flex-col items-center justify-center gap-3 text-slate-400 text-xs">
-        <CoindexIcon className="w-12 h-12 animate-pulse" />
+        <CoindexIcon className="w-16 h-11" />
         <div className="flex items-center gap-2">
           <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
           <span>Conectando ao Coindex & Supabase...</span>
@@ -6057,8 +6057,8 @@ export default function CoindexApp() {
             {sidebarOpen ? (
               <CoindexLogoHorizontal size="sm" />
             ) : (
-              <div className="mx-auto">
-                <CoindexIcon className="w-9 h-9" />
+              <div className="mx-auto group cursor-pointer" title="Coindex OS">
+                <CoindexIcon className="w-10 h-7" />
               </div>
             )}
             <button

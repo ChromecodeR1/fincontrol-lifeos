@@ -425,12 +425,12 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   });
 
   // SPRINT 46: Estado e Controle de Variante de Logo Coindex Minimalista
-  const [activeLogoVariant, setActiveLogoVariant] = useState<CoindexLogoVariant>("kinetic_arc");
+  const [activeLogoVariant, setActiveLogoVariant] = useState<CoindexLogoVariant>("equilibrium_link");
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem("coindex_logo_variant") as CoindexLogoVariant | null;
-      if (saved && ["kinetic_arc", "equilibrium_rings", "ascending_bars", "precision_quadrant"].includes(saved)) {
+      if (saved && ["equilibrium_link", "kinetic_arc", "ascending_bars", "precision_quadrant"].includes(saved)) {
         setActiveLogoVariant(saved);
       }
     } catch {}
@@ -438,7 +438,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     const handleStorageChange = () => {
       try {
         const saved = localStorage.getItem("coindex_logo_variant") as CoindexLogoVariant | null;
-        if (saved && ["kinetic_arc", "equilibrium_rings", "ascending_bars", "precision_quadrant"].includes(saved)) {
+        if (saved && ["equilibrium_link", "kinetic_arc", "ascending_bars", "precision_quadrant"].includes(saved)) {
           setActiveLogoVariant(saved);
         }
       } catch {}
