@@ -38,6 +38,7 @@ import { simulatePurchaseImpact } from "./lib/domain/purchase-simulator";
 import { parseDateParts } from "./lib/domain/date-br";
 import { BanksTab } from "./components/BanksTab";
 import { VehiclesTab } from "./components/VehiclesTab";
+import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
 
 /**
  * Formata ritmo/pace esportivo exato em min:seg /km (AUD-15).
@@ -143,6 +144,8 @@ export interface SecondaryTabsProps {
   handleSaveStaticStatus: (e: React.FormEvent) => void;
   saveStaticStatus: (items: StaticStatusItem[]) => void;
   selectedMonth?: string;
+  bgFxMode?: AmbientFxMode;
+  handleSelectBgFxMode?: (mode: AmbientFxMode) => void;
   handleLaunchFixedTransactions?: (targetMonth?: string) => Promise<{ createdCount: number; totalCount: number }>;
   filteredTransactions: Transaction[];
   transactions: Transaction[];
@@ -285,6 +288,7 @@ export interface SecondaryTabsProps {
 export default function SecondaryTabs(props: SecondaryTabsProps) {
   const {
     activeTab, moneyBlur, currentUser, currentUserAvatar, themeMode, changeThemeMode,
+    bgFxMode, handleSelectBgFxMode,
     setShowChangelogModal, staticStatus, editingStatusId, setEditingStatusId, newStatusItem,
     setNewStatusItem, handleSaveStaticStatus, saveStaticStatus, filteredTransactions, transactions,
     searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, onAddTransaction, onBatchImportTransactions, dailyQuotaInfo, cdiAnnualRate, getFlowType,
@@ -3814,6 +3818,58 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               <Camera className="w-3.5 h-3.5" /> Foto de Perfil
               <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpdateProfileAvatar(f); }} />
             </label>
+          </div>
+        </div>
+
+        {/* PAINEL DE EFEITOS DE FUNDO & ATMOSFERA CUPERTINO AMBIENT FX (SPRINT 45) */}
+        <div className="glass-card p-6 rounded-3xl border border-[var(--cupertino-border)] space-y-4 shadow-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#0A84FF]" /> Atmosfera & Efeitos de Background (Cupertino Ambient FX)
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Selecione o motor visual renderizado no fundo da aplicação. O efeito se propaga de forma translúcida sob o vidro dos cards.
+              </p>
+            </div>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30">
+              Modo Ativo: {AMBIENT_FX_OPTIONS.find((o) => o.id === (bgFxMode || "hybrid"))?.label}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {AMBIENT_FX_OPTIONS.map((opt) => {
+              const isSelected = (bgFxMode || "hybrid") === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => handleSelectBgFxMode?.(opt.id)}
+                  className={`p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 ${
+                    isSelected
+                      ? "bg-[#0A84FF]/15 border-[#0A84FF]/50 shadow-md ring-1 ring-[#0A84FF]/40 -translate-y-0.5"
+                      : "bg-white/[0.03] hover:bg-white/[0.06] border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl">{opt.icon}</span>
+                    {isSelected ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0A84FF] text-white">
+                        ATIVO
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-500">Selecionar</span>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className={`text-xs font-bold ${isSelected ? "text-white" : "text-slate-200"}`}>
+                      {opt.label}
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-snug">{opt.desc}</p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 

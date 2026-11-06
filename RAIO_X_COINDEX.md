@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.32.0`  
-> **Última Atualização:** 5 de Novembro de 2026 (Pós-Sprint 44 — Correção de Persistência ao Editar Data, Safe Merge Last-Write-Wins (LWW), Unificação de Combustível em Gasolina e Ordenação A-Z de Categorias)  
+> **Versão da Aplicação:** `0.33.0`  
+> **Última Atualização:** 5 de Novembro de 2026 (Pós-Sprint 45 — Motor de Efeitos Especiais de Background "Cupertino Ambient FX" com 6 Modos Selecionáveis, Refração de Vidro Líquido e Spotlight Interativo)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -824,6 +824,23 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - No modal de transação (`TransactionModal.tsx`): `<select>` de categorias memoizado com ordenação alfabética `sortedCategories`.
       - Na tabela avançada (`TransactionsTableAdvanced.tsx`): `allUniqueCategories` ordenado com `localeCompare("pt-BR")`.
       - Na aba de Configurações (`SecondaryTabs.tsx`): listagem de badges de categorias ordenada de A a Z.
+
+  - **Sprint 45 (Novembro de 2026 — Motor de Efeitos Especiais de Background "Cupertino Ambient FX" com 6 Modos Selecionáveis, Refração de Vidro Líquido e Spotlight Interativo):**
+    - **Passo 1 — Componente Isolado `AmbientBackgroundFX.tsx`:**
+      - Camada fixa de fundo (`fixed inset-0 pointer-events-none z-0 overflow-hidden select-none` com `aria-hidden="true"` e `transform: none`), prevenindo estritamente a criação de containing block para modais e portais.
+      - Suporte a 6 modos visuais em tempo real:
+        1. `hybrid` (Híbrido Copilot - Padrão): Fusão de Aurora suave + Micro-Grade Linear + Spotlight interativo de cursor.
+        2. `aurora` (Aurora Cupertino Mesh): Três esferas fluidas com desfoque profundo (`blur-[130px]`, `blur-[140px]`, `blur-[150px]`) nas cores da identidade Coindex (`#0A84FF`, `#5E5CE6`, `#30D158`) animadas com keyframes independentes (`cupertinoAuroraFloat1-3`).
+        3. `grid` (Grade Arquitetural Linear): Malha arquitetônica minimalista de 28x28px com máscara radial difusa (`radial-gradient`).
+        4. `rays` (Feixes Titanium & Matte): Luz volumétrica cônica superior (`conic-gradient` com `blur-[90px]`) combinada com camada de microtextura fosca sutil.
+        5. `spotlight` (Spotlight Interativo): Rastreamento de cursor de alta performance com `requestAnimationFrame`, otimizado para desativar automaticamente em telas sensíveis ao toque ou sob preferência de redução de movimento (`prefers-reduced-motion`).
+        6. `none` (Sólido Puro): Desativação completa dos efeitos visuais decorativos.
+    - **Passo 2 — Controles e Seletores Rápidos de Atmosfera:**
+      - Popover interativo na Topbar de navegação ao lado do alternador de tema Claro/Escuro, com acionamento pelo ícone `Sparkles` e persistência no `localStorage` sob a chave `coindex_bg_fx_mode`.
+      - Painel visual completo com cards interativos na aba Configurações (`SecondaryTabs.tsx`).
+    - **Passo 3 — Refinamento de Translucidez e Refração de Vidro Líquido (`globals.css`):**
+      - `--cupertino-card` ajustado para `rgba(19, 24, 36, 0.78)` no modo escuro e `rgba(255, 255, 255, 0.84)` no modo claro, ambos com `backdrop-filter: blur(20px) saturate(160%)`.
+      - Contêineres de página (`.dashboard-root-wrapper` e `.dashboard-main-content`) configurados como transparentes, permitindo difração luminosa autêntica sob os cards Bento Grid sem degradação de contraste ou legibilidade.
 
 ---
 

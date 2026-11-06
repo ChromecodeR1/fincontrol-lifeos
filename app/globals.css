@@ -5,7 +5,7 @@ html[data-theme="dark"] {
   color-scheme: dark;
   --cupertino-bg: #0B0E14;
   --cupertino-sidebar: #0E121B;
-  --cupertino-card: #131824;
+  --cupertino-card: rgba(19, 24, 36, 0.78);
   --cupertino-card-elevated: #1A2030;
   --cupertino-input: #0D111A;
   --cupertino-border: rgba(255, 255, 255, 0.08);
@@ -26,7 +26,7 @@ html[data-theme="light"] {
   color-scheme: light;
   --cupertino-bg: #F2F4F8;
   --cupertino-sidebar: #ffffff;
-  --cupertino-card: #ffffff;
+  --cupertino-card: rgba(255, 255, 255, 0.84);
   --cupertino-card-elevated: #f5f5f7;
   --cupertino-input: #f5f5f7;
   --cupertino-border: rgba(15, 23, 42, 0.08);
@@ -64,19 +64,23 @@ body {
    ============================================================================ */
 
 /* Nível 0: Fundo da Página uniforme à direita da Sidebar */
-html[data-theme="light"] body,
+html[data-theme="light"] body {
+  background-color: #F2F4F8 !important;
+}
 html[data-theme="light"] main,
 html[data-theme="light"] .dashboard-root-wrapper,
 html[data-theme="light"] .dashboard-main-content {
-  background-color: #F2F4F8 !important;
+  background-color: transparent !important;
 }
 
 /* Fundo uniforme no Modo Escuro Cupertino Midnight */
-html[data-theme="dark"] body,
+html[data-theme="dark"] body {
+  background-color: #0B0E14 !important;
+}
 html[data-theme="dark"] main,
 html[data-theme="dark"] .dashboard-root-wrapper,
 html[data-theme="dark"] .dashboard-main-content {
-  background-color: #0B0E14 !important;
+  background-color: transparent !important;
 }
 
 html[data-theme="dark"] [class*="bg-slate-950"]:not(.wallet-physical-card),
@@ -89,6 +93,8 @@ html[data-theme="dark"] [class*="bg-black/"]:not(.wallet-physical-card) {
 .cyber-card,
 .glass-card {
   background-color: var(--cupertino-card) !important;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
   border-color: var(--cupertino-border) !important;
   box-shadow: var(--cupertino-shadow) !important;
 }
@@ -96,7 +102,9 @@ html[data-theme="dark"] [class*="bg-black/"]:not(.wallet-physical-card) {
 html[data-theme="light"] .cyber-card,
 html[data-theme="light"] .glass-card,
 html[data-theme="light"] [class*="bg-slate-900"]:not(.wallet-physical-card):not([class*="from-"]):not([class*="to-"]):not([class*="via-"]) {
-  background-color: #ffffff !important;
+  background-color: var(--cupertino-card) !important;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
   border-color: rgba(15, 23, 42, 0.08) !important;
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
 }
@@ -368,4 +376,25 @@ select:focus-visible {
 .card-elevation-context {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+
+/* ============================================================================
+   SPRINT 45: CUPERTINO AMBIENT FX AURORA KEYFRAMES
+   ============================================================================ */
+@keyframes cupertinoAuroraFloat1 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, 30px) scale(1.08); }
+  100% { transform: translate(-20px, 50px) scale(0.95); }
+}
+
+@keyframes cupertinoAuroraFloat2 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-50px, 20px) scale(1.05); }
+  100% { transform: translate(30px, -40px) scale(0.92); }
+}
+
+@keyframes cupertinoAuroraFloat3 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, -30px) scale(1.12); }
+  100% { transform: translate(-40px, 20px) scale(0.97); }
 }

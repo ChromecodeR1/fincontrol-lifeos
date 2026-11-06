@@ -380,10 +380,22 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.32.0";
-export const PREVIOUS_VERSION = "0.31.0";
+export const APP_VERSION = "0.33.0";
+export const PREVIOUS_VERSION = "0.32.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.33.0",
+    date: "Nov/2026",
+    title: "Sprint 45: Motor de Efeitos Especiais de Background 'Cupertino Ambient FX' (Aurora Mesh, Linear Grid, Titanium Light Rays, Spotlight e Híbrido)",
+    highlights: [
+      "Motor Cupertino Ambient FX: 6 modos atmosféricos selecionáveis em tempo real (Híbrido Copilot, Aurora Cupertino Mesh, Grade Arquitetural Linear, Feixes Titanium & Matte, Spotlight Interativo e Sólido Puro).",
+      "Seletor Rápido na Topbar & Configurações: Popover intuitivo com ícone Sparkles na barra superior e painel visual completo na aba Configurações.",
+      "Refração Real de Vidro Líquido: Ajuste fino de translucidez (--cupertino-card com backdrop-filter blur 20px saturate 160%) permitindo difração luminosa sob os cards Bento.",
+      "Spotlight Interativo Otimizado: Rastreamento suave de cursor via requestAnimationFrame desativado automaticamente em telas touch e prefers-reduced-motion.",
+      "Zero Block & Isolamento de Modais: Camada fixa z-0 com pointer-events-none garantindo ausência de containing block e clique sem obstrução."
+    ]
+  },
   {
     version: "0.32.0",
     date: "Nov/2026",

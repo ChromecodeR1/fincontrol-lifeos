@@ -234,6 +234,7 @@ import SpotifyModule from "./components/SpotifyModule";
 import { TransactionModal, SmartDateInputBR } from "./components/TransactionModal";
 import { ProfileModal } from "./components/ProfileModal";
 import KpiAuditModal from "./components/KpiAuditModal";
+import { AmbientBackgroundFX, AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
 import {
   calculateVehicleConsumption,
   calculateVehicleTco,
@@ -583,6 +584,43 @@ export default function CoindexApp() {
       applyTheme();
     }
   }, [cupertinoTheme]);
+
+  // SPRINT 45: Motor de Efeitos Especiais de Background "Cupertino Ambient FX"
+  const [bgFxMode, setBgFxMode] = useState<AmbientFxMode>("hybrid");
+  const [ambientFxPopoverOpen, setAmbientFxPopoverOpen] = useState(false);
+  const ambientFxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const savedBgFx = localStorage.getItem("coindex_bg_fx_mode") as AmbientFxMode | null;
+      if (savedBgFx && ["hybrid", "aurora", "grid", "rays", "spotlight", "none"].includes(savedBgFx)) {
+        setBgFxMode(savedBgFx);
+      }
+    } catch {}
+  }, []);
+
+  const handleSelectBgFxMode = useCallback((mode: AmbientFxMode) => {
+    setBgFxMode(mode);
+    try {
+      localStorage.setItem("coindex_bg_fx_mode", mode);
+    } catch (err) {
+      console.error("Erro ao salvar coindex_bg_fx_mode", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ambientFxRef.current && !ambientFxRef.current.contains(e.target as Node)) {
+        setAmbientFxPopoverOpen(false);
+      }
+    };
+    if (ambientFxPopoverOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [ambientFxPopoverOpen]);
 
   const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -5920,7 +5958,9 @@ export default function CoindexApp() {
   }
 
   return (
-    <div className="min-h-screen flex text-slate-100 bg-[var(--cupertino-bg)] dashboard-root-wrapper">
+    <div className="min-h-screen flex text-slate-100 bg-transparent dashboard-root-wrapper relative">
+      {/* SPRINT 45: Motor de Efeitos Especiais de Background "Cupertino Ambient FX" */}
+      <AmbientBackgroundFX mode={bgFxMode} />
       <style jsx global>{`
         .glass-card {
           backdrop-filter: blur(18px);
@@ -6128,7 +6168,7 @@ export default function CoindexApp() {
         </aside>
 
       {/* CONTEÚDO PRINCIPAL */}
-      <div className={`flex-1 transition-all duration-200 ${sidebarOpen ? "ml-64" : "ml-20"} bg-[var(--cupertino-bg)] dashboard-main-content`}>
+      <div className={`flex-1 transition-all duration-200 ${sidebarOpen ? "ml-64" : "ml-20"} bg-transparent dashboard-main-content relative z-10`}>
         {/* CABEÇALHO PRINCIPAL */}
         <header className="sticky top-0 z-30 border-b border-[var(--cupertino-border)] bg-[var(--cupertino-sidebar)]/85 backdrop-blur-xl px-4 lg:px-8 py-3.5">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
@@ -6501,6 +6541,76 @@ export default function CoindexApp() {
                     <Moon className="w-3.5 h-3.5 text-sky-400" />
                     <span className="hidden sm:inline">Escuro</span>
                   </button>
+                </div>
+
+                {/* SELETOR DE EFEITO DE FUNDO / ATMOSFERA CUPERTINO AMBIENT FX (Sprint 45) */}
+                <div className="relative" ref={ambientFxRef}>
+                  <button
+                    type="button"
+                    onClick={() => setAmbientFxPopoverOpen((prev) => !prev)}
+                    aria-expanded={ambientFxPopoverOpen}
+                    aria-haspopup="true"
+                    className={`min-h-[44px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      bgFxMode !== "none"
+                        ? "bg-[#0A84FF]/15 hover:bg-[#0A84FF]/25 border-[#0A84FF]/30 text-[#0A84FF] shadow-sm"
+                        : "bg-slate-900/80 hover:bg-slate-900 border-white/10 text-slate-400 hover:text-slate-200"
+                    }`}
+                    title="Atmosfera e Efeitos Especiais de Background"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[#0A84FF]" />
+                    <span className="hidden sm:inline">Atmosfera</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white font-mono font-bold">
+                      {AMBIENT_FX_OPTIONS.find((opt) => opt.id === bgFxMode)?.icon || "✨"}
+                    </span>
+                  </button>
+
+                  {ambientFxPopoverOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full mt-2 w-72 rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl p-2.5 z-50 animate-cupertino-in space-y-1 backdrop-blur-2xl"
+                    >
+                      <div className="px-2.5 py-2 border-b border-white/10 mb-1">
+                        <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-[#0A84FF]" /> Efeitos de Fundo Cupertino
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                          Alterne a refração atmosférica visível através do vidro dos cards.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        {AMBIENT_FX_OPTIONS.map((opt) => {
+                          const isSelected = bgFxMode === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => {
+                                handleSelectBgFxMode(opt.id);
+                                setAmbientFxPopoverOpen(false);
+                              }}
+                              className={`w-full text-left p-2 rounded-xl transition flex items-start gap-2.5 cursor-pointer ${
+                                isSelected
+                                  ? "bg-[#0A84FF]/20 border border-[#0A84FF]/40 text-white"
+                                  : "hover:bg-white/5 border border-transparent text-slate-300 hover:text-white"
+                              }`}
+                            >
+                              <span className="text-base leading-none shrink-0 mt-0.5">{opt.icon}</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between">
+                                  <span className={`text-xs font-bold ${isSelected ? "text-white" : "text-slate-200"}`}>
+                                    {opt.label}
+                                  </span>
+                                  {isSelected && <span className="w-2 h-2 rounded-full bg-[#0A84FF] shadow-[0_0_8px_#0A84FF]" />}
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{opt.desc}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* BOTÃO DE PRIVACIDADE SOMENTE COM O SÍMBOLO DO OLHO */}
@@ -8379,6 +8489,8 @@ export default function CoindexApp() {
               currentUserAvatar={currentUserAvatar}
               themeMode={themeMode}
               changeThemeMode={changeThemeMode}
+              bgFxMode={bgFxMode}
+              handleSelectBgFxMode={handleSelectBgFxMode}
               setShowChangelogModal={setShowChangelogModal}
               staticStatus={staticStatus}
               editingStatusId={editingStatusId}
