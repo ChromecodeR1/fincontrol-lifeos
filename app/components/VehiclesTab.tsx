@@ -56,6 +56,7 @@ import {
   ChartWidgetSize,
   DEFAULT_CHART_WIDGET_SETTINGS
 } from "./ChartSettingsPopover";
+import { SlidingSegmentedControl } from "./SlidingSegmentedControl";
 import {
   calculateVehicleConsumption,
   calculateVehicleTco,
@@ -1488,16 +1489,21 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
                 </div>
               </div>
 
-              {/* Tanque Cheio */}
-              <label className="flex items-center justify-between p-2 rounded-xl bg-slate-950 border border-white/10 cursor-pointer select-none">
-                <span className="text-xs font-semibold text-slate-200">Abastecimento com Tanque Cheio</span>
-                <input
-                  type="checkbox"
-                  checked={quickFuelFullTank}
-                  onChange={(e) => setQuickFuelFullTank(e.target.checked)}
-                  className="w-4 h-4 rounded border-amber-500/50 bg-slate-900 text-amber-500 accent-amber-500 cursor-pointer"
+              {/* Seletor Deslizante de Método de Cálculo: Reserva / Parcial vs Tanque Cheio */}
+              <div>
+                <label className="text-slate-400 block mb-1 text-xs">Método de Cálculo de Abastecimento</label>
+                <SlidingSegmentedControl
+                  options={[
+                    { id: "partial", label: "⛽ Reserva / Parcial" },
+                    { id: "full", label: "満 Tanque Cheio" }
+                  ]}
+                  value={quickFuelFullTank ? "full" : "partial"}
+                  onChange={(val) => setQuickFuelFullTank(val === "full")}
+                  fullWidth={true}
+                  size="sm"
+                  activeColor={quickFuelFullTank ? "bg-amber-600 text-white shadow-md shadow-amber-600/30" : "bg-[#0A84FF] text-white shadow-sm"}
                 />
-              </label>
+              </div>
 
               {/* Forma de Pagamento e Banco */}
               <div className="grid grid-cols-2 gap-2">

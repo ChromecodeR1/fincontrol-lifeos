@@ -239,6 +239,7 @@ import { TransactionModal, SmartDateInputBR } from "./components/TransactionModa
 import { ProfileModal } from "./components/ProfileModal";
 import KpiAuditModal from "./components/KpiAuditModal";
 import { AmbientBackgroundFX, AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
+import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
 import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
 import {
   calculateVehicleConsumption,
@@ -828,10 +829,8 @@ export default function CoindexApp() {
     }
   }, [cupertinoTheme]);
 
-  // SPRINT 45: Motor de Efeitos Especiais de Background "Cupertino Ambient FX"
+  // SPRINT 45 / SPRINT 49: Motor de Efeitos de Background fixo em Híbrido Copilot (comutável via "Reduzir Animações" nas Configurações)
   const [bgFxMode, setBgFxMode] = useState<AmbientFxMode>("hybrid");
-  const [ambientFxPopoverOpen, setAmbientFxPopoverOpen] = useState(false);
-  const ambientFxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -850,20 +849,6 @@ export default function CoindexApp() {
       console.error("Erro ao salvar coindex_bg_fx_mode", err);
     }
   }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ambientFxRef.current && !ambientFxRef.current.contains(e.target as Node)) {
-        setAmbientFxPopoverOpen(false);
-      }
-    };
-    if (ambientFxPopoverOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [ambientFxPopoverOpen]);
 
   const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -2061,10 +2046,24 @@ export default function CoindexApp() {
             setBioLogs(d.bioLogs);
             localStorage.setItem("lifeos_bio_v8", JSON.stringify(d.bioLogs));
           }
-          if (d.notes.length > 0) {
-            setNotes(d.notes);
-            localStorage.setItem("lifeos_notes_v8", JSON.stringify(d.notes));
+          // 3. BRAIN NOTES & DESEJOS DE COMPRA (Auto-Heal e Sincronização Cloud SSOT)
+          let localNotesForMerge: BrainNote[] = [];
+          try {
+            const rawLocalNotes = getUserItem("lifeos_notes_v8", targetUserId) || localStorage.getItem("lifeos_notes_v8");
+            if (rawLocalNotes) {
+              localNotesForMerge = JSON.parse(rawLocalNotes);
+            }
+          } catch (e) {
+            console.error("Erro ao ler notas locais:", e);
           }
+          const remoteNotes = d.notes || [];
+          const mergedNotes = mergeEntitiesSafe(localNotesForMerge, remoteNotes, currentTombstones);
+          setNotes(mergedNotes);
+
+          // Push para nuvem: Envia desejos e notas locais não cadastrados no Supabase
+          const remoteNoteIds = new Set(remoteNotes.map((n) => n.id));
+          const notesToHeal = mergedNotes.filter((n) => !remoteNoteIds.has(n.id));
+          notesToHeal.forEach((n) => void upsertNoteInDb(n));
           if (d.okrs.length > 0) {
             setOkrs(d.okrs);
             localStorage.setItem("lifeos_okrs_v8", JSON.stringify(d.okrs));
@@ -6913,105 +6912,25 @@ export default function CoindexApp() {
                   )}
                 </div>
 
-                {/* SELETOR SEGMENTED CONTROL APPLE (CLARO / ESCURO) */}
-                <div className="flex items-center p-1 rounded-xl bg-slate-900/80 border border-white/10 text-xs">
-                  <button
-                    type="button"
-                    onClick={(e) => toggleCupertinoTheme("light", e)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
-                      cupertinoTheme === "light"
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                    title="Tema Claro (Cupertino Light)"
-                  >
-                    <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    <span className="hidden sm:inline">Claro</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => toggleCupertinoTheme("dark", e)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
-                      cupertinoTheme === "dark"
-                        ? "bg-slate-800 text-white shadow-sm"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                    title="Tema Escuro (Cupertino Dark)"
-                  >
-                    <Moon className="w-3.5 h-3.5 text-sky-400" />
-                    <span className="hidden sm:inline">Escuro</span>
-                  </button>
-                </div>
-
-                {/* SELETOR DE EFEITO DE FUNDO / ATMOSFERA CUPERTINO AMBIENT FX (Sprint 45) */}
-                <div className="relative" ref={ambientFxRef}>
-                  <button
-                    type="button"
-                    onClick={() => setAmbientFxPopoverOpen((prev) => !prev)}
-                    aria-expanded={ambientFxPopoverOpen}
-                    aria-haspopup="true"
-                    className={`min-h-[44px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                      bgFxMode !== "none"
-                        ? "bg-[#0A84FF]/15 hover:bg-[#0A84FF]/25 border-[#0A84FF]/30 text-[#0A84FF] shadow-sm"
-                        : "bg-slate-900/80 hover:bg-slate-900 border-white/10 text-slate-400 hover:text-slate-200"
-                    }`}
-                    title="Atmosfera e Efeitos Especiais de Background"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-[#0A84FF]" />
-                    <span className="hidden sm:inline">Atmosfera</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white font-mono font-bold">
-                      {AMBIENT_FX_OPTIONS.find((opt) => opt.id === bgFxMode)?.icon || "✨"}
-                    </span>
-                  </button>
-
-                  {ambientFxPopoverOpen && (
-                    <div
-                      role="menu"
-                      className="absolute right-0 top-full mt-2 w-72 rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl p-2.5 z-50 animate-cupertino-in space-y-1 backdrop-blur-2xl"
-                    >
-                      <div className="px-2.5 py-2 border-b border-white/10 mb-1">
-                        <p className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-[#0A84FF]" /> Efeitos de Fundo Cupertino
-                        </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
-                          Alterne a refração atmosférica visível através do vidro dos cards.
-                        </p>
-                      </div>
-
-                      <div className="space-y-1">
-                        {AMBIENT_FX_OPTIONS.map((opt) => {
-                          const isSelected = bgFxMode === opt.id;
-                          return (
-                            <button
-                              key={opt.id}
-                              type="button"
-                              onClick={() => {
-                                handleSelectBgFxMode(opt.id);
-                                setAmbientFxPopoverOpen(false);
-                              }}
-                              className={`w-full text-left p-2 rounded-xl transition flex items-start gap-2.5 cursor-pointer ${
-                                isSelected
-                                  ? "bg-[#0A84FF]/20 border border-[#0A84FF]/40 text-white"
-                                  : "hover:bg-white/5 border border-transparent text-slate-300 hover:text-white"
-                              }`}
-                            >
-                              <span className="text-base leading-none shrink-0 mt-0.5">{opt.icon}</span>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between">
-                                  <span className={`text-xs font-bold ${isSelected ? "text-white" : "text-slate-200"}`}>
-                                    {opt.label}
-                                  </span>
-                                  {isSelected && <span className="w-2 h-2 rounded-full bg-[#0A84FF] shadow-[0_0_8px_#0A84FF]" />}
-                                </div>
-                                <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{opt.desc}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* SELETOR SEGMENTED CONTROL APPLE (CLARO / ESCURO) COM MOTION DESLIZANTE */}
+                <SlidingSegmentedControl
+                  options={[
+                    {
+                      id: "light",
+                      label: <span className="hidden sm:inline">Claro</span>,
+                      icon: <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    },
+                    {
+                      id: "dark",
+                      label: <span className="hidden sm:inline">Escuro</span>,
+                      icon: <Moon className="w-3.5 h-3.5 text-sky-400" />
+                    }
+                  ]}
+                  value={cupertinoTheme}
+                  onChange={(val) => toggleCupertinoTheme(val as "light" | "dark")}
+                  size="sm"
+                  activeColor={cupertinoTheme === "light" ? "bg-white text-slate-900 shadow-sm" : "bg-slate-800 text-white shadow-sm"}
+                />
 
                 {/* BOTÃO DE PRIVACIDADE SOMENTE COM O SÍMBOLO DO OLHO */}
                 <button
@@ -7055,30 +6974,21 @@ export default function CoindexApp() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/90 border border-white/[0.08] text-[11px]">
-                    <Filter className="w-3.5 h-3.5 text-[#0A84FF] ml-2 mr-1" />
-                    {(
-                      [
+                  <div className="flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-[#0A84FF]" />
+                    <SlidingSegmentedControl
+                      options={[
                         { id: "ALL", label: "Todos" },
                         { id: "FIXO", label: "Fixos" },
                         { id: "VARIAVEL", label: "Variáveis" },
                         { id: "CARTAO", label: "Cartão" },
                         { id: "PIX", label: "PIX" }
-                      ] as const
-                    ).map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setQuickFilter(f.id)}
-                        className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer ${
-                          quickFilter === f.id
-                            ? "bg-[#0A84FF] text-white shadow-sm"
-                            : "text-slate-400 hover:text-white hover:bg-white/5"
-                        }`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
+                      ]}
+                      value={quickFilter}
+                      onChange={(val) => setQuickFilter(val as QuickFilterType)}
+                      size="xs"
+                      activeColor="bg-[#0A84FF]"
+                    />
                   </div>
 
                   <button
@@ -7131,30 +7041,16 @@ export default function CoindexApp() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setAccountingRegime("competencia")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                          accountingRegime === "competencia"
-                            ? "bg-[#0A84FF] text-white shadow-sm"
-                            : "text-slate-400 hover:text-white hover:bg-white/5"
-                        }`}
-                      >
-                        Competência
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAccountingRegime("caixa")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                          accountingRegime === "caixa"
-                            ? "bg-[#0A84FF] text-white shadow-sm"
-                            : "text-slate-400 hover:text-white hover:bg-white/5"
-                        }`}
-                      >
-                        Caixa
-                      </button>
-                    </div>
+                    <SlidingSegmentedControl
+                      options={[
+                        { id: "competencia", label: "Competência" },
+                        { id: "caixa", label: "Caixa" }
+                      ]}
+                      value={accountingRegime}
+                      onChange={(val) => setAccountingRegime(val as "competencia" | "caixa")}
+                      size="xs"
+                      activeColor="bg-[#0A84FF]"
+                    />
                   </div>
                 </div>
 
@@ -7554,63 +7450,34 @@ export default function CoindexApp() {
                         {/* WIDGET 2: CENTRAL ANALÍTICA MULTI-VIEW (Patrimônio, Ritmo/Pace e Projeção 6M) */}
                         {(widget.id === "patrimony" || widget.id === "patrimony_chart") && (
                           <div className="space-y-4 flex-1 flex flex-col justify-between">
-                            {/* Segmented Control de 3 Visões Analíticas Estilo Copilot Money */}
+                            {/* Segmented Control de 3 Visões Analíticas Estilo Copilot Money com Sliding Pill */}
                             <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/5">
-                              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-xs">
-                                <button
-                                  type="button"
-                                  onClick={() => setPatrimonyCardView("patrimony")}
-                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                                    patrimonyCardView === "patrimony"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  <TrendingUp className="w-3.5 h-3.5" /> Patrimônio
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setPatrimonyCardView("pace")}
-                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                                    patrimonyCardView === "pace"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  <Activity className="w-3.5 h-3.5" /> Ritmo no Mês (Pace)
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setPatrimonyCardView("forecast")}
-                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                                    patrimonyCardView === "forecast"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  <CalendarRange className="w-3.5 h-3.5" /> Projeção 6M
-                                </button>
-                              </div>
+                              <SlidingSegmentedControl
+                                options={[
+                                  { id: "patrimony", label: "Patrimônio", icon: <TrendingUp className="w-3.5 h-3.5" /> },
+                                  { id: "pace", label: "Ritmo no Mês", icon: <Activity className="w-3.5 h-3.5" /> },
+                                  { id: "forecast", label: "Projeção 6M", icon: <CalendarRange className="w-3.5 h-3.5" /> }
+                                ]}
+                                value={patrimonyCardView}
+                                onChange={(val) => setPatrimonyCardView(val as "patrimony" | "pace" | "forecast")}
+                                size="xs"
+                                activeColor="bg-[#0A84FF]"
+                              />
 
                               {patrimonyCardView === "patrimony" && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                  {/* Seletor de Período */}
-                                  <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
-                                    {(["6M", "1A", "ALL"] as const).map((range) => (
-                                      <button
-                                        key={range}
-                                        type="button"
-                                        onClick={() => setPatrimonyTimeRange(range)}
-                                        className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
-                                          patrimonyTimeRange === range
-                                            ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
-                                            : "text-slate-400 hover:text-white hover:bg-white/5"
-                                        }`}
-                                      >
-                                        {range === "ALL" ? "Tudo" : range}
-                                      </button>
-                                    ))}
-                                  </div>
+                                  {/* Seletor de Período Deslizante */}
+                                  <SlidingSegmentedControl
+                                    options={[
+                                      { id: "6M", label: "6M" },
+                                      { id: "1A", label: "1A" },
+                                      { id: "ALL", label: "Tudo" }
+                                    ]}
+                                    value={patrimonyTimeRange}
+                                    onChange={(val) => setPatrimonyTimeRange(val as "6M" | "1A" | "ALL")}
+                                    size="xs"
+                                    activeColor="bg-[#0A84FF]"
+                                  />
 
                                   {/* Toggle Clicável de Aportes Brutos */}
                                   <button
@@ -7697,29 +7564,19 @@ export default function CoindexApp() {
                                     </button>
                                   </div>
 
-                                  {/* SPRINT 30: Toggle Rápido [Bruto | Líquido IR | Só Aportes] */}
-                                  <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs sm:ml-auto">
-                                    {(
-                                      [
-                                        { id: "bruto", label: "Bruto" },
-                                        { id: "liquido", label: "Líquido IR" },
-                                        { id: "aportes", label: "Só Aportes" }
-                                      ] as const
-                                    ).map((mode) => (
-                                      <button
-                                        key={mode.id}
-                                        type="button"
-                                        onClick={() => handleSetYieldMode(mode.id)}
-                                        className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all cursor-pointer ${
-                                          yieldMode === mode.id
-                                            ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
-                                            : "text-slate-400 hover:text-white hover:bg-white/5"
-                                        }`}
-                                      >
-                                        {mode.label}
-                                      </button>
-                                    ))}
-                                  </div>
+                                  {/* SPRINT 30 / SPRINT 49: Toggle Rápido [Bruto | Líquido IR | Só Aportes] Deslizante */}
+                                  <SlidingSegmentedControl
+                                    options={[
+                                      { id: "bruto", label: "Bruto" },
+                                      { id: "liquido", label: "Líquido IR" },
+                                      { id: "aportes", label: "Só Aportes" }
+                                    ]}
+                                    value={yieldMode}
+                                    onChange={(val) => handleSetYieldMode(val as "bruto" | "liquido" | "aportes")}
+                                    size="xs"
+                                    activeColor="bg-[#0A84FF]"
+                                    className="sm:ml-auto"
+                                  />
                                 </div>
 
                                 {showAdjustmentInput && (
@@ -8248,66 +8105,46 @@ export default function CoindexApp() {
                           <div className="space-y-3 text-xs">
                             {/* Abas Internas do Radar */}
                             <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/5">
-                              <div className="flex flex-wrap items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
-                                <button
-                                  type="button"
-                                  onClick={() => setRadarActiveTab("fixos")}
-                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1 ${
-                                    radarActiveTab === "fixos"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  <span>Fixos a Lançar</span>
-                                  {pendingRadarData.unlaunchedFixed.length > 0 && (
-                                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/30 text-amber-300 border border-amber-500/50">
-                                      {pendingRadarData.unlaunchedFixed.length}
-                                    </span>
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setRadarActiveTab("pendentes")}
-                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1 ${
-                                    radarActiveTab === "pendentes"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  <span>Contas Pendentes</span>
-                                  {pendingRadarData.pendingTxs.length > 0 && (
-                                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500/30 text-rose-300 border border-rose-500/50">
-                                      {pendingRadarData.pendingTxs.length}
-                                    </span>
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setRadarActiveTab("faturas")}
-                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1 ${
-                                    radarActiveTab === "faturas"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  <span>Vencimentos Cartões</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setRadarActiveTab("saude")}
-                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1 ${
-                                    radarActiveTab === "saude"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  <ShieldCheck className="w-3.5 h-3.5" />
-                                  <span>Saúde (Score)</span>
-                                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${financialHealthData.statusColor}`}>
-                                    {financialHealthData.overallScore}
-                                  </span>
-                                </button>
-                              </div>
+                              <SlidingSegmentedControl
+                                options={[
+                                  {
+                                    id: "fixos",
+                                    label: "Fixos a Lançar",
+                                    badge: pendingRadarData.unlaunchedFixed.length > 0 ? (
+                                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/30 text-amber-300 border border-amber-500/50">
+                                        {pendingRadarData.unlaunchedFixed.length}
+                                      </span>
+                                    ) : undefined
+                                  },
+                                  {
+                                    id: "pendentes",
+                                    label: "Contas Pendentes",
+                                    badge: pendingRadarData.pendingTxs.length > 0 ? (
+                                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500/30 text-rose-300 border border-rose-500/50">
+                                        {pendingRadarData.pendingTxs.length}
+                                      </span>
+                                    ) : undefined
+                                  },
+                                  {
+                                    id: "faturas",
+                                    label: "Vencimentos Cartões"
+                                  },
+                                  {
+                                    id: "saude",
+                                    label: "Saúde",
+                                    icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />,
+                                    badge: (
+                                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${financialHealthData.statusColor}`}>
+                                        {financialHealthData.overallScore}
+                                      </span>
+                                    )
+                                  }
+                                ]}
+                                value={radarActiveTab}
+                                onChange={(val) => setRadarActiveTab(val as "fixos" | "pendentes" | "faturas" | "saude")}
+                                size="xs"
+                                activeColor="bg-[#0A84FF]"
+                              />
 
                               {radarActiveTab === "fixos" && pendingRadarData.unlaunchedFixed.length > 0 && (
                                 <button
@@ -8673,32 +8510,16 @@ export default function CoindexApp() {
                           <div className="space-y-3 text-xs">
                             {/* Sub-abas do Cashflow */}
                             <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                              <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-xl border border-white/10 text-xs">
-                                <button
-                                  type="button"
-                                  onClick={() => setCashflowActiveTab("fluxo")}
-                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                                    cashflowActiveTab === "fluxo"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  <TrendingUp className="w-3.5 h-3.5" />
-                                  <span>Fluxo Mensal (6M)</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setCashflowActiveTab("recentes")}
-                                  className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                                    cashflowActiveTab === "recentes"
-                                      ? "bg-[#0A84FF] text-white shadow-sm"
-                                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                                  }`}
-                                >
-                                  <Clock className="w-3.5 h-3.5" />
-                                  <span>Atividades Recentes</span>
-                                </button>
-                              </div>
+                              <SlidingSegmentedControl
+                                options={[
+                                  { id: "fluxo", label: "Fluxo Mensal (6M)", icon: <TrendingUp className="w-3.5 h-3.5" /> },
+                                  { id: "recentes", label: "Atividades Recentes", icon: <Clock className="w-3.5 h-3.5" /> }
+                                ]}
+                                value={cashflowActiveTab}
+                                onChange={(val) => setCashflowActiveTab(val as "fluxo" | "recentes")}
+                                size="xs"
+                                activeColor="bg-[#0A84FF]"
+                              />
 
                               <button
                                 type="button"

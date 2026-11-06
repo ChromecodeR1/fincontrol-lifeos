@@ -42,6 +42,7 @@ import { InvestmentsTab } from "./components/InvestmentsTab";
 import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
 import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
 import { COINDEX_LOGO_VARIANTS, CoindexLogoVariant, CoindexIcon } from "./components/CoindexLogo";
+import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
 
 /**
  * Formata ritmo/pace esportivo exato em min:seg /km (AUD-15).
@@ -2048,30 +2049,19 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               </div>
             </div>
 
-            {/* Segmented Control de Status */}
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/90 border border-white/10 text-xs">
-              {(
-                [
-                  { id: "all", label: "Todos" },
-                  { id: "pending", label: "Pendentes" },
-                  { id: "partial", label: "Parciais" },
-                  { id: "paid", label: "Quitados" }
-                ] as const
-              ).map((st) => (
-                <button
-                  key={st.id}
-                  type="button"
-                  onClick={() => setReceivableStatusFilter(st.id)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
-                    receivableStatusFilter === st.id
-                      ? "bg-amber-500 text-slate-950 shadow-sm"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  {st.label}
-                </button>
-              ))}
-            </div>
+            {/* Segmented Control de Status com Motion Deslizante */}
+            <SlidingSegmentedControl
+              options={[
+                { id: "all", label: "Todos" },
+                { id: "pending", label: "Pendentes" },
+                { id: "partial", label: "Parciais" },
+                { id: "paid", label: "Quitados" }
+              ]}
+              value={receivableStatusFilter}
+              onChange={(val) => setReceivableStatusFilter(val as any)}
+              size="xs"
+              activeColor="bg-amber-500 text-slate-950 shadow-sm"
+            />
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
@@ -2671,35 +2661,34 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* Seletor de Séries */}
-                <select
+                {/* Seletor Deslizante de Séries */}
+                <SlidingSegmentedControl
+                  options={[
+                    { id: "all", label: "Peso + BF%" },
+                    { id: "weight", label: "Só Peso (kg)" },
+                    { id: "bf", label: "Só BF (%)" },
+                    { id: "target", label: "Rumo à Meta" }
+                  ]}
                   value={bioSeriesMode}
-                  onChange={(e) => setBioSeriesMode(e.target.value as any)}
-                  className="px-2.5 py-1 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-slate-200 outline-none focus:border-emerald-400 cursor-pointer"
-                >
-                  <option value="all">Peso + BF%</option>
-                  <option value="weight">Só Peso (kg)</option>
-                  <option value="bf">Só BF (%)</option>
-                  <option value="target">Rumo à Meta (78kg)</option>
-                </select>
+                  onChange={(val) => setBioSeriesMode(val as any)}
+                  size="xs"
+                  activeColor="bg-emerald-500 text-slate-950 shadow-sm"
+                />
 
-                {/* Seletor de Período Rápido */}
-                <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-900/90 border border-white/10 text-xs">
-                  {(["1M", "3M", "6M", "1A", "Tudo"] as const).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setBioPeriodFilter(p)}
-                      className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
-                        bioPeriodFilter === p
-                          ? "bg-emerald-500 text-slate-950 shadow-sm"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
+                {/* Seletor Deslizante de Período Rápido */}
+                <SlidingSegmentedControl
+                  options={[
+                    { id: "1M", label: "1M" },
+                    { id: "3M", label: "3M" },
+                    { id: "6M", label: "6M" },
+                    { id: "1A", label: "1A" },
+                    { id: "Tudo", label: "Tudo" }
+                  ]}
+                  value={bioPeriodFilter}
+                  onChange={(val) => setBioPeriodFilter(val as any)}
+                  size="xs"
+                  activeColor="bg-emerald-500 text-slate-950 shadow-sm"
+                />
 
                 {/* Botão de Engrenagem / Popover */}
                 <div className="relative">
@@ -2851,44 +2840,28 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           {isSyncingStrava && (
             <div className="absolute top-0 left-0 right-0 h-1 bg-[#FC4C02] cupertino-shimmer z-30" />
           )}
-          {/* Abas Superiores de Navegação Interna: Progresso vs Atividades */}
-          <div className="flex items-center justify-between border-b border-[var(--cupertino-border)] pb-3">
-            <div className="flex items-center gap-6">
-              <button
-                type="button"
-                onClick={() => setStravaInnerTab("progress")}
-                className={`relative pb-2 text-sm font-bold transition-colors cursor-pointer ${
-                  stravaInnerTab === "progress"
-                    ? "text-[var(--cupertino-text)] font-extrabold"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                Progresso
-                {stravaInnerTab === "progress" && (
-                  <span className="absolute bottom-[-13px] left-0 right-0 h-[3px] bg-[#FC4C02] rounded-full" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStravaInnerTab("activities")}
-                className={`relative pb-2 text-sm font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                  stravaInnerTab === "activities"
-                    ? "text-[var(--cupertino-text)] font-extrabold"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                Atividades
-                {stravaActivities && stravaActivities.length > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                    {stravaActivities.length}
-                  </span>
-                )}
-                {stravaInnerTab === "activities" && (
-                  <span className="absolute bottom-[-13px] left-0 right-0 h-[3px] bg-[#FC4C02] rounded-full" />
-                )}
-              </button>
-            </div>
+          {/* Abas Superiores de Navegação Interna: Progresso vs Atividades (Linha Laranja #FC4C02 Deslizante) */}
+          <div className="flex items-center justify-between border-b border-[var(--cupertino-border)] pb-2">
+            <SlidingSegmentedControl
+              options={[
+                { id: "progress", label: "Progresso" },
+                {
+                  id: "activities",
+                  label: "Atividades",
+                  badge: stravaActivities && stravaActivities.length > 0 ? (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                      {stravaActivities.length}
+                    </span>
+                  ) : undefined
+                }
+              ]}
+              value={stravaInnerTab}
+              onChange={(val) => setStravaInnerTab(val as "progress" | "activities")}
+              size="sm"
+              indicatorVariant="underline"
+              activeColor="bg-[#FC4C02] h-[3px]"
+              className="bg-transparent border-0 p-0 shadow-none"
+            />
 
             <div className="flex items-center gap-2">
               <button
@@ -3547,51 +3520,41 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               </div>
             </div>
 
-            {/* Pílulas de Filtro Rápido (Todos, Notas & Objetivos, Lista de Desejos) */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setMuralFilter("ALL")}
-                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                  muralFilter === "ALL"
-                    ? "bg-[#0A84FF] text-white shadow-sm ring-1 ring-white/20"
-                    : "bg-slate-900/90 text-slate-400 hover:text-white border border-white/5"
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" /> Todos
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 font-mono tabular-nums">{notes.length}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMuralFilter("NOTES")}
-                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-                  muralFilter === "NOTES"
-                    ? "bg-[#0A84FF] text-white shadow-sm ring-1 ring-white/20"
-                    : "bg-slate-900/90 text-slate-400 hover:text-white border border-white/5"
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" /> Notas & Objetivos
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 font-mono tabular-nums">
-                  {notes.filter((n) => n.itemType !== "wish" && (!n.price || n.price === 0)).length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMuralFilter("WISHES")}
-                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
-                  muralFilter === "WISHES"
-                    ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30 ring-1 ring-white/20"
-                    : "bg-slate-900/90 text-slate-400 hover:text-white border border-white/5"
-                }`}
-              >
-                <ShoppingBag className="w-3.5 h-3.5 text-amber-400" /> Lista de Desejos (R$)
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 font-mono tabular-nums">
-                  {notes.filter((n) => n.itemType === "wish" || (n.price != null && n.price > 0)).length}
-                </span>
-              </button>
-            </div>
+            {/* Pílulas de Filtro Rápido Deslizante (Todos, Notas & Objetivos, Lista de Desejos) */}
+            <SlidingSegmentedControl
+              options={[
+                {
+                  id: "ALL",
+                  label: "Todos",
+                  icon: <Layers className="w-3.5 h-3.5" />,
+                  badge: <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 font-mono tabular-nums">{notes.length}</span>
+                },
+                {
+                  id: "NOTES",
+                  label: "Notas & Objetivos",
+                  icon: <FileText className="w-3.5 h-3.5" />,
+                  badge: (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 font-mono tabular-nums">
+                      {notes.filter((n) => n.itemType !== "wish" && (!n.price || n.price === 0)).length}
+                    </span>
+                  )
+                },
+                {
+                  id: "WISHES",
+                  label: "Lista de Desejos (R$)",
+                  icon: <ShoppingBag className="w-3.5 h-3.5 text-amber-400" />,
+                  badge: (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 font-mono tabular-nums">
+                      {notes.filter((n) => n.itemType === "wish" || (n.price != null && n.price > 0)).length}
+                    </span>
+                  )
+                }
+              ]}
+              value={muralFilter}
+              onChange={(val) => setMuralFilter(val as any)}
+              size="sm"
+              activeColor={muralFilter === "WISHES" ? "bg-amber-600 text-white" : "bg-[#0A84FF] text-white"}
+            />
 
             {/* Pílulas de Tags Temáticas */}
             <div className="flex flex-wrap gap-1.5">
@@ -3962,55 +3925,55 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
         </div>
 
-        {/* PAINEL DE EFEITOS DE FUNDO & ATMOSFERA CUPERTINO AMBIENT FX (SPRINT 45) */}
+        {/* SPRINT 49: CONTROLE UNIFICADO "REDUZIR ANIMAÇÕES: [SIM | NÃO]" */}
         <div className="glass-card p-6 rounded-3xl border border-[var(--cupertino-border)] space-y-4 shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
               <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#0A84FF]" /> Atmosfera & Efeitos de Background (Cupertino Ambient FX)
+                <Sparkles className="w-4 h-4 text-[#0A84FF]" /> Reduzir Animações (Atmosfera & Efeitos de Background)
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Selecione o motor visual renderizado no fundo da aplicação. O efeito se propaga de forma translúcida sob o vidro dos cards.
+              <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
+                Alterne entre a experiência imersiva com efeitos atmosféricos Híbrido Copilot (Aurora + Micro-Grid + Spotlight) e o modo de alto rendimento sólido puro sem animações decorativas.
               </p>
             </div>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30">
-              Modo Ativo: {AMBIENT_FX_OPTIONS.find((o) => o.id === (bgFxMode || "hybrid"))?.label}
-            </span>
+
+            <div className="flex flex-col sm:items-end gap-1.5">
+              <span className="text-[11px] font-semibold text-slate-400">
+                Reduzir Animações:
+              </span>
+              <SlidingSegmentedControl
+                options={[
+                  { id: "sim", label: "Sim" },
+                  { id: "nao", label: "Não" }
+                ]}
+                value={bgFxMode !== "none" ? "sim" : "nao"}
+                onChange={(val) => {
+                  if (val === "sim") {
+                    handleSelectBgFxMode?.("hybrid");
+                  } else {
+                    handleSelectBgFxMode?.("none");
+                  }
+                }}
+                size="sm"
+                activeColor="bg-[#0A84FF] text-white"
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {AMBIENT_FX_OPTIONS.map((opt) => {
-              const isSelected = (bgFxMode || "hybrid") === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => handleSelectBgFxMode?.(opt.id)}
-                  className={`p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 ${
-                    isSelected
-                      ? "bg-[#0A84FF]/15 border-[#0A84FF]/50 shadow-md ring-1 ring-[#0A84FF]/40 -translate-y-0.5"
-                      : "bg-white/[0.03] hover:bg-white/[0.06] border-white/10 hover:border-white/20"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl">{opt.icon}</span>
-                    {isSelected ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0A84FF] text-white">
-                        ATIVO
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-semibold text-slate-500">Selecionar</span>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className={`text-xs font-bold ${isSelected ? "text-white" : "text-slate-200"}`}>
-                      {opt.label}
-                    </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-snug">{opt.desc}</p>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="p-3 rounded-2xl bg-slate-950/60 border border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+            <div className="flex items-center gap-2">
+              <span className="text-base">
+                {bgFxMode !== "none" ? "✨" : "⬛"}
+              </span>
+              <span>
+                {bgFxMode !== "none"
+                  ? "Modo Ativo: Híbrido Copilot (Fusão Aurora Cupertino + Micro-Grid + Spotlight sutil ativo a 144Hz)"
+                  : "Modo Ativo: Sólido Puro (Efeitos decorativos e motions atmosféricos desativados para máxima performance)"}
+              </span>
+            </div>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${bgFxMode !== "none" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-slate-800 text-slate-300 border border-white/10"}`}>
+              {bgFxMode !== "none" ? "144Hz ATIVO" : "ECONOMIA ATIVA"}
+            </span>
           </div>
         </div>
 

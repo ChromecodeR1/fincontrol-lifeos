@@ -24,6 +24,7 @@ import {
   getCardInvoiceCompetence,
   evaluateMathExpression
 } from "@/app/lifeos-data";
+import { SlidingSegmentedControl } from "./SlidingSegmentedControl";
 
 export interface TransactionFormState {
   date: string;
@@ -708,29 +709,35 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           )}
 
-          {/* Seletor de Modo: Padrão vs Posto Express vs Transferência */}
-          <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-950 border border-white/10">
-            <button
-              type="button"
-              onClick={() => {
+          {/* Seletor de Modo Deslizante: Padrão vs Posto Express vs Transferência */}
+          <SlidingSegmentedControl
+            options={[
+              {
+                id: "standard",
+                label: "Padrão",
+                icon: <Wallet className="w-3.5 h-3.5 shrink-0" />
+              },
+              {
+                id: "fuel",
+                label: "Posto Express ⛽",
+                icon: <Fuel className="w-3.5 h-3.5 shrink-0" />
+              },
+              {
+                id: "transfer",
+                label: "Transferência 🔄",
+                icon: <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" />
+              }
+            ]}
+            value={formState.isTransfer ? "transfer" : isPostoExpress ? "fuel" : "standard"}
+            onChange={(val) => {
+              if (val === "standard") {
                 setIsPostoExpress(false);
                 setFormState((prev) => ({
                   ...prev,
                   isTransfer: false,
                   category: prev.category === "Transferência entre Contas" ? "Alimentação" : prev.category
                 }));
-              }}
-              className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center cursor-pointer ${
-                !isPostoExpress && !formState.isTransfer
-                  ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              <Wallet className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Padrão</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
+              } else if (val === "fuel") {
                 setIsPostoExpress(true);
                 setFormState((prev) => ({
                   ...prev,
@@ -741,18 +748,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       ? "Abastecimento - Gasolina"
                       : prev.description
                 }));
-              }}
-              className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center cursor-pointer ${
-                isPostoExpress && !formState.isTransfer
-                  ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              <Fuel className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Posto Express ⛽</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
+              } else if (val === "transfer") {
                 setIsPostoExpress(false);
                 const defaultSrc = formState.sourceBank || formState.bankAccount || banks[0]?.name || "Nubank";
                 const defaultDst = formState.destinationBank || (banks.find((b) => b.name !== defaultSrc)?.name || banks[1]?.name || banks[0]?.name || "Inter");
@@ -767,16 +763,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   destinationBank: defaultDst,
                   description: prev.description && !prev.description.includes("Transferência") ? prev.description : `Transferência: ${defaultSrc} ➔ ${defaultDst}`
                 }));
-              }}
-              className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-center cursor-pointer ${
-                formState.isTransfer
-                  ? "bg-sky-600 text-white shadow-lg shadow-sky-600/30"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Transferência 🔄</span>
-            </button>
-          </div>
+              }
+            }}
+            fullWidth={true}
+            size="md"
+            activeColor={
+              formState.isTransfer
+                ? "bg-sky-600 text-white shadow-lg shadow-sky-600/30"
+                : isPostoExpress
+                ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30"
+                : "bg-[#0A84FF] text-white shadow-sm"
+            }
+          />
         </div>
 
         {/* Formulário Interno com Rolagem Própria */}

@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.36.0`  
-> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 48 — Criação do Módulo de Investimentos & Mercado Ao Vivo: The Wealth Core 144Hz, Multi-Charts Simultâneos e Simulador de Inflação do Papel)  
+> **Versão da Aplicação:** `0.37.0`  
+> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 49 — Arquitetura 100% Cloud-First no Supabase, Persistência Completa de Desejos/Cartões/Bancos, Motion Deslizante Horizontal "Sliding Pill" em Todos os Controles Unidos e Efeito Híbrido Copilot Fixo)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -867,6 +867,38 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - **Loader 2 (Painel Strava Progress):** Barra superior indeterminada em `#FC4C02` + overlay `.cupertino-shimmer` durante `isSyncingStrava`.
       - **Loader 3 (Taxa CDI BCB):** Micro-dot pulsante (`animate-ping`) verde na badge `115% CDI • BCB Ao Vivo`.
       - **Loader 4 (Importação CSV/OFX e Modais):** Barra de progresso deslizante durante o processamento de arquivo e transição com check icon na confirmação da importação.
+
+  - **Sprint 49 (Novembro de 2026 — Arquitetura 100% Cloud-First no Supabase, Motion Deslizante Horizontal "Sliding Pill" e Efeito Híbrido Fixo):**
+    - **Passo 1 — Arquitetura 100% Cloud-First (Supabase SSOT) para Desejos de Compra, Cartões e Bancos:**
+      - Eliminação estrita de dependência de dados armazenados exclusivamente no navegador. O Supabase PostgreSQL agora atua como Single Source of Truth (SSOT).
+      - Resolução definitiva do problema de perda de metadados em Desejos de Compra (`BrainNote` com `itemType: "wish"`): implementação do mecanismo de envelope JSON determinístico (`<!--__COINDEX_WISH_META__:{...}-->`) nas funções `encodeWishMetadata` e `decodeWishMetadata` em `app/lib/services/coindex-supabase.ts`.
+      - Garantia de preservação total de campos como `itemType`, `price`, `completed`, `targetMonth`, `priority`, `storeUrl` e `completedAt` mesmo caso o banco de dados opere com schema básico sob fallback.
+      - Migração SQL oficial gerada em `supabase/migrations/0002_coindex_full_cloud_columns.sql` contendo todas as colunas nativas e políticas RLS multi-tenant para `brain_notes`, `credit_cards`, `banks`, `transactions` e `user_settings`.
+      - Snapshot master na nuvem armazenado em `user_settings.cloud_backup_state` para restauração imediata entre dispositivos.
+    - **Passo 2 — Remoção do Botão "Atmosfera" da Topbar & Efeito Híbrido Copilot Fixo:**
+      - Eliminação completa do botão "✨ Atmosfera" da Topbar (`app/page.tsx`), simplificando a barra superior do dashboard.
+      - Efeito de fundo `AmbientBackgroundFX` fixado por padrão no modo `"hybrid"` (Aurora Cupertino + Micro-Grid + Spotlight sutil).
+      - Adição do controle unificado `"Reduzir Animações: [Sim | Não]"` na aba Configurações (`app/SecondaryTabs.tsx`):
+        - `Sim`: ativa todos os efeitos atmosféricos Híbrido Copilot e motions a 144Hz.
+        - `Não`: desativa efeitos para fundo sólido puro, proporcionando máxima economia de bateria e alta performance.
+    - **Passo 3 — Motor Universal de Motion Deslizante Horizontal (`SlidingSegmentedControl`):**
+      - Criação do componente `app/components/SlidingSegmentedControl.tsx` baseado em medições dinâmicas de `offsetLeft`, `offsetWidth` e animação física fluida `280ms cubic-bezier(0.22, 1, 0.36, 1)` com aceleração GPU por compositor (`translate3d`).
+      - Suporte aos modos `"pill"` (pílula deslizante translúcida) e `"underline"` (linha de destaque inferior deslizante).
+      - Implantação completa em todas as barras de opções unidas do sistema:
+        1. **Tema Cupertino na Topbar:** `[☀️ Claro | 🌙 Escuro]`.
+        2. **Regime Contábil:** `[Competência | Caixa]`.
+        3. **Painel Dashboard (Quick Filters):** `[Todos | Fixos | Variáveis | Cartão | PIX]`.
+        4. **Central Analítica de Patrimônio:** `[Patrimônio | Ritmo no Mês | Projeção 6M]`, `[6M | 1A | Tudo]` e `[Bruto | Líquido IR | Só Aportes]`.
+        5. **Radar Financeiro & Fluxo:** `[Fixos a Lançar | Contas Pendentes | Vencimentos Cartões | Saúde]` e `[Fluxo Mensal (6M) | Atividades Recentes]`.
+        6. **Tabela de Lançamentos:** Filtro de situação `[Todos | Pagos | Na Fatura | Pendentes]`.
+        7. **Devedores (Valores a Receber):** Filtro de situação `[Todos | Pendentes | Parciais | Quitados]`.
+        8. **Bioimpedância Física:** Seletor de séries `[Peso + BF% | Só Peso (kg) | Só BF (%) | Rumo à Meta]` e períodos `[1M | 3M | 6M | 1A | Tudo]`.
+        9. **Strava Progress:** Abas superiores `[Progresso | Atividades]` com a linha laranja `#FC4C02` deslizando suavemente de um lado ao outro.
+        10. **Segundo Cérebro (Mural Central):** Filtro `[Todos | Notas & Objetivos | Lista de Desejos (R$)]`.
+        11. **Configurações:** Seletor `[Sim | Não]` de `"Reduzir Animações"`.
+        12. **Modal de Abastecimento (Veículos):** Seletor de método de cálculo `[⛽ Reserva / Parcial | 満 Tanque Cheio]`.
+        13. **Investimentos:** Sub-visão `[💎 Carteira de Investimentos & Mercado | 💵 Dinheiro em Papel (Inflação IPCA)]`.
+        14. **Modal de Novo Lançamento (`TransactionModal`):** Abas no topo `[Padrão | Posto Express ⛽ | Transferência 🔄]`.
 
   - **Sprint 48 (Novembro de 2026 — Módulo de Investimentos & Mercado Ao Vivo: The Wealth Core 144Hz, Multi-Charts Simultâneos e Simulador de Inflação do Papel):**
     - **Passo 1 — Módulo Investimentos na Sidebar & Schema de Ativos:**

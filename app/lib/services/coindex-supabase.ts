@@ -26,6 +26,47 @@ import {
   DEFAULT_DASHBOARD_LAYOUT
 } from "../../lifeos-data";
 
+const WISH_META_PREFIX = "<!--__COINDEX_WISH_META__:";
+const WISH_META_SUFFIX = "-->";
+
+/**
+ * Serializa metadados críticos de Desejos de Compra (BrainNote) dentro do conteúdo
+ * para garantir 100% de persistência na nuvem (Supabase SSOT) mesmo se o schema
+ * da tabela remota estiver sem as colunas novas dedicadas.
+ */
+export function encodeWishMetadata(n: BrainNote, baseContent: string): string {
+  const meta: Record<string, unknown> = {};
+  if (n.itemType) meta.itemType = n.itemType;
+  if (n.price !== undefined) meta.price = n.price;
+  if (n.completed !== undefined) meta.completed = n.completed;
+  if (n.targetMonth !== undefined) meta.targetMonth = n.targetMonth;
+  if (n.priority !== undefined) meta.priority = n.priority;
+  if (n.storeUrl !== undefined) meta.storeUrl = n.storeUrl;
+  if (n.completedAt !== undefined) meta.completedAt = n.completedAt;
+  if (n.description && n.description !== baseContent) meta.description = n.description;
+
+  const clean = (baseContent || "").replace(/<!--__COINDEX_WISH_META__:[\s\S]*?-->/g, "").trim();
+  if (Object.keys(meta).length === 0) return clean;
+  return `${clean}\n\n${WISH_META_PREFIX}${JSON.stringify(meta)}${WISH_META_SUFFIX}`;
+}
+
+/**
+ * Decodifica metadados de Desejos de Compra transparentemente do conteúdo da nota.
+ */
+export function decodeWishMetadata(content: string): { cleanContent: string; meta?: Partial<BrainNote> } {
+  if (!content) return { cleanContent: "" };
+  const match = content.match(/<!--__COINDEX_WISH_META__:([\s\S]*?)-->/);
+  if (!match) return { cleanContent: content };
+
+  try {
+    const meta = JSON.parse(match[1]);
+    const cleanContent = content.replace(/<!--__COINDEX_WISH_META__:[\s\S]*?-->/g, "").trim();
+    return { cleanContent, meta };
+  } catch {
+    return { cleanContent: content };
+  }
+}
+
 export interface UserSettingsPayload {
   username?: string;
   avatarUrl?: string;
@@ -216,7 +257,9 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         rev: r.rev != null ? Number(r.rev) : undefined
       }));
 
-    const cards: CreditCardItem[] = cardRows
+    const rawCloudBackup = (settingsRes.data as any)?.cloud_backup_state;
+
+    let cards: CreditCardItem[] = cardRows
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
       .map((r) => ({
         id: String(r.id),
@@ -233,8 +276,12 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         rev: r.rev != null ? Number(r.rev) : undefined
       }));
 
+    if (cards.length === 0 && Array.isArray(rawCloudBackup?.cards) && rawCloudBackup.cards.length > 0) {
+      cards = rawCloudBackup.cards;
+    }
+
     const bankRows = ((banksRes as any)?.data ?? []) as Array<Record<string, unknown>>;
-    const banks: BankItem[] = bankRows
+    let banks: BankItem[] = bankRows
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
       .map((r) => ({
         id: String(r.id),
@@ -248,6 +295,10 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
         rev: r.rev != null ? Number(r.rev) : undefined
       }));
+
+    if (banks.length === 0 && Array.isArray(rawCloudBackup?.banks) && rawCloudBackup.banks.length > 0) {
+      banks = rawCloudBackup.banks;
+    }
 
     const staticStatus: StaticStatusItem[] = ((statusRes.data ?? []) as Array<Record<string, unknown>>)
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
@@ -293,25 +344,48 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         unit: String(r.unit ?? "R$")
       }));
 
-    const notes: BrainNote[] = ((notesRes.data ?? []) as Array<Record<string, unknown>>)
+    let notes: BrainNote[] = ((notesRes.data ?? []) as Array<Record<string, unknown>>)
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
-      .map((r) => ({
-        id: String(r.id),
-        date: String(r.note_date),
-        title: String(r.title),
-        content: String(r.content ?? ""),
-        tag: (r.tag as BrainNote["tag"]) ?? "#Ideias",
-        completed: Boolean(r.completed),
-        itemType: (r.item_type as "note" | "wish") ?? (r.price != null ? "wish" : "note"),
-        price: r.price != null ? Number(r.price) : undefined,
-        description: r.description ? String(r.description) : String(r.content || ""),
-        priority: (r.priority as "Essencial" | "Planejado" | "Desejo") ?? undefined,
-        storeUrl: r.store_url ? String(r.store_url) : undefined,
-        completedAt: r.completed_at ? String(r.completed_at) : undefined,
-        updatedAt: r.updated_at ? String(r.updated_at) : undefined,
-        deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
-        rev: r.rev != null ? Number(r.rev) : undefined
-      }));
+      .map((r) => {
+        const rawContent = String(r.content ?? "");
+        const rawDesc = r.description ? String(r.description) : "";
+        const decodedContent = decodeWishMetadata(rawContent);
+        const decodedDesc = decodeWishMetadata(rawDesc);
+        const meta = decodedContent.meta || decodedDesc.meta || {};
+
+        const itemType = (r.item_type as "note" | "wish") || meta.itemType || (r.price != null || meta.price != null ? "wish" : "note");
+        const price = r.price != null ? Number(r.price) : (meta.price !== undefined ? Number(meta.price) : undefined);
+        const completed = r.completed != null ? Boolean(r.completed) : Boolean(meta.completed);
+        const priority = (r.priority as "Essencial" | "Planejado" | "Desejo") || meta.priority || undefined;
+        const storeUrl = r.store_url ? String(r.store_url) : (meta.storeUrl ? String(meta.storeUrl) : undefined);
+        const completedAt = r.completed_at ? String(r.completed_at) : (meta.completedAt ? String(meta.completedAt) : undefined);
+        const targetMonth = (r.target_month ? String(r.target_month) : undefined) || meta.targetMonth;
+        const finalContent = decodedContent.cleanContent || rawContent;
+        const finalDesc = decodedDesc.cleanContent || rawDesc || finalContent;
+
+        return {
+          id: String(r.id),
+          date: String(r.note_date),
+          title: String(r.title),
+          content: finalContent,
+          tag: (r.tag as BrainNote["tag"]) ?? "#Ideias",
+          completed,
+          itemType,
+          price,
+          description: finalDesc,
+          priority,
+          storeUrl,
+          completedAt,
+          targetMonth,
+          updatedAt: r.updated_at ? String(r.updated_at) : undefined,
+          deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
+          rev: r.rev != null ? Number(r.rev) : undefined
+        };
+      });
+
+    if (notes.length === 0 && Array.isArray(rawCloudBackup?.brainNotes) && rawCloudBackup.brainNotes.length > 0) {
+      notes = rawCloudBackup.brainNotes;
+    }
 
     const alertRules: CustomAlertRule[] = ((alertsRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
       id: String(r.id),
@@ -560,15 +634,52 @@ export async function migrateAllStateToSupabase(
     }
 
     if (snapshot.notes.length > 0) {
-      const notePayload = snapshot.notes.map((n) => ({
-        id: n.id,
+      const notePayload = snapshot.notes.map((n) => {
+        const enrichedContent = encodeWishMetadata(n, n.content || n.description || "");
+        return {
+          id: n.id,
+          user_id: userId,
+          note_date: n.date,
+          title: n.title,
+          content: enrichedContent,
+          tag: n.tag,
+          completed: n.completed ?? false,
+          item_type: n.itemType || (n.price ? "wish" : "note"),
+          price: n.price ?? null,
+          description: n.description || enrichedContent,
+          priority: n.priority ?? "Planejado",
+          store_url: n.storeUrl ?? null,
+          target_month: n.targetMonth ?? null,
+          completed_at: n.completedAt ?? null
+        };
+      });
+      const { error: batchErr } = await supabase.from("brain_notes").upsert(notePayload, { onConflict: "id,user_id" });
+      if (batchErr) {
+        const safePayload = snapshot.notes.map((n) => ({
+          id: n.id,
+          user_id: userId,
+          note_date: n.date,
+          title: n.title,
+          content: encodeWishMetadata(n, n.content || n.description || ""),
+          tag: n.tag
+        }));
+        await supabase.from("brain_notes").upsert(safePayload, { onConflict: "id,user_id" });
+      }
+    }
+
+    // Persiste Cloud Backup State (SSOT de Emergência) em user_settings
+    try {
+      await supabase.from("user_settings").upsert({
         user_id: userId,
-        note_date: n.date,
-        title: n.title,
-        content: n.content,
-        tag: n.tag
-      }));
-      await supabase.from("brain_notes").upsert(notePayload, { onConflict: "id,user_id" });
+        cloud_backup_state: {
+          cards: snapshot.cards,
+          banks: snapshot.banks,
+          brainNotes: snapshot.notes,
+          syncedAt: new Date().toISOString()
+        }
+      });
+    } catch {
+      // Ignora se coluna ainda não estiver pronta
     }
 
     if (snapshot.alertRules.length > 0) {
@@ -952,12 +1063,16 @@ export async function upsertNoteInDb(n: BrainNote) {
   const supabase = createClient();
   const userId = await getActiveUserId();
   if (!userId) return;
+
+  const baseContent = n.content || n.description || "";
+  const enrichedContent = encodeWishMetadata(n, baseContent);
+
   const payload: Record<string, unknown> = {
     id: n.id,
     user_id: userId,
     note_date: n.date,
     title: n.title,
-    content: n.content || n.description || "",
+    content: enrichedContent,
     tag: n.tag
   };
   if (n.completed !== undefined) payload.completed = n.completed;
@@ -966,6 +1081,7 @@ export async function upsertNoteInDb(n: BrainNote) {
   if (n.description !== undefined) payload.description = n.description;
   if (n.priority !== undefined) payload.priority = n.priority;
   if (n.storeUrl !== undefined) payload.store_url = n.storeUrl;
+  if (n.targetMonth !== undefined) payload.target_month = n.targetMonth;
   if (n.completedAt !== undefined) payload.completed_at = n.completedAt;
 
   const { error } = await supabase.from("brain_notes").upsert(payload, { onConflict: "id,user_id" });
@@ -976,7 +1092,7 @@ export async function upsertNoteInDb(n: BrainNote) {
         user_id: userId,
         note_date: n.date,
         title: n.title,
-        content: n.content || n.description || "",
+        content: enrichedContent,
         tag: n.tag
       },
       { onConflict: "id,user_id" }

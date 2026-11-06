@@ -42,6 +42,7 @@ import { formatBRL } from "../lib/domain/finance";
 import { todayBR, formatDateBR, toSortableISO, compareDatesBR } from "../lib/domain/date-br";
 import { calculatePortfolioCdiYield } from "../lib/domain/investment-yield";
 import { AnimatedNumber144, AnimatedBRL, AnimatedMetric } from "./AnimatedNumber144";
+import { SlidingSegmentedControl } from "./SlidingSegmentedControl";
 import { MarketPulseResponse, MarketTickerItem } from "../api/market-pulse/route";
 
 export interface InvestmentsTabProps {
@@ -481,31 +482,21 @@ export function InvestmentsTab({
       {/* TOPO: PÍLULA SELETORA DE SUB-VISÕES & BOTÕES DE AÇÃO RÁPIDA           */}
       {/* ==================================================================== */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-white/[0.08]">
-        {/* Pílula Alternadora Estilo Apple */}
-        <div className="inline-flex p-1 rounded-2xl bg-slate-900/80 border border-white/10 shadow-inner">
-          <button
-            type="button"
-            onClick={() => setSubView("portfolio")}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-              subView === "portfolio"
-                ? "bg-[#0A84FF] text-white shadow-md shadow-[#0A84FF]/25 font-bold"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <span>💎 Carteira de Investimentos & Mercado</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSubView("paper")}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-              subView === "paper"
-                ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25 font-bold"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <span>💵 Dinheiro em Papel (Inflação IPCA)</span>
-          </button>
-        </div>
+        {/* Pílula Alternadora Estilo Apple com Motion Deslizante */}
+        <SlidingSegmentedControl
+          options={[
+            { id: "portfolio", label: "💎 Carteira de Investimentos & Mercado" },
+            { id: "paper", label: "💵 Dinheiro em Papel (Inflação IPCA)" }
+          ]}
+          value={subView}
+          onChange={(val) => setSubView(val as "portfolio" | "paper")}
+          size="md"
+          activeColor={
+            subView === "portfolio"
+              ? "bg-[#0A84FF] text-white shadow-md shadow-[#0A84FF]/25 font-bold"
+              : "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25 font-bold"
+          }
+        />
 
         {/* Ações: Atualizar Cotações + Novos Lançamentos */}
         <div className="flex items-center gap-2.5">

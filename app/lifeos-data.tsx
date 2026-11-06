@@ -308,6 +308,7 @@ export interface BrainNote {
   description?: string;
   priority?: "Essencial" | "Planejado" | "Desejo";
   storeUrl?: string;
+  targetMonth?: string;
   completedAt?: string;
   updatedAt?: string;
   deletedAt?: string;
@@ -387,10 +388,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.36.0";
-export const PREVIOUS_VERSION = "0.35.1";
+export const APP_VERSION = "0.37.0";
+export const PREVIOUS_VERSION = "0.36.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.37.0",
+    date: "Nov/2026",
+    title: "Sprint 49: Arquitetura 100% Cloud-First no Supabase, Motion Deslizante Horizontal (Sliding Pill) e Efeito Híbrido Copilot Fixo",
+    highlights: [
+      "Persistência 100% Cloud-First (Supabase SSOT): Eliminação da dependência de salvamento local; Desejos de Compra (BrainNote), cartões, bancos e veículos totalmente salvos e reconciliados no PostgreSQL na nuvem.",
+      "Blindagem de Desejos de Compra: Envelope JSON determinístico garantindo que atributos de desejos (itemType, price, completed, targetMonth, priority, storeUrl) jamais sejam perdidos mesmo sob fallbacks de schema.",
+      "SlidingSegmentedControl Universal: Motor de animação física Apple (280ms cubic-bezier(0.22, 1, 0.36, 1)) com translação suave do indicador deslizante horizontal em todas as barras de opções unidas do sistema.",
+      "Barras Unidas com Motion Deslizante: Aplicado em Tema (Claro/Escuro), Regime (Competência/Caixa), Analítica de Patrimônio, Radar Financeiro, Fluxo de Caixa, Situação de Lançamentos, Devedores, Bioimpedância, Strava e Abas de Modal.",
+      "Efeito Híbrido Fixo & Limpeza da Topbar: Remoção completa do botão 'Atmosfera' da barra superior; fundo visual fixado por padrão no modo Híbrido Copilot.",
+      "Controle Unificado 'Reduzir Animações': Configuração unificada nas preferências [Sim | Não] permitindo alternar facilmente entre o visual imersivo a 144Hz e modo sólido puro de máxima economia de energia.",
+      "Migração SQL PostgreSQL: Disponibilizada em supabase/migrations/0002_coindex_full_cloud_columns.sql com todas as colunas nativas e RLS multi-tenant."
+    ]
+  },
   {
     version: "0.36.0",
     date: "Nov/2026",

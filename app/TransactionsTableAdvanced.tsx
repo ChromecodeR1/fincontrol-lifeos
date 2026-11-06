@@ -41,6 +41,7 @@ import {
   BankIngestResult,
   ParsedBankTransaction
 } from "./lib/domain/bank-ingest";
+import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
 
 export type TxSortKey = "date" | "description" | "category" | "costType" | "paymentMethod" | "km" | "status" | "amount";
 export type SortDirection = "asc" | "desc";
@@ -644,26 +645,21 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-          {/* Filtro Rápido de Situação */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950 border border-white/10 text-[11px]">
-            <Filter className="w-3.5 h-3.5 text-indigo-400 ml-1.5 mr-1" />
-            {[
-              { id: "ALL", label: "Todos" },
-              { id: "PAGO", label: "Pagos" },
-              { id: "NA_FATURA", label: "Na Fatura" },
-              { id: "PENDENTE", label: "Pendentes" }
-            ].map((st) => (
-              <button
-                key={st.id}
-                type="button"
-                onClick={() => setTxStatusFilter(st.id as "ALL" | "PAGO" | "PENDENTE" | "NA_FATURA")}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition text-xs cursor-pointer ${
-                  txStatusFilter === st.id ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
-                }`}
-              >
-                {st.label}
-              </button>
-            ))}
+          {/* Filtro Rápido de Situação Deslizante */}
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-indigo-400" />
+            <SlidingSegmentedControl
+              options={[
+                { id: "ALL", label: "Todos" },
+                { id: "PAGO", label: "Pagos" },
+                { id: "NA_FATURA", label: "Na Fatura" },
+                { id: "PENDENTE", label: "Pendentes" }
+              ]}
+              value={txStatusFilter}
+              onChange={(val) => setTxStatusFilter(val as "ALL" | "PAGO" | "PENDENTE" | "NA_FATURA")}
+              size="xs"
+              activeColor="bg-[#0A84FF]"
+            />
           </div>
 
           <div className="relative flex-1 sm:w-60">
