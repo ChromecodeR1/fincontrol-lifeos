@@ -38,6 +38,7 @@ import { simulatePurchaseImpact } from "./lib/domain/purchase-simulator";
 import { parseDateParts } from "./lib/domain/date-br";
 import { BanksTab } from "./components/BanksTab";
 import { VehiclesTab } from "./components/VehiclesTab";
+import { InvestmentsTab } from "./components/InvestmentsTab";
 import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
 import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
 import { COINDEX_LOGO_VARIANTS, CoindexLogoVariant, CoindexIcon } from "./components/CoindexLogo";
@@ -156,6 +157,7 @@ export interface SecondaryTabsProps {
   handleExportCSV: () => void;
   handleOpenNewTxModal: (defaultCategory?: string) => void;
   onAddTransaction?: (tx: Transaction) => Promise<void> | void;
+  onSaveInvestmentTx?: (tx: Partial<Transaction>, isEdit?: boolean) => void;
   onBatchImportTransactions?: (txs: Transaction[]) => void;
   dailyQuotaInfo?: { dailyBudget: number; remainingDays: number; remainingFree: number };
   cdiAnnualRate?: number;
@@ -726,7 +728,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     bgFxMode, handleSelectBgFxMode,
     setShowChangelogModal, staticStatus, editingStatusId, setEditingStatusId, newStatusItem,
     setNewStatusItem, handleSaveStaticStatus, saveStaticStatus, filteredTransactions, transactions,
-    searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, onAddTransaction, onBatchImportTransactions, dailyQuotaInfo, cdiAnnualRate, getFlowType,
+    searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, onAddTransaction, onSaveInvestmentTx, onBatchImportTransactions, dailyQuotaInfo, cdiAnnualRate, getFlowType,
     banks, editingBankId, setEditingBankId, newBank, setNewBank, handleSaveBank, handleDeleteBank,
     cards, categoryColors, handleToggleStatus, handleStartEditTransaction, handleDeleteTransaction,
     receivableItems, receivablesAnalytics, handleAssignDebtor, handlePartialPaymentReceivable,
@@ -2346,6 +2348,24 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         handleDeleteWish={handleDeleteWish}
         personalBudgetLimit={personalBudgetLimit}
         moneyBlur={moneyBlur}
+      />
+    );
+  }
+
+  // ============================================================================
+  // ABA: INVESTIMENTOS & MERCADO AO VIVO (SPRINT 48)
+  // ============================================================================
+  if (activeTab === "investments") {
+    return (
+      <InvestmentsTab
+        transactions={transactions}
+        banks={banks}
+        cards={cards}
+        cdiAnnualRate={cdiAnnualRate}
+        moneyBlur={moneyBlur}
+        onSaveTransaction={onSaveInvestmentTx || ((tx) => { if (onAddTransaction && tx.id) void onAddTransaction(tx as Transaction); })}
+        onDeleteTransaction={handleDeleteTransaction}
+        notify={notify}
       />
     );
   }

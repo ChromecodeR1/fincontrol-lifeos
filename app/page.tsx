@@ -4781,6 +4781,49 @@ export default function CoindexApp() {
     [debtorMap, notify]
   );
 
+  const handleSaveInvestmentTx = useCallback(
+    async (partialTx: Partial<Transaction>, isEdit?: boolean) => {
+      const fullTx: Transaction = {
+        id: partialTx.id || `inv-${Date.now()}`,
+        date: formatDateBR(partialTx.date) || todayBR(),
+        description: partialTx.description || "Aporte em Investimentos",
+        amount: partialTx.amount || 0,
+        category: partialTx.category || "Aporte",
+        costType: partialTx.costType || "Variável",
+        paymentMethod: partialTx.paymentMethod || "Transferência / PIX",
+        status: partialTx.status || "Pago",
+        flowType: partialTx.flowType || "INVESTMENT",
+        bankAccount: partialTx.bankAccount || "Nubank",
+        bankId: partialTx.bankId,
+        investmentBucket: partialTx.investmentBucket || "CDI",
+        assetTicker: partialTx.assetTicker,
+        entryQuotePrice: partialTx.entryQuotePrice,
+        manualYieldPct: partialTx.manualYieldPct,
+        updatedAt: new Date().toISOString(),
+        rev: ((partialTx as any).rev || 0) + 1
+      };
+
+      setTransactions((prev) => {
+        let next: Transaction[];
+        if (isEdit || prev.some((t) => t.id === fullTx.id)) {
+          next = prev.map((t) => (t.id === fullTx.id ? { ...t, ...fullTx } : t));
+        } else {
+          next = [fullTx, ...prev];
+        }
+        setUserItem("lifeos_txs_v8", JSON.stringify(next), currentUserId);
+        localStorage.setItem("lifeos_txs_v8", JSON.stringify(next));
+        return next;
+      });
+
+      try {
+        await upsertTransactionsInDb([fullTx], debtorMap);
+      } catch (err) {
+        console.error("Erro ao sincronizar investimento com Supabase", err);
+      }
+    },
+    [currentUserId, debtorMap]
+  );
+
   const handleToggleStatus = (tx: Transaction) => {
     let nextStatus: TxStatus;
     if (tx.status === "Pago") {
@@ -6441,6 +6484,7 @@ export default function CoindexApp() {
                 { id: "transactions", label: "Lançamentos", icon: <Wallet className="w-4 h-4" /> },
                 { id: "receivables", label: "Valores a Receber", icon: <HandCoins className="w-4 h-4" /> },
                 { id: "cards", label: "Bancos", icon: <CreditCard className="w-4 h-4" /> },
+                { id: "investments", label: "Investimentos", icon: <TrendingUp className="w-4 h-4" /> },
                 { id: "spotify", label: "Spotify", icon: <SpotifyLogo size={16} /> },
                 { id: "auto", label: "Meus Veículos", icon: <Car className="w-4 h-4" /> },
                 { id: "bio", label: "Bio & Strava", icon: <Activity className="w-4 h-4" /> },
@@ -8868,6 +8912,7 @@ export default function CoindexApp() {
               handleExportCSV={handleExportCSV}
               handleOpenNewTxModal={handleOpenNewTxModal}
               onAddTransaction={handleUnifiedAddFuel}
+              onSaveInvestmentTx={handleSaveInvestmentTx}
               onBatchImportTransactions={handleBatchImportTransactions}
               dailyQuotaInfo={dailyQuotaInfo}
               cdiAnnualRate={marketRates.cdiAnnualRate}

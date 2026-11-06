@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.35.1`  
-> **Última Atualização:** 6 de Novembro de 2026 (Pós-Hotfix Sprint 47.1 — Blindagem de Persistência de Bancos e Cartões contra Sobrescrita do Supabase, União Aditiva Segura e Auto-Resgate no LocalStorage)  
+> **Versão da Aplicação:** `0.36.0`  
+> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 48 — Criação do Módulo de Investimentos & Mercado Ao Vivo: The Wealth Core 144Hz, Multi-Charts Simultâneos e Simulador de Inflação do Papel)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -867,6 +867,24 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - **Loader 2 (Painel Strava Progress):** Barra superior indeterminada em `#FC4C02` + overlay `.cupertino-shimmer` durante `isSyncingStrava`.
       - **Loader 3 (Taxa CDI BCB):** Micro-dot pulsante (`animate-ping`) verde na badge `115% CDI • BCB Ao Vivo`.
       - **Loader 4 (Importação CSV/OFX e Modais):** Barra de progresso deslizante durante o processamento de arquivo e transição com check icon na confirmação da importação.
+
+  - **Sprint 48 (Novembro de 2026 — Módulo de Investimentos & Mercado Ao Vivo: The Wealth Core 144Hz, Multi-Charts Simultâneos e Simulador de Inflação do Papel):**
+    - **Passo 1 — Módulo Investimentos na Sidebar & Schema de Ativos:**
+      - Adição da aba dedicada `investments` na sidebar esquerda e bottom bar mobile, com ícone `TrendingUp`.
+      - Extensão da interface `Transaction` com campos de telemetria de investimentos: `investmentBucket` (`"CDI" | "LCI" | "BTC" | "STOCKS" | "PAPER_CASH"`), `assetTicker`, `entryQuotePrice` e `manualYieldPct`.
+    - **Passo 2 — Rota de Mercado Ao Vivo (`app/api/market-pulse/route.ts`):**
+      - Agregação paralela com timeout resiliente de 5s: Binance Public API (BTC/BRL, BNB/BRL, ETH/BRL, SOL/BRL), AwesomeAPI (USD/BRL, EUR/BRL) e Banco Central do Brasil SGS (Taxa CDI / Selic e Ibovespa).
+      - Retorno de cotações em tempo real, variação 24h e séries temporais de 30 dias para plotagem de gráficos com fallback offline realista embutido.
+    - **Passo 3 — The Wealth Core & Gavetas Especializadas (`app/components/InvestmentsTab.tsx`):**
+      - Hero card monumental com total investido a mercado via `<AnimatedNumber144 />`, custo depositado saído do bolso, lucro acumulado em R$ e % e barra multi-segmentada de alocação fluida.
+      - Grid de gavetas interativas com foco spotlight 144Hz: Bitcoin & Cripto (marcação a mercado e satoshis acumulados), CDI 115% com capitalização diária composta, LCI/LCA isento de IR e Ações/FIIs.
+    - **Passo 4 — Sincronização Bidirecional e Reclassificação 1-Clique:**
+      - Modal rápido de aporte e resgate conectado atomicamente à coleção central de `transactions` e storage triplo, capturando cotação de entrada em tempo real.
+      - Seletor de gaveta 1-clique por linha na tabela de aportes: flash visual suave na linha, reclassificação instantânea e recálculo dinâmico dos saldos a 144Hz.
+    - **Passo 5 — Terminal de Mercado Ao Vivo (Multi-Charts Simultâneos Customizáveis):**
+      - Exibição paralela em grade Bento de gráficos Recharts `<AreaChart>` com degradê direcional dinâmico (verde/vermelho) para todos os ativos ativos, com seletores 24H/7D/1M/1Y e popover de customização persistido no localStorage.
+    - **Passo 6 — Simulador de Desvalorização do Dinheiro em Papel:**
+      - Sub-aba dedicada projetando a corrosão inflacionária real (IPCA ~4,5% a.a.) do dinheiro guardado em espécie versus o custo de oportunidade da Caixinha 115% CDI em horizontes de 1, 3 e 5 anos, com gráfico comparativo duplo.
 
   - **Hotfix Sprint 47.1 (Novembro de 2026 — Blindagem de Persistência de Bancos e Cartões contra Sobrescrita do Supabase, União Aditiva Segura e Auto-Resgate no LocalStorage):**
     - **Passo 1 — Fim da Sobrescrita na Hidratação com `mergeEntitiesSafe` (LWW + Tombstones):**

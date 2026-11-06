@@ -72,12 +72,15 @@ export type TxStatus = "Pago" | "Pendente" | "Na Fatura" | "Pendente / Na Fatura
 export type FlowType = "INCOME" | "EXPENSE" | "INVESTMENT" | "NEUTRAL" | "RECEIVABLE";
 export type CurveType = "monotone" | "natural" | "linear" | "step";
 export type ThemeMode = "branco" | "tradicional" | "noturno";
+export type InvestmentBucket = "CDI" | "LCI" | "BTC" | "STOCKS" | "PAPER_CASH";
+
 export type ActiveTab =
   | "dashboard"
   | "status"
   | "transactions"
   | "receivables"
   | "cards"
+  | "investments"
   | "auto"
   | "bio"
   | "brain"
@@ -170,6 +173,10 @@ export interface Transaction {
   externalId?: string;
   deletedAt?: string;
   rev?: number;
+  investmentBucket?: InvestmentBucket;
+  assetTicker?: string;
+  entryQuotePrice?: number;
+  manualYieldPct?: number;
 }
 
 export type BankAccountType = "Conta Corrente" | "Conta Digital" | "Investimentos" | "Benefícios";
@@ -380,10 +387,23 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.35.1";
-export const PREVIOUS_VERSION = "0.35.0";
+export const APP_VERSION = "0.36.0";
+export const PREVIOUS_VERSION = "0.35.1";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.36.0",
+    date: "Nov/2026",
+    title: "Sprint 48: Módulo de Investimentos & Mercado Ao Vivo (Wealth Core 144Hz, Multi-Charts e Simulador de Inflação)",
+    highlights: [
+      "Módulo Investimentos na Sidebar: Nova aba dedicada com sincronização bidirecional em tempo real com a tabela principal de Lançamentos.",
+      "The Wealth Core & Marcação a Mercado: Hero card com total acumulado a mercado, custo depositado, rendimento líquido e barra dinâmica de alocação.",
+      "Gavetas Especializadas de Ativos: Cards interativos com física 144Hz para Bitcoin & Cripto (BTC), CDI 115%, LCI/LCA isento de IR e Ações/FIIs.",
+      "Terminal de Multi-Charts de Mercado Ao Vivo: Painel simultâneo de gráficos Recharts com cotações e séries temporais gratuitas de BTC, BNB, ETH, SOL, Dólar, Euro, CDI e IBOV.",
+      "Simulador de Desvalorização do Dinheiro em Papel: Análise do impacto da inflação (IPCA ~4,5% a.a.) versus custo de oportunidade da Caixinha 115% CDI em 1, 3 e 5 anos.",
+      "Reclassificação em 1-Clique: Pílulas dinâmicas com flash suave para movimentar aportes entre gavetas instantaneamente com recálculo a 144Hz."
+    ]
+  },
   {
     version: "0.35.1",
     date: "Nov/2026",
