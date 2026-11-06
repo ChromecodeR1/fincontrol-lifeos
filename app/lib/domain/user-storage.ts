@@ -37,6 +37,22 @@ export function getUserItem(key: string, userId?: string | null): string | null 
     return legacyVal;
   }
 
+  // Fallback 3: Chaves globais de backup vault (Sprint 47.1)
+  if (key.includes("banks")) {
+    const vaultBanks = window.localStorage.getItem("coindex_vault_banks_backup");
+    if (vaultBanks !== null) {
+      window.localStorage.setItem(namespacedKey, vaultBanks);
+      return vaultBanks;
+    }
+  }
+  if (key.includes("cards")) {
+    const vaultCards = window.localStorage.getItem("coindex_vault_cards_backup");
+    if (vaultCards !== null) {
+      window.localStorage.setItem(namespacedKey, vaultCards);
+      return vaultCards;
+    }
+  }
+
   return null;
 }
 

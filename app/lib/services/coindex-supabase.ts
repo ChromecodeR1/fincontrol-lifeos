@@ -3,6 +3,7 @@ import { ChartWidgetSettings } from "../../components/ChartSettingsPopover";
 import {
   Transaction,
   CreditCardItem,
+  BankItem,
   StaticStatusItem,
   WishlistItem,
   BioLog,
@@ -50,6 +51,7 @@ export interface UserSettingsPayload {
 export interface FullCoindexSnapshot {
   transactions: Transaction[];
   cards: CreditCardItem[];
+  banks?: BankItem[];
   staticStatus: StaticStatusItem[];
   wishlist: WishlistItem[];
   bioLogs: BioLog[];
@@ -93,6 +95,16 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       return { ok: false, isEmpty: true, error: "Utilizador não autenticado." };
     }
 
+    // Consulta resiliente de bancos remotos (tabela banks pode não existir em esquemas legados)
+    const banksResPromise = (async () => {
+      try {
+        const res = await supabase.from("banks").select("*").eq("user_id", userId);
+        return res;
+      } catch {
+        return { data: [], error: null };
+      }
+    })();
+
     const [
       settingsRes,
       catsRes,
@@ -105,7 +117,8 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       okrsRes,
       notesRes,
       alertsRes,
-      logsRes
+      logsRes,
+      banksRes
     ] = await Promise.all([
       supabase.from("user_settings").select("*").eq("user_id", userId).maybeSingle(),
       supabase.from("categories").select("*").eq("user_id", userId),
@@ -123,7 +136,8 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       supabase.from("personal_okrs").select("*").eq("user_id", userId),
       supabase.from("brain_notes").select("*").eq("user_id", userId).order("note_date", { ascending: false }),
       supabase.from("alert_rules").select("*").eq("user_id", userId),
-      supabase.from("system_logs").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200)
+      supabase.from("system_logs").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
+      banksResPromise
     ]);
 
     let txRows = (txsRes.data ?? []) as Array<Record<string, unknown>>;
@@ -212,6 +226,24 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         closingDay: Number(r.closing_day ?? 25),
         dueDay: Number(r.due_day ?? 5),
         logoUrl: r.logo_url ? String(r.logo_url) : undefined,
+        bankId: (r as any).bank_id ? String((r as any).bank_id) : undefined,
+        bankName: (r as any).bank_name ? String((r as any).bank_name) : undefined,
+        updatedAt: r.updated_at ? String(r.updated_at) : undefined,
+        deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
+        rev: r.rev != null ? Number(r.rev) : undefined
+      }));
+
+    const bankRows = ((banksRes as any)?.data ?? []) as Array<Record<string, unknown>>;
+    const banks: BankItem[] = bankRows
+      .filter((r) => !isExcluded(String(r.id), r.deleted_at))
+      .map((r) => ({
+        id: String(r.id),
+        name: String(r.name),
+        logoUrl: r.logo_url ? String(r.logo_url) : undefined,
+        limit: r.limit_amount != null ? Number(r.limit_amount) : (r.limit != null ? Number(r.limit) : undefined),
+        limitType: r.limit_type ? String(r.limit_type) : undefined,
+        accountType: (r.account_type as BankItem["accountType"]) ?? undefined,
+        color: r.color ? String(r.color) : undefined,
         updatedAt: r.updated_at ? String(r.updated_at) : undefined,
         deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
         rev: r.rev != null ? Number(r.rev) : undefined
@@ -364,6 +396,7 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       data: {
         transactions,
         cards,
+        banks,
         staticStatus,
         wishlist,
         bioLogs,
@@ -438,17 +471,11 @@ export async function migrateAllStateToSupabase(
     }
 
     if (snapshot.cards.length > 0) {
-      const cardPayload = snapshot.cards.map((c) => ({
-        id: c.id,
-        user_id: userId,
-        name: c.name,
-        brand: c.brand,
-        limit_amount: c.limit,
-        closing_day: c.closingDay,
-        due_day: c.dueDay,
-        logo_url: c.logoUrl ?? null
-      }));
-      await supabase.from("credit_cards").upsert(cardPayload, { onConflict: "id,user_id" });
+      await upsertCardsInDb(snapshot.cards);
+    }
+
+    if (snapshot.banks && snapshot.banks.length > 0) {
+      await upsertBanksInDb(snapshot.banks);
     }
 
     if (snapshot.wishlist.length > 0) {
@@ -620,12 +647,13 @@ export async function deleteTransactionsInDb(ids: string[]) {
   await supabase.from("transactions").delete().in("id", ids).eq("user_id", userId);
 }
 
-export async function upsertCardInDb(card: CreditCardItem) {
-  const supabase = createClient();
-  const userId = await getActiveUserId();
-  if (!userId) return;
-  await supabase.from("credit_cards").upsert(
-    {
+export async function upsertCardInDb(card: CreditCardItem): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = createClient();
+    const userId = await getActiveUserId();
+    if (!userId) return { ok: false, error: "Usuário não autenticado" };
+
+    const fullPayload: Record<string, unknown> = {
       id: card.id,
       user_id: userId,
       name: card.name,
@@ -633,10 +661,197 @@ export async function upsertCardInDb(card: CreditCardItem) {
       limit_amount: card.limit,
       closing_day: card.closingDay,
       due_day: card.dueDay,
-      logo_url: card.logoUrl ?? null
-    },
-    { onConflict: "id,user_id" }
-  );
+      logo_url: card.logoUrl ?? null,
+      bank_id: card.bankId ?? null,
+      bank_name: card.bankName ?? null,
+      rev: card.rev ?? 1,
+      updated_at: card.updatedAt ?? new Date().toISOString()
+    };
+
+    const res = await supabase.from("credit_cards").upsert(fullPayload, { onConflict: "id,user_id" });
+    if (res.error) {
+      // Se falhar por incompatibilidade de schema/coluna (PGRST204 ou 42703)
+      if (res.error.code === "PGRST204" || res.error.code === "42703" || res.error.message?.includes("column")) {
+        console.warn("[coindex-supabase] Schema fallback para credit_cards:", res.error.message);
+        const minimalPayload = {
+          id: card.id,
+          user_id: userId,
+          name: card.name,
+          brand: card.brand,
+          limit_amount: card.limit,
+          closing_day: card.closingDay,
+          due_day: card.dueDay,
+          logo_url: card.logoUrl ?? null
+        };
+        const fallbackRes = await supabase.from("credit_cards").upsert(minimalPayload, { onConflict: "id,user_id" });
+        if (fallbackRes.error) {
+          console.error("[coindex-supabase] Fallback básico de credit_cards falhou:", fallbackRes.error);
+          return { ok: false, error: fallbackRes.error.message };
+        }
+      } else {
+        return { ok: false, error: res.error.message };
+      }
+    }
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro desconhecido";
+    console.error("[coindex-supabase] Erro de rede ao salvar cartão:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function upsertCardsInDb(cards: CreditCardItem[]): Promise<{ ok: boolean; error?: string }> {
+  if (cards.length === 0) return { ok: true };
+  try {
+    const supabase = createClient();
+    const userId = await getActiveUserId();
+    if (!userId) return { ok: false, error: "Usuário não autenticado" };
+
+    const fullPayloads = cards.map((c) => ({
+      id: c.id,
+      user_id: userId,
+      name: c.name,
+      brand: c.brand,
+      limit_amount: c.limit,
+      closing_day: c.closingDay,
+      due_day: c.dueDay,
+      logo_url: c.logoUrl ?? null,
+      bank_id: c.bankId ?? null,
+      bank_name: c.bankName ?? null,
+      rev: c.rev ?? 1,
+      updated_at: c.updatedAt ?? new Date().toISOString()
+    }));
+
+    const res = await supabase.from("credit_cards").upsert(fullPayloads, { onConflict: "id,user_id" });
+    if (res.error) {
+      if (res.error.code === "PGRST204" || res.error.code === "42703" || res.error.message?.includes("column")) {
+        console.warn("[coindex-supabase] Schema fallback para lote de credit_cards:", res.error.message);
+        const minimalPayloads = cards.map((c) => ({
+          id: c.id,
+          user_id: userId,
+          name: c.name,
+          brand: c.brand,
+          limit_amount: c.limit,
+          closing_day: c.closingDay,
+          due_day: c.dueDay,
+          logo_url: c.logoUrl ?? null
+        }));
+        const fallbackRes = await supabase.from("credit_cards").upsert(minimalPayloads, { onConflict: "id,user_id" });
+        if (fallbackRes.error) {
+          return { ok: false, error: fallbackRes.error.message };
+        }
+      } else {
+        return { ok: false, error: res.error.message };
+      }
+    }
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro desconhecido";
+    console.error("[coindex-supabase] Erro de rede ao persistir cartões em lote:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function upsertBankInDb(bank: BankItem): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = createClient();
+    const userId = await getActiveUserId();
+    if (!userId) return { ok: false, error: "Usuário não autenticado" };
+
+    const fullPayload: Record<string, unknown> = {
+      id: bank.id,
+      user_id: userId,
+      name: bank.name,
+      logo_url: bank.logoUrl ?? null,
+      limit_amount: bank.limit ?? null,
+      limit_type: bank.limitType ?? "Cartão de Crédito",
+      account_type: bank.accountType ?? "Conta Digital",
+      color: bank.color ?? null,
+      rev: bank.rev ?? 1,
+      updated_at: bank.updatedAt ?? new Date().toISOString()
+    };
+
+    const res = await supabase.from("banks").upsert(fullPayload, { onConflict: "id,user_id" });
+    if (res.error) {
+      if (res.error.code === "PGRST204" || res.error.code === "42703") {
+        console.warn("[coindex-supabase] Schema fallback para banks (colunas mínimas):", res.error.message);
+        const minimalPayload = {
+          id: bank.id,
+          user_id: userId,
+          name: bank.name,
+          logo_url: bank.logoUrl ?? null
+        };
+        const fbRes = await supabase.from("banks").upsert(minimalPayload, { onConflict: "id,user_id" });
+        if (fbRes.error) {
+          return { ok: false, error: fbRes.error.message };
+        }
+      } else if (res.error.code === "42P01" || res.error.code === "PGRST205") {
+        console.info("[coindex-supabase] Tabela 'banks' inexistente no Supabase; persistência garantida no vault local.");
+        return { ok: true };
+      } else {
+        return { ok: false, error: res.error.message };
+      }
+    }
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro desconhecido";
+    console.error("[coindex-supabase] Erro de rede ao salvar banco:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function upsertBanksInDb(banks: BankItem[]): Promise<{ ok: boolean; error?: string }> {
+  if (banks.length === 0) return { ok: true };
+  try {
+    const supabase = createClient();
+    const userId = await getActiveUserId();
+    if (!userId) return { ok: false, error: "Usuário não autenticado" };
+
+    const payloads = banks.map((b) => ({
+      id: b.id,
+      user_id: userId,
+      name: b.name,
+      logo_url: b.logoUrl ?? null,
+      limit_amount: b.limit ?? null,
+      limit_type: b.limitType ?? "Cartão de Crédito",
+      account_type: b.accountType ?? "Conta Digital",
+      color: b.color ?? null,
+      rev: b.rev ?? 1,
+      updated_at: b.updatedAt ?? new Date().toISOString()
+    }));
+
+    const res = await supabase.from("banks").upsert(payloads, { onConflict: "id,user_id" });
+    if (res.error) {
+      if (res.error.code === "PGRST204" || res.error.code === "42703") {
+        const minimalPayloads = banks.map((b) => ({
+          id: b.id,
+          user_id: userId,
+          name: b.name,
+          logo_url: b.logoUrl ?? null
+        }));
+        await supabase.from("banks").upsert(minimalPayloads, { onConflict: "id,user_id" });
+      } else if (res.error.code === "42P01" || res.error.code === "PGRST205") {
+        return { ok: true };
+      } else {
+        return { ok: false, error: res.error.message };
+      }
+    }
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro desconhecido";
+    return { ok: false, error: msg };
+  }
+}
+
+export async function deleteBankInDb(id: string): Promise<void> {
+  try {
+    const supabase = createClient();
+    const userId = await getActiveUserId();
+    if (!userId) return;
+    await supabase.from("banks").delete().eq("id", id).eq("user_id", userId);
+  } catch (err) {
+    console.warn("[coindex-supabase] Aviso ao excluir banco remoto:", err);
+  }
 }
 
 export async function deleteCardInDb(id: string) {

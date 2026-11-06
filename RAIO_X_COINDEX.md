@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.35.0`  
-> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 47 — Otimização Extrema de Performance para 144Hz Zero-Jank com Ticker Direto no DOM sem Re-renders, Pipeline GPU Compositor e Desacoplamento de Scrubbing nos Gráficos)  
+> **Versão da Aplicação:** `0.35.1`  
+> **Última Atualização:** 6 de Novembro de 2026 (Pós-Hotfix Sprint 47.1 — Blindagem de Persistência de Bancos e Cartões contra Sobrescrita do Supabase, União Aditiva Segura e Auto-Resgate no LocalStorage)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -867,6 +867,20 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - **Loader 2 (Painel Strava Progress):** Barra superior indeterminada em `#FC4C02` + overlay `.cupertino-shimmer` durante `isSyncingStrava`.
       - **Loader 3 (Taxa CDI BCB):** Micro-dot pulsante (`animate-ping`) verde na badge `115% CDI • BCB Ao Vivo`.
       - **Loader 4 (Importação CSV/OFX e Modais):** Barra de progresso deslizante durante o processamento de arquivo e transição com check icon na confirmação da importação.
+
+  - **Hotfix Sprint 47.1 (Novembro de 2026 — Blindagem de Persistência de Bancos e Cartões contra Sobrescrita do Supabase, União Aditiva Segura e Auto-Resgate no LocalStorage):**
+    - **Passo 1 — Fim da Sobrescrita na Hidratação com `mergeEntitiesSafe` (LWW + Tombstones):**
+      - Diagnóstico da causa raiz: listas incompletas ou defasadas retornadas pelo Supabase (por latência ou falhas de schema) sobrescreviam cegamente `banks` e `cards` no `localStorage`, apagando cadastros recentes.
+      - Criação da função pura `mergeEntitiesSafe`: mescla listas locais e remotas com resolução Last-Write-Wins (maior `rev` e `updatedAt`, com desempate pró-local), filtragem estrita de tombstones e desduplicação por ID e nome canônico.
+      - **Auto-Heal Push:** identificação síncrona de entidades locais ausentes ou mais recentes que a nuvem, disparando o envio (`upsert`) em segundo plano para autorrecuperação do banco de dados remoto.
+    - **Passo 2 — Persistência Síncrona Tripla em Bancos e Cartões:**
+      - Gravação no mesmo tick em três camadas: (1) namespace do usuário (`lifeos_banks_v8` / `lifeos_cards_v8`), (2) chaves legadas (`lifeos_banks_v1` / `lifeos_cards_v8`), e (3) vault de emergência global (`coindex_vault_banks_backup` / `coindex_vault_cards_backup`).
+      - Proteção total contra race conditions onde o `userId` leva centenas de milissegundos para hidratar na inicialização da sessão.
+    - **Passo 3 — Blindagem de Schema e Retries no Supabase:**
+      - Funções `upsertCardInDb`, `upsertCardsInDb`, `upsertBankInDb`, `upsertBanksInDb` e `deleteBankInDb` com captura de erros `PGRST204` / `42703` (colunas ausentes) e fallback automático para colunas base universais, além de tolerância a esquemas sem a tabela `banks`.
+    - **Passo 4 — Motor de Auto-Resgate (`rescueMissingBanksAndCards`):**
+      - Varredura de emergência no `initCoindex`: inspeciona todas as chaves de storage existentes no navegador (`coindex_guest_*`, `coindex_usr_*`, `vault_*`).
+      - Análise reversa de transações: identifica cartões e instituições citados em lançamentos ativos (`cardUsed`, `bankAccount`, `sourceBank`, `destinationBank`) e os reconstrói automaticamente caso tenham sido expurgados em sessões anteriores.
 
   - **Sprint 47 (Novembro de 2026 — Otimização Extrema de Performance para 144Hz Zero-Jank: Ticker Direto no DOM, Pipeline GPU Compositor e Desacoplamento de Scrubbing nos Gráficos):**
     - **Passo 1 — Motor `AnimatedNumber144` (Direct-DOM Ticker a 144Hz/240Hz):**

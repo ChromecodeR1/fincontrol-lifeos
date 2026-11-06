@@ -380,10 +380,22 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.35.0";
-export const PREVIOUS_VERSION = "0.34.0";
+export const APP_VERSION = "0.35.1";
+export const PREVIOUS_VERSION = "0.35.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.35.1",
+    date: "Nov/2026",
+    title: "Hotfix Sprint 47.1: Blindagem de Persistência de Bancos e Cartões contra Sobrescrita do Supabase, União Aditiva Segura e Auto-Resgate no LocalStorage",
+    highlights: [
+      "Fim da Sobrescrita na Hidratação: Implementação do algoritmo mergeEntitiesSafe LWW com tombstones, impedindo que dados incompletos do Supabase apaguem bancos ou cartões criados localmente.",
+      "Auto-Heal Push: Sincronização automática em background para o Supabase de cartões e bancos locais mais recentes ou não cadastrados remotamente.",
+      "Persistência Síncrona Tripla: Gravação atômica instantânea no namespace isolado do usuário (lifeos_banks_v8/lifeos_cards_v8), na chave legada e no vault global de segurança (coindex_vault_*).",
+      "Motor de Auto-Resgate (rescueMissingBanksAndCards): Varredura ampla no localStorage e análise reversa de transações para reconstruir automaticamente bancos e cartões faltantes.",
+      "Blindagem de Schema e Retries no Supabase: Fallback automático com colunas mínimas universais em caso de incompatibilidade de colunas PostgreSQL (PGRST204 / 42703)."
+    ]
+  },
   {
     version: "0.35.0",
     date: "Nov/2026",

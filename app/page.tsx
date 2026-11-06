@@ -204,7 +204,11 @@ import {
   deleteTransactionInDb,
   deleteTransactionsInDb,
   upsertCardInDb,
+  upsertCardsInDb,
   deleteCardInDb,
+  upsertBankInDb,
+  upsertBanksInDb,
+  deleteBankInDb,
   syncStaticStatusListInDb,
   upsertWishInDb,
   deleteWishInDb,
@@ -505,6 +509,244 @@ function ForecastCyberTooltip({
       </div>
     </div>
   );
+}
+
+/**
+ * HOTFIX SPRINT 47.1: Motor de Resgate & Merge Seguro LWW para Bancos e Cartões
+ * Previne sobrescrita destrutiva pela nuvem e ressurgimento de itens excluídos via Tombstones.
+ */
+export function mergeEntitiesSafe<
+  T extends { id: string; name?: string; updatedAt?: string; deletedAt?: string; rev?: number }
+>(
+  localList: T[],
+  remoteList: T[],
+  tombstones: Set<string>
+): T[] {
+  const mergedMap = new Map<string, T>();
+
+  const isLocalNewerOrEqual = (local: T, remote: T): boolean => {
+    const localTime = local.updatedAt ? new Date(local.updatedAt).getTime() : 0;
+    const remoteTime = remote.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
+    if (localTime !== remoteTime) {
+      return localTime >= remoteTime;
+    }
+    const localRev = local.rev ?? 0;
+    const remoteRev = remote.rev ?? 0;
+    if (localRev !== remoteRev) {
+      return localRev >= remoteRev;
+    }
+    return true; // Empate: dá preferência absoluta ao local
+  };
+
+  // 1. Registra entidades remotas válidas
+  for (const remote of remoteList) {
+    if (!remote || !remote.id) continue;
+    if (tombstones.has(remote.id) || remote.deletedAt) continue;
+    mergedMap.set(remote.id, remote);
+  }
+
+  // 2. Mescla entidades locais com LWW (Last-Write-Wins)
+  for (const local of localList) {
+    if (!local || !local.id) continue;
+    if (tombstones.has(local.id) || local.deletedAt) continue;
+
+    const existing = mergedMap.get(local.id);
+    if (!existing) {
+      mergedMap.set(local.id, local);
+    } else {
+      if (isLocalNewerOrEqual(local, existing)) {
+        mergedMap.set(local.id, local);
+      }
+    }
+  }
+
+  // 3. Desduplicação inteligente por nome canônico
+  const byName = new Map<string, T>();
+  for (const item of mergedMap.values()) {
+    const normName = item.name ? item.name.trim().toLowerCase() : null;
+    if (!normName) {
+      byName.set(item.id, item);
+      continue;
+    }
+    const existing = byName.get(normName);
+    if (!existing) {
+      byName.set(normName, item);
+    } else {
+      if (isLocalNewerOrEqual(item, existing)) {
+        byName.set(normName, item);
+      }
+    }
+  }
+
+  return Array.from(byName.values());
+}
+
+/**
+ * Varredor de Resgate Automático de Bancos e Cartões (Sprint 47.1)
+ * Inspeciona todo o localStorage e histórico de transações para reconstruir instituições e cartões faltantes.
+ */
+export function rescueMissingBanksAndCards(
+  currentBanks: BankItem[],
+  currentCards: CreditCardItem[],
+  currentTxs: Transaction[],
+  tombstones: Set<string>
+): { rescuedBanks: BankItem[]; rescuedCards: CreditCardItem[]; rescuedCount: number } {
+  let rescuedCount = 0;
+  const candidateBanks: BankItem[] = [...currentBanks];
+  const candidateCards: CreditCardItem[] = [...currentCards];
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const totalKeys = window.localStorage.length;
+      for (let i = 0; i < totalKeys; i++) {
+        const key = window.localStorage.key(i);
+        if (!key) continue;
+
+        // Inspeciona chaves de bancos
+        if (
+          key.includes("banks_v8") ||
+          key.includes("banks_v1") ||
+          key.includes("vault_banks_backup") ||
+          (key.startsWith("coindex_") && key.includes("banks"))
+        ) {
+          try {
+            const raw = window.localStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) {
+                for (const item of parsed) {
+                  if (item && typeof item === "object" && item.id && item.name) {
+                    if (!tombstones.has(item.id) && !item.deletedAt) {
+                      candidateBanks.push(item);
+                    }
+                  }
+                }
+              }
+            }
+          } catch {
+            // Ignora JSONs corrompidos
+          }
+        }
+
+        // Inspeciona chaves de cartões
+        if (
+          key.includes("cards_v8") ||
+          key.includes("vault_cards_backup") ||
+          (key.startsWith("coindex_") && key.includes("cards"))
+        ) {
+          try {
+            const raw = window.localStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) {
+                for (const item of parsed) {
+                  if (item && typeof item === "object" && item.id && item.name) {
+                    if (!tombstones.has(item.id) && !item.deletedAt) {
+                      candidateCards.push(item);
+                    }
+                  }
+                }
+              }
+            }
+          } catch {
+            // Ignora JSONs corrompidos
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[coindex] Erro ao varrer localStorage para resgate de bancos/cartões:", e);
+    }
+  }
+
+  // Mescla inicial segura
+  let rescuedBanks = mergeEntitiesSafe(candidateBanks, [], tombstones);
+  let rescuedCards = mergeEntitiesSafe(candidateCards, [], tombstones);
+
+  // Garante que bancos padrões essenciais existam caso não estejam tombstoned
+  if (!rescuedBanks.some((b) => b.name === "BTG Pactual") && !tombstones.has("b3")) {
+    const btg = INITIAL_BANKS.find((b) => b.name === "BTG Pactual");
+    if (btg) rescuedBanks.push(btg);
+  }
+  if (!rescuedBanks.some((b) => b.name === "Nubank") && !tombstones.has("b1")) {
+    const nu = INITIAL_BANKS.find((b) => b.name === "Nubank");
+    if (nu) rescuedBanks.push(nu);
+  }
+  if (!rescuedBanks.some((b) => b.name === "Inter") && !tombstones.has("b2")) {
+    const inter = INITIAL_BANKS.find((b) => b.name === "Inter");
+    if (inter) rescuedBanks.push(inter);
+  }
+
+  // Garante cartões padrões se vazios
+  if (rescuedCards.length === 0) {
+    for (const initCard of INITIAL_CARDS) {
+      if (!tombstones.has(initCard.id)) {
+        rescuedCards.push(initCard);
+      }
+    }
+  }
+
+  // Inspeciona todas as transações ativas para auto-reconstrução de instituições e cartões
+  for (const tx of currentTxs) {
+    // 1. Resgate de Cartão citado em transação
+    if (tx.cardUsed && typeof tx.cardUsed === "string" && tx.cardUsed.trim().length > 0) {
+      const cardName = tx.cardUsed.trim();
+      const cardExists = rescuedCards.some(
+        (c) => c.name.toLowerCase() === cardName.toLowerCase() || (tx.cardId && c.id === tx.cardId)
+      );
+      if (!cardExists) {
+        const slugId = tx.cardId || `card-rescued-${cardName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+        if (!tombstones.has(slugId)) {
+          rescuedCards.push({
+            id: slugId,
+            name: cardName,
+            brand: "Mastercard Black",
+            limit: 5000,
+            closingDay: 25,
+            dueDay: 5,
+            bankName: tx.bankAccount || undefined,
+            updatedAt: new Date().toISOString(),
+            rev: 1
+          });
+          rescuedCount++;
+        }
+      }
+    }
+
+    // 2. Resgate de Bancos citados em transação
+    const banksToCheck = [tx.bankAccount, tx.sourceBank, tx.destinationBank].filter(
+      (b): b is string => Boolean(b && typeof b === "string" && b.trim().length > 0)
+    );
+
+    for (const bName of banksToCheck) {
+      const cleanBName = bName.trim();
+      if (["dinheiro", "pix", "ted", "doc", "boleto", "outros"].includes(cleanBName.toLowerCase())) {
+        continue;
+      }
+      const bankExists = rescuedBanks.some(
+        (b) => b.name.toLowerCase() === cleanBName.toLowerCase() || (tx.bankId && b.id === tx.bankId)
+      );
+      if (!bankExists) {
+        const slugId = tx.bankId || `bank-rescued-${cleanBName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+        if (!tombstones.has(slugId)) {
+          rescuedBanks.push({
+            id: slugId,
+            name: cleanBName,
+            limitType: "Cartão de Crédito",
+            accountType: "Conta Digital",
+            updatedAt: new Date().toISOString(),
+            rev: 1
+          });
+          rescuedCount++;
+        }
+      }
+    }
+  }
+
+  // Re-aplica merge final para ordenar e desduplicar
+  rescuedBanks = mergeEntitiesSafe(rescuedBanks, [], tombstones);
+  rescuedCards = mergeEntitiesSafe(rescuedCards, [], tombstones);
+
+  return { rescuedBanks, rescuedCards, rescuedCount };
 }
 
 export default function CoindexApp() {
@@ -1488,6 +1730,7 @@ export default function CoindexApp() {
         if (savedReadNotifs) setReadNotificationIds(JSON.parse(savedReadNotifs));
 
         const sTxs = getUserItem("lifeos_txs_v8");
+        let initialTxs: Transaction[] = [];
         if (sTxs) {
           const parsedTxs: Transaction[] = JSON.parse(sTxs);
           // Migração de categorias legadas (Sprint 19)
@@ -1495,29 +1738,29 @@ export default function CoindexApp() {
             ...t,
             category: migrateLegacyCategory(t.category, t.description)
           }));
+          initialTxs = migratedTxs;
           setTransactions(migratedTxs);
           setUserItem("lifeos_txs_v8", JSON.stringify(migratedTxs));
         }
         const sDebtors = localStorage.getItem("lifeos_debtors_v8");
         if (sDebtors) setDebtorMap(JSON.parse(sDebtors));
-        const sBanks = localStorage.getItem("lifeos_banks_v1");
-        if (sBanks) {
-          const parsedBanks: BankItem[] = JSON.parse(sBanks);
-          if (!parsedBanks.some((b) => b.name === "BTG Pactual")) {
-            const btg = INITIAL_BANKS.find((b) => b.name === "BTG Pactual");
-            if (btg) {
-              const mergedBanks = [...parsedBanks, btg];
-              setBanks(mergedBanks);
-              localStorage.setItem("lifeos_banks_v1", JSON.stringify(mergedBanks));
-            } else {
-              setBanks(parsedBanks);
-            }
-          } else {
-            setBanks(parsedBanks);
-          }
-        }
-        const sCards = localStorage.getItem("lifeos_cards_v8");
-        if (sCards) setCards(JSON.parse(sCards));
+
+        // SPRINT 47.1: Auto-Resgate e Sincronização Síncrona Tripla de Bancos e Cartões
+        const tombstonesOnStart = getTombstones(currentUserId);
+        const { rescuedBanks, rescuedCards } = rescueMissingBanksAndCards(
+          INITIAL_BANKS,
+          INITIAL_CARDS,
+          initialTxs,
+          tombstonesOnStart
+        );
+        setBanks(rescuedBanks);
+        setCards(rescuedCards);
+        setUserItem("lifeos_banks_v8", JSON.stringify(rescuedBanks), currentUserId);
+        localStorage.setItem("lifeos_banks_v1", JSON.stringify(rescuedBanks));
+        localStorage.setItem("coindex_vault_banks_backup", JSON.stringify(rescuedBanks));
+        setUserItem("lifeos_cards_v8", JSON.stringify(rescuedCards), currentUserId);
+        localStorage.setItem("lifeos_cards_v8", JSON.stringify(rescuedCards));
+        localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(rescuedCards));
         const sStatus = localStorage.getItem("lifeos_status_v8");
         if (sStatus) setStaticStatus(JSON.parse(sStatus));
         const sWish = localStorage.getItem("lifeos_wish_v8");
@@ -1623,6 +1866,7 @@ export default function CoindexApp() {
             {
               transactions,
               cards,
+              banks,
               staticStatus,
               wishlist,
               bioLogs,
@@ -1729,9 +1973,81 @@ export default function CoindexApp() {
             }
           }
 
-          if (d.cards.length > 0) {
-            setCards(d.cards);
-            localStorage.setItem("lifeos_cards_v8", JSON.stringify(d.cards));
+          // SPRINT 47.1: União Aditiva Segura (Non-Destructive Union Merge) por ID + Tombstone Check
+          // 1. CARDS
+          let localCardsForMerge: CreditCardItem[] = [];
+          try {
+            const rawLocalCards =
+              getUserItem("lifeos_cards_v8", targetUserId) ||
+              localStorage.getItem("lifeos_cards_v8") ||
+              localStorage.getItem("coindex_vault_cards_backup");
+            if (rawLocalCards) {
+              localCardsForMerge = JSON.parse(rawLocalCards);
+            }
+          } catch (e) {
+            console.error("Erro ao ler cartões locais para merge:", e);
+          }
+          if (localCardsForMerge.length === 0 && cards.length > 0) {
+            localCardsForMerge = cards;
+          }
+
+          const mergedCards = mergeEntitiesSafe(localCardsForMerge, d.cards || [], currentTombstones);
+          setCards(mergedCards);
+          setUserItem("lifeos_cards_v8", JSON.stringify(mergedCards), targetUserId);
+          localStorage.setItem("lifeos_cards_v8", JSON.stringify(mergedCards));
+          localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(mergedCards));
+
+          // Auto-Heal Push: Envia cartões locais mais recentes ou não cadastrados no Supabase
+          const remoteCardIds = new Set((d.cards || []).map((c) => c.id));
+          const cardsToHeal = mergedCards.filter((c) => {
+            if (!remoteCardIds.has(c.id)) return true;
+            const remote = (d.cards || []).find((rc) => rc.id === c.id);
+            if (!remote) return true;
+            const localTime = c.updatedAt ? new Date(c.updatedAt).getTime() : 0;
+            const remoteTime = remote.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
+            return localTime > remoteTime || (c.rev ?? 0) > (remote.rev ?? 0);
+          });
+          if (cardsToHeal.length > 0) {
+            void upsertCardsInDb(cardsToHeal);
+          }
+
+          // 2. BANKS
+          let localBanksForMerge: BankItem[] = [];
+          try {
+            const rawLocalBanks =
+              getUserItem("lifeos_banks_v8", targetUserId) ||
+              getUserItem("lifeos_banks_v1", targetUserId) ||
+              localStorage.getItem("lifeos_banks_v1") ||
+              localStorage.getItem("coindex_vault_banks_backup");
+            if (rawLocalBanks) {
+              localBanksForMerge = JSON.parse(rawLocalBanks);
+            }
+          } catch (e) {
+            console.error("Erro ao ler bancos locais para merge:", e);
+          }
+          if (localBanksForMerge.length === 0 && banks.length > 0) {
+            localBanksForMerge = banks;
+          }
+
+          const remoteBanks = d.banks || [];
+          const mergedBanks = mergeEntitiesSafe(localBanksForMerge, remoteBanks, currentTombstones);
+          setBanks(mergedBanks);
+          setUserItem("lifeos_banks_v8", JSON.stringify(mergedBanks), targetUserId);
+          localStorage.setItem("lifeos_banks_v1", JSON.stringify(mergedBanks));
+          localStorage.setItem("coindex_vault_banks_backup", JSON.stringify(mergedBanks));
+
+          // Auto-Heal Push: Envia bancos locais mais recentes ou não cadastrados no Supabase
+          const remoteBankIds = new Set(remoteBanks.map((b) => b.id));
+          const banksToHeal = mergedBanks.filter((b) => {
+            if (!remoteBankIds.has(b.id)) return true;
+            const remote = remoteBanks.find((rb) => rb.id === b.id);
+            if (!remote) return true;
+            const localTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+            const remoteTime = remote.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
+            return localTime > remoteTime || (b.rev ?? 0) > (remote.rev ?? 0);
+          });
+          if (banksToHeal.length > 0) {
+            void upsertBanksInDb(banksToHeal);
           }
           if (d.staticStatus.length > 0) {
             setStaticStatus(d.staticStatus);
@@ -4967,6 +5283,7 @@ export default function CoindexApp() {
       return;
     }
 
+    const prevCard = editingCardId ? cards.find((c) => c.id === editingCardId) : null;
     const cardObj: CreditCardItem = {
       id: editingCardId || `card-${Date.now()}`,
       name: validation.data.name,
@@ -4976,14 +5293,19 @@ export default function CoindexApp() {
       dueDay: validation.data.dueDay,
       logoUrl: validation.data.logoUrl || undefined,
       bankId: validation.data.bankId || undefined,
-      bankName: validation.data.bankName || undefined
+      bankName: validation.data.bankName || undefined,
+      updatedAt: new Date().toISOString(),
+      rev: (prevCard?.rev ?? 0) + 1
     };
 
     const oldCard = editingCardId ? cards.find((c) => c.id === editingCardId) : null;
     const updated = editingCardId ? cards.map((c) => (c.id === editingCardId ? cardObj : c)) : [...cards, cardObj];
     setCards(updated);
+    // Persistência Síncrona Tripla (Sprint 47.1)
+    setUserItem("lifeos_cards_v8", JSON.stringify(updated), currentUserId);
     localStorage.setItem("lifeos_cards_v8", JSON.stringify(updated));
-    upsertCardInDb(cardObj);
+    localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(updated));
+    void upsertCardInDb(cardObj);
 
     // Cascata SSOT: Ao renomear cartão, atualiza todas as transações vinculadas mantendo histórico e faturas
     if (editingCardId && oldCard && (oldCard.name !== cardObj.name || oldCard.bankName !== cardObj.bankName)) {
@@ -5027,8 +5349,11 @@ export default function CoindexApp() {
         recordTombstone(id, currentUserId);
         const updated = cards.filter((c) => c.id !== id);
         setCards(updated);
+        // Persistência Síncrona Tripla (Sprint 47.1)
         setUserItem("lifeos_cards_v8", JSON.stringify(updated), currentUserId);
-        deleteCardInDb(id);
+        localStorage.setItem("lifeos_cards_v8", JSON.stringify(updated));
+        localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(updated));
+        void deleteCardInDb(id);
         notify("Cartão Removido", `"${card?.name || "Cartão"}" excluído com sucesso.`, "warning", "CONFIG");
       }
     });
@@ -5051,19 +5376,26 @@ export default function CoindexApp() {
       return;
     }
 
+    const prevBank = editingBankId ? banks.find((b) => b.id === editingBankId) : null;
     const bankObj: BankItem = {
       id: editingBankId || `bank-${Date.now()}`,
       name: sanitizeText(validation.data.name),
       logoUrl: validation.data.logoUrl || undefined,
       limit: validation.data.limit,
-      limitType: validation.data.limitType || "Cartão de Crédito"
+      limitType: validation.data.limitType || "Cartão de Crédito",
+      updatedAt: new Date().toISOString(),
+      rev: (prevBank?.rev ?? 0) + 1
     };
     const oldBank = editingBankId ? banks.find((b) => b.id === editingBankId) : null;
     const updated = editingBankId
       ? banks.map((b) => (b.id === editingBankId ? bankObj : b))
       : [...banks, bankObj];
     setBanks(updated);
+    // Persistência Síncrona Tripla (Sprint 47.1)
+    setUserItem("lifeos_banks_v8", JSON.stringify(updated), currentUserId);
     localStorage.setItem("lifeos_banks_v1", JSON.stringify(updated));
+    localStorage.setItem("coindex_vault_banks_backup", JSON.stringify(updated));
+    void upsertBankInDb(bankObj);
 
     // SSOT Cascata: Sincroniza nos cartões vinculados e nas transações vinculadas mantendo integridade
     if (editingBankId && oldBank && oldBank.name !== bankObj.name) {
@@ -5132,12 +5464,21 @@ export default function CoindexApp() {
       confirmLabel: "Excluir Banco",
       danger: true,
       onConfirm: () => {
+        recordTombstone(id, currentUserId);
         const updated = banks.filter((b) => b.id !== id);
         setBanks(updated);
+        // Persistência Síncrona Tripla (Sprint 47.1)
+        setUserItem("lifeos_banks_v8", JSON.stringify(updated), currentUserId);
         localStorage.setItem("lifeos_banks_v1", JSON.stringify(updated));
+        localStorage.setItem("coindex_vault_banks_backup", JSON.stringify(updated));
+
         const updatedCards = cards.map((c) => (c.bankId === id ? { ...c, bankId: undefined } : c));
         setCards(updatedCards);
+        setUserItem("lifeos_cards_v8", JSON.stringify(updatedCards), currentUserId);
         localStorage.setItem("lifeos_cards_v8", JSON.stringify(updatedCards));
+        localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(updatedCards));
+
+        void deleteBankInDb(id);
         notify("Banco Removido", `"${bank?.name || "Banco"}" excluído com sucesso.`, "warning", "CONFIG");
       }
     });
@@ -5748,9 +6089,15 @@ export default function CoindexApp() {
 
         setCards(nextCards);
         setUserItem("lifeos_cards_v8", JSON.stringify(nextCards), currentUserId);
+        localStorage.setItem("lifeos_cards_v8", JSON.stringify(nextCards));
+        localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(nextCards));
+        void upsertCardsInDb(nextCards);
 
         setBanks(nextBanks);
-        setUserItem("lifeos_banks_v1", JSON.stringify(nextBanks), currentUserId);
+        setUserItem("lifeos_banks_v8", JSON.stringify(nextBanks), currentUserId);
+        localStorage.setItem("lifeos_banks_v1", JSON.stringify(nextBanks));
+        localStorage.setItem("coindex_vault_banks_backup", JSON.stringify(nextBanks));
+        void upsertBanksInDb(nextBanks);
 
         setStaticStatus(nextStatus);
         setUserItem("lifeos_status_v8", JSON.stringify(nextStatus), currentUserId);
