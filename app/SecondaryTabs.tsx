@@ -4329,7 +4329,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </form>
 
             <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pt-1">
-              {categoriesCatalog.map((cat) => {
+              {[...categoriesCatalog].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })).map((cat) => {
                 const col = categoryColors[cat.name] || "#6366f1";
                 const isBeingEdited = editingCategoryName === cat.name;
                 return (

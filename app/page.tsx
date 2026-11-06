@@ -1629,22 +1629,66 @@ export default function CoindexApp() {
             category: migrateLegacyCategory(t.category, t.description)
           }));
           const finalTxs = migratedTxs;
+          const targetUserId = res.userId || currentUserId;
+          const currentTombstones = getTombstones(targetUserId);
 
-          // Safe merge com o estado local preservando lançamentos recentes e respeitando tombstones (AUD-24)
-          setTransactions((prev) => {
-            const currentTombstones = getTombstones(res.userId || currentUserId);
-            const map = new Map<string, Transaction>();
-            finalTxs.forEach((t) => {
-              if (!currentTombstones.has(t.id)) map.set(t.id, t);
-            });
-            prev.forEach((pt) => {
-              if (!currentTombstones.has(pt.id) && !map.has(pt.id)) {
-                map.set(pt.id, pt);
-              }
-            });
-            return Array.from(map.values()).sort((a, b) => compareDatesBR(b.date, a.date));
+          // Safe merge Last-Write-Wins (LWW) entre o Supabase e o estado local (Sprint 44)
+          let localTxs: Transaction[] = [];
+          try {
+            const rawLocal = getUserItem("lifeos_txs_v8", targetUserId) || localStorage.getItem("lifeos_txs_v8");
+            if (rawLocal) {
+              localTxs = JSON.parse(rawLocal);
+            }
+          } catch (e) {
+            console.error("Erro ao ler transações locais para LWW", e);
+          }
+
+          const remoteMap = new Map<string, Transaction>();
+          finalTxs.forEach((t) => {
+            if (!currentTombstones.has(t.id)) {
+              remoteMap.set(t.id, t);
+            }
           });
-          setUserItem("lifeos_txs_v8", JSON.stringify(finalTxs), res.userId || currentUserId);
+
+          const localNewerToSync: Transaction[] = [];
+          const mergedMap = new Map<string, Transaction>(remoteMap);
+
+          const isLocalNewer = (local: Transaction, remote: Transaction): boolean => {
+            const localTime = local.updatedAt ? new Date(local.updatedAt).getTime() : 0;
+            const remoteTime = remote.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
+            if (localTime !== remoteTime) {
+              return localTime > remoteTime;
+            }
+            const localRev = local.rev ?? 0;
+            const remoteRev = remote.rev ?? 0;
+            return localRev > remoteRev;
+          };
+
+          localTxs.forEach((pt) => {
+            if (currentTombstones.has(pt.id)) return;
+            const remote = remoteMap.get(pt.id);
+            if (!remote) {
+              mergedMap.set(pt.id, pt);
+              localNewerToSync.push(pt);
+            } else if (isLocalNewer(pt, remote)) {
+              mergedMap.set(pt.id, pt);
+              localNewerToSync.push(pt);
+            }
+          });
+
+          const merged = Array.from(mergedMap.values()).sort((a, b) => compareDatesBR(b.date, a.date));
+
+          setTransactions(merged);
+          setUserItem("lifeos_txs_v8", JSON.stringify(merged), targetUserId);
+          localStorage.setItem("lifeos_txs_v8", JSON.stringify(merged));
+
+          if (localNewerToSync.length > 0) {
+            try {
+              await upsertTransactionsInDb(localNewerToSync, debtorMap);
+            } catch (err) {
+              console.error("Erro ao reenviar transações locais mais recentes ao Supabase:", err);
+            }
+          }
 
           if (d.cards.length > 0) {
             setCards(d.cards);
@@ -3743,7 +3787,7 @@ export default function CoindexApp() {
     setExpressFuelType("Gasolina");
     setNewTx({
       date: todayBR(),
-      description: isFuel ? "Abastecimento Gasolina Comum" : "",
+      description: isFuel ? "Abastecimento - Gasolina" : "",
       amount: "",
       category: isFuel ? "Gasolina" : cat,
       costType: "Variável",
@@ -3939,12 +3983,16 @@ export default function CoindexApp() {
               const hasParenInOriginal = /\(\d{1,2}\/\d{1,2}\)/.test(t.description);
               const finalDescription = hasParenInOriginal ? `${cleanBase} (${itemInfo})` : cleanBase;
 
-              const itemInvoiceMonth = isCredit ? getCardInvoiceCompetence(t.date, matchedCard?.closingDay) : undefined;
+              const instInvData = isCredit
+                ? calculateInvoiceAndCashMonths(t.date, matchedCard?.closingDay, matchedCard?.dueDay)
+                : null;
+              const itemInvoiceMonth = isCredit ? instInvData?.invoiceCompetence : undefined;
+              const itemCashMonth = isCredit ? instInvData?.cashMonth : getYearMonthKey(t.date);
 
               const updatedItem: Transaction = {
                 ...t,
                 description: finalDescription,
-                category: newTx.category,
+                category: normalizedCategory,
                 flowType: resolvedFlow,
                 costType: newTx.costType,
                 paymentMethod: newTx.paymentMethod,
@@ -3955,7 +4003,9 @@ export default function CoindexApp() {
                 installmentInfo: itemInfo,
                 installmentGroupId: commonGroupId,
                 invoiceMonth: itemInvoiceMonth,
-                debtor: newTx.category === "A Receber" ? sanitizeText(newTx.debtor) : t.debtor,
+                cashMonth: itemCashMonth,
+                debtor: normalizedCategory === "A Receber" ? sanitizeText(newTx.debtor) : t.debtor,
+                rev: (t.rev ?? 0) + 1,
                 updatedAt: nowIso
               };
               editedItems.push(updatedItem);
@@ -3965,6 +4015,7 @@ export default function CoindexApp() {
           });
 
           setTransactions(updated);
+          setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
           localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
           await upsertTransactionsInDb(editedItems, debtorMap);
           notify(
@@ -3976,10 +4027,10 @@ export default function CoindexApp() {
         } else {
           let editedItem: Transaction | null = null;
           const invData = isCredit
-            ? calculateInvoiceAndCashMonths(newTx.date, matchedCard?.closingDay, matchedCard?.dueDay)
+            ? calculateInvoiceAndCashMonths(normalizedDate, matchedCard?.closingDay, matchedCard?.dueDay)
             : null;
-          const itemInvoiceMonth = invData?.invoiceCompetence;
-          const itemCashMonth = invData?.cashMonth;
+          const itemInvoiceMonth = isCredit ? invData?.invoiceCompetence : undefined;
+          const itemCashMonth = isCredit ? invData?.cashMonth : getYearMonthKey(normalizedDate);
 
           const existingTx = transactions.find((t) => t.id === editingTxId);
           const existingChildId = existingTx?.linkedReceivableId;
@@ -4046,6 +4097,7 @@ export default function CoindexApp() {
                   linkedReceivableId: finalLinkedReceivableId,
                   indexer: newTx.indexer,
                   cdiPercentage: newTx.cdiPercentage ? parseFloat(newTx.cdiPercentage) : undefined,
+                  rev: (t.rev ?? 0) + 1,
                   updatedAt: nowIso
                 };
                 updatedEditedItem = editedItem;
@@ -4064,6 +4116,7 @@ export default function CoindexApp() {
             }
 
             try {
+              setUserItem("lifeos_txs_v8", JSON.stringify(next), currentUserId);
               localStorage.setItem("lifeos_txs_v8", JSON.stringify(next));
             } catch (err) {
               console.error("Erro ao salvar localStorage lifeos_txs_v8", err);
@@ -4118,19 +4171,19 @@ export default function CoindexApp() {
         }
       } else if (installmentsCount > 1 && isCredit) {
         const slices = distributeInstallments(totalAmount, installmentsCount);
-        const seriesId = generateInstallmentSeriesId(newTx.description, newTx.date, totalAmount);
+        const seriesId = generateInstallmentSeriesId(newTx.description, normalizedDate, totalAmount);
         const createdList: Transaction[] = [];
 
         for (let i = 0; i < slices.length; i++) {
           const slice = slices[i];
-          const instDate = addMonthsToDate(newTx.date, i);
+          const instDate = addMonthsToDate(normalizedDate, i);
           const invData = calculateInvoiceAndCashMonths(instDate, matchedCard?.closingDay, matchedCard?.dueDay);
           createdList.push({
             id: `tx-${Date.now()}-${i}`,
             date: instDate,
             description: sanitizeText(newTx.description),
             amount: slice.amount,
-            category: newTx.category,
+            category: normalizedCategory,
             flowType: resolvedFlow,
             costType: newTx.costType,
             paymentMethod: newTx.paymentMethod,
@@ -4144,12 +4197,14 @@ export default function CoindexApp() {
             installmentSeriesId: seriesId,
             invoiceMonth: invData.invoiceCompetence,
             cashMonth: invData.cashMonth,
-            debtor: newTx.category === "A Receber" ? sanitizeText(newTx.debtor) : undefined,
+            debtor: normalizedCategory === "A Receber" ? sanitizeText(newTx.debtor) : undefined,
+            rev: 1,
             updatedAt: nowIso
           });
         }
         const updated = [...createdList, ...transactions];
         setTransactions(updated);
+        setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
         localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
         await upsertTransactionsInDb(createdList, debtorMap);
         notify(
@@ -4162,8 +4217,8 @@ export default function CoindexApp() {
         const invData = isCredit
           ? calculateInvoiceAndCashMonths(normalizedDate, matchedCard?.closingDay, matchedCard?.dueDay)
           : null;
-        const itemInvoiceMonth = invData?.invoiceCompetence;
-        const itemCashMonth = invData?.cashMonth;
+        const itemInvoiceMonth = isCredit ? invData?.invoiceCompetence : undefined;
+        const itemCashMonth = isCredit ? invData?.cashMonth : getYearMonthKey(normalizedDate);
         const parentId = `tx-${Date.now()}`;
         let childItem: Transaction | null = null;
         let childId: string | undefined = undefined;
@@ -4184,6 +4239,7 @@ export default function CoindexApp() {
             paidAmount: 0,
             isSplitChild: true,
             linkedSplitParentId: parentId,
+            rev: 1,
             updatedAt: nowIso
           };
         }
@@ -4219,6 +4275,7 @@ export default function CoindexApp() {
           linkedReceivableId: childId,
           indexer: newTx.indexer,
           cdiPercentage: newTx.cdiPercentage ? parseFloat(newTx.cdiPercentage) : undefined,
+          rev: 1,
           updatedAt: nowIso
         };
 
@@ -4233,6 +4290,7 @@ export default function CoindexApp() {
         setTransactions((prev) => {
           const next = [...toSaveList, ...prev.filter((t) => !toSaveList.some((s) => s.id === t.id))];
           try {
+            setUserItem("lifeos_txs_v8", JSON.stringify(next), currentUserId);
             localStorage.setItem("lifeos_txs_v8", JSON.stringify(next));
           } catch (err) {
             console.error("Erro ao salvar localStorage lifeos_txs_v8", err);

@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.31.0`  
-> **Última Atualização:** 4 de Novembro de 2026 (Pós-Sprint 42 — Correção Visual e Contábil + R$ Verde em Empréstimos, Exclusão Direta em Devedores e Modal Raio-X Célula por Célula nos 4 KPIs)  
+> **Versão da Aplicação:** `0.32.0`  
+> **Última Atualização:** 5 de Novembro de 2026 (Pós-Sprint 44 — Correção de Persistência ao Editar Data, Safe Merge Last-Write-Wins (LWW), Unificação de Combustível em Gasolina e Ordenação A-Z de Categorias)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -803,6 +803,27 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Rodapé com prova real matemática (`Sum Check`): `Total de Células: N lançamentos | Soma Algébrica Exata: R$ XXX,XX (100% reconciliado com o Card)`.
       - Sub-aba exclusiva de **"Memória de Cálculo do Safe-to-Spend"** para o Card 4 (Balanço), detalhando Saldo em Contas (banco a banco), Receitas Pendentes, Contas Diretas Pendentes e Faturas de Cartão de Crédito.
       - Correção do `Safe-to-Spend` no modo `"ALL"` (`Histórico Geral`): utiliza a data de referência segura do mês corrente (`currentCalendarDate.yearMonth`), evitando o falso déficit de anos passados e garantindo compatibilidade total com o pré-renderizador do Next.js 16.
+
+  - **Sprint 44 (Novembro de 2026 — Correção de Persistência ao Editar Data, Safe Merge Last-Write-Wins (LWW), Unificação de Combustível em Gasolina e Ordenação A-Z de Categorias):**
+    - **Passo 1 — Persistência Robusta de Datas e Resolução LWW com Supabase:**
+      - No `SmartDateInputBR`: disparo de `onChange` imediato no evento de digitação ao completar 8 dígitos válidos (`DD/MM/AAAA` ou `DD-MM-AAAA`), e `onBlur` com fallback de segurança para a data anterior válida ou `todayBR()`.
+      - Normalização universal de data (`formatDateBR || todayBR()`) em todas as submissões (`handleFormSubmit` e `handleSaveAndNewClick`).
+      - Em `app/page.tsx` (`handleSaveTransaction`): cálculo contábil de competência de fatura e caixa com base em `normalizedDate`. Isolamento estrito de `itemCashMonth` e anulação de `itemInvoiceMonth` para transações que não são cartão de crédito.
+      - Edição de compras parceladas (`applyToAllSeries`): recálculo individual de `invoiceMonth` e `cashMonth` de cada parcela mantendo histórico contábil íntegro.
+      - Dupla persistência síncrona atômica no mesmo tick (`setUserItem("lifeos_txs_v8")` + `localStorage.setItem("lifeos_txs_v8")`) em todos os 4 pontos de gravação.
+      - Safe merge com Supabase via algoritmo Last-Write-Wins (LWW): comparação de `updatedAt` e `rev`. Registros locais mais recentes são preservados e reenviados ao banco de dados via `upsertTransactionsInDb`.
+      - Atualização do payload de `upsertTransactionsInDb` e `migrateAllStateToSupabase` incluindo `bank_account`, `fuel_type`, `full_tank`, `flow_type`, `invoice_month`, `cash_month`, `rev` e `updated_at`.
+    - **Passo 2 — Unificação Completa de Categorias de Combustível para "Gasolina":**
+      - Em `migrateLegacyCategory` (`lifeos-data.tsx`): unificação determinística de todas as variações históricas ("Gasolina/Combustível", "Combustível (Gasolina / Etanol)", "Combustível", "Abastecimento", "Etanol", "Posto", etc.) para a categoria oficial `"Gasolina"` (`#f59e0b`).
+      - Remoção de "Combustível (Gasolina / Etanol)" do catálogo padrão `DEFAULT_CATEGORIES_CATALOG`.
+      - Atualização da regra de auto-categorização bancária em `app/lib/domain/bank-ingest.ts` (`OFFICIAL_AUTO_CATEGORY_RULES`) para categorizar postos diretamente como `"Gasolina"`.
+      - Posto Express (`TransactionModal.tsx` e `page.tsx`): categoria `"Gasolina"` e descrição padrão `"Abastecimento - Gasolina"`.
+    - **Passo 3 — Ordenação Alfabética Rigorosa de A a Z para Categorias:**
+      - Criação da função pura `sortCategoriesAlphabetically` com `localeCompare("pt-BR", { sensitivity: "base" })`.
+      - Catálogo `DEFAULT_CATEGORIES_CATALOG` e `OFFICIAL_CATEGORIES` pré-ordenados de A a Z.
+      - No modal de transação (`TransactionModal.tsx`): `<select>` de categorias memoizado com ordenação alfabética `sortedCategories`.
+      - Na tabela avançada (`TransactionsTableAdvanced.tsx`): `allUniqueCategories` ordenado com `localeCompare("pt-BR")`.
+      - Na aba de Configurações (`SecondaryTabs.tsx`): listagem de badges de categorias ordenada de A a Z.
 
 ---
 

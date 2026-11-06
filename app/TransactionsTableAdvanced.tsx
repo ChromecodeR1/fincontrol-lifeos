@@ -340,7 +340,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
 
   // Lista de categorias e métodos únicos para os popovers de filtro
   const allUniqueCategories = useMemo(
-    () => Array.from(new Set(filteredTransactions.map((t) => t.category))).sort(),
+    () => Array.from(new Set(filteredTransactions.map((t) => t.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })),
     [filteredTransactions]
   );
   const allUniqueMethods = useMemo(

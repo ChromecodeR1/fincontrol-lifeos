@@ -55,7 +55,7 @@ export const OFFICIAL_AUTO_CATEGORY_RULES: CategoryRule[] = [
   },
   {
     keywords: ["posto", "shell", "ipiranga", "petrobras", "abastecimento", "combustivel", "gasolina", "etanol", "diesel", "auto posto", "auto servico posto"],
-    category: "Combustível",
+    category: "Gasolina",
     costType: "Variável",
     paymentMethod: "Débito em Conta"
   },

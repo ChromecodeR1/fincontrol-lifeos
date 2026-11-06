@@ -116,7 +116,17 @@ export const SmartDateInputBR: React.FC<SmartDateInputBRProps> = ({
   }, [value]);
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+    const raw = e.target.value;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) {
+      const br = formatDateBR(raw.trim());
+      if (br) {
+        setTextValue(formatToDisplay(br));
+        onChange(br);
+        return;
+      }
+    }
+
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
     let formatted = digits;
     if (digits.length > 4) {
       formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
@@ -125,7 +135,7 @@ export const SmartDateInputBR: React.FC<SmartDateInputBRProps> = ({
     }
     setTextValue(formatted);
 
-    // Se completou os 8 dígitos (DD/MM/AAAA)
+    // Se completou os 8 dígitos (DD/MM/AAAA ou DD-MM-AAAA)
     if (digits.length === 8) {
       const day = parseInt(digits.slice(0, 2), 10);
       const month = parseInt(digits.slice(2, 4), 10);
@@ -138,6 +148,29 @@ export const SmartDateInputBR: React.FC<SmartDateInputBRProps> = ({
         onChange(validBR);
       }
     }
+  };
+
+  const handleBlur = () => {
+    const digits = textValue.replace(/\D/g, "");
+    if (digits.length === 8) {
+      const day = parseInt(digits.slice(0, 2), 10);
+      const month = parseInt(digits.slice(2, 4), 10);
+      const year = parseInt(digits.slice(4, 8), 10);
+
+      if (month >= 1 && month <= 12 && year >= 1900 && year <= 2099) {
+        const maxDays = daysInMonth(year, month);
+        const safeDay = Math.min(Math.max(1, day), maxDays);
+        const validBR = `${String(safeDay).padStart(2, "0")}-${String(month).padStart(2, "0")}-${year}`;
+        setTextValue(formatToDisplay(validBR));
+        onChange(validBR);
+        return;
+      }
+    }
+
+    // Se o usuário deixar incompleto ou inválido, restaura o último valor válido ou data de hoje
+    const fallback = formatDateBR(value) || todayBR();
+    setTextValue(formatToDisplay(fallback));
+    onChange(fallback);
   };
 
   const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,6 +210,7 @@ export const SmartDateInputBR: React.FC<SmartDateInputBRProps> = ({
         required={required}
         value={textValue}
         onChange={handleTextChange}
+        onBlur={handleBlur}
         className="w-full px-3.5 py-2.5 bg-transparent text-white font-mono tabular-nums text-xs outline-none placeholder:text-slate-500"
       />
       <button
@@ -296,6 +330,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   }, [transactions]);
 
   // Sugestões filtradas em tempo real conforme a digitação do usuário
+  const sortedCategories = useMemo(
+    () => [...categoriesCatalog].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })),
+    [categoriesCatalog]
+  );
+
   const suggestions = useMemo(() => {
     if (editingTxId) return [];
     const q = (formState.description || "").trim().toLowerCase();
@@ -535,6 +574,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedDate = formatDateBR(formState.date) || todayBR();
+
     if (isPostoExpress) {
       let finalAmount = formState.amount;
       const parsedAmount = parseFloat(evaluateMathExpression(formState.amount) || "0") || 0;
@@ -545,7 +586,36 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         finalAmount = (parsedLiters * parsedPrice).toFixed(2);
       }
 
-      const normalizedDate = formatDateBR(formState.date) || todayBR();
+      setFormState((prev) => ({
+        ...prev,
+        amount: finalAmount,
+        date: normalizedDate,
+        category: "Gasolina",
+        status: prev.status || "Pago",
+        fuelType: expressFuelType
+      }));
+    } else {
+      setFormState((prev) => ({
+        ...prev,
+        date: normalizedDate
+      }));
+    }
+    onSubmit(e);
+  };
+
+  const handleSaveAndNewClick = (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalizedDate = formatDateBR(formState.date) || todayBR();
+
+    if (isPostoExpress) {
+      let finalAmount = formState.amount;
+      const parsedAmount = parseFloat(evaluateMathExpression(formState.amount) || "0") || 0;
+      const parsedLiters = parseFloat(formState.liters?.replace(",", ".") || "0") || 0;
+      const parsedPrice = parseFloat(formState.pricePerLiter?.replace(",", ".") || "0") || 0;
+
+      if (parsedAmount <= 0 && parsedLiters > 0 && parsedPrice > 0) {
+        finalAmount = (parsedLiters * parsedPrice).toFixed(2);
+      }
 
       setFormState((prev) => ({
         ...prev,
@@ -555,8 +625,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         status: prev.status || "Pago",
         fuelType: expressFuelType
       }));
+    } else {
+      setFormState((prev) => ({
+        ...prev,
+        date: normalizedDate
+      }));
     }
-    onSubmit(e);
+    if (onSaveAndNew) {
+      onSaveAndNew(e);
+    }
   };
 
   if (!isOpen) return null;
@@ -658,7 +735,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   category: "Gasolina",
                   description:
                     !prev.description || prev.description.toLowerCase().includes("abastecimento")
-                      ? `Abastecimento ${expressFuelType === "Etanol" ? "Etanol" : "Gasolina Comum"}`
+                      ? "Abastecimento - Gasolina"
                       : prev.description
                 }));
               }}
@@ -854,7 +931,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       fuelType: "Gasolina",
                       description:
                         !prev.description || prev.description.toLowerCase().includes("abastecimento")
-                          ? "Abastecimento Gasolina Comum"
+                          ? "Abastecimento - Gasolina"
                           : prev.description
                     }));
                   }}
@@ -1405,7 +1482,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   }}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-indigo-500"
                 >
-                  {categoriesCatalog.map((c) => (
+                  {sortedCategories.map((c) => (
                     <option key={c.name} value={c.name}>
                       {c.name}
                     </option>
@@ -1843,7 +1920,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   !formState.thirdPartyName?.trim()
                 ))
               }
-              onClick={onSaveAndNew}
+              onClick={handleSaveAndNewClick}
               className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-[var(--cupertino-border)] text-slate-200 hover:text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-sm"
             >
               {isSavingTx ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 text-[#0A84FF]" />}

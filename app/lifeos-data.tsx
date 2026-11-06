@@ -380,10 +380,22 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.29.0";
-export const PREVIOUS_VERSION = "0.27.0";
+export const APP_VERSION = "0.32.0";
+export const PREVIOUS_VERSION = "0.31.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.32.0",
+    date: "Nov/2026",
+    title: "Sprint 44: Persistência Robusta de Datas, Last-Write-Wins (LWW), Unificação de Combustível em Gasolina e Ordenação A-Z de Categorias",
+    highlights: [
+      "Persistência Instantânea de Datas: Sincronização em tempo real de digitação no SmartDateInputBR com recálculo automático de competência e desembolso de caixa (cashMonth).",
+      "Last-Write-Wins (LWW) & Resolução de Conflitos: Hidratação resiliente com comparação de updatedAt e versão (rev), reenviando registros locais mais recentes para o Supabase PostgreSQL.",
+      "Unificação de Categorias de Combustível: Todas as variações legadas (Combustível, Posto, Etanol, etc.) normalizadas para 'Gasolina' (#f59e0b).",
+      "Ordenação Alfabética A a Z: Catálogo de categorias 100% ordenado de A a Z em todas as interfaces (modais, filtros, tabelas e configurações) com locale pt-BR.",
+      "Dupla Persistência Síncrona Atômica: setUserItem e localStorage.setItem disparados no mesmo tick em todas as mutações financeiras."
+    ]
+  },
   {
     version: "0.28.0",
     date: "Nov/2026",
@@ -799,9 +811,22 @@ export function migrateLegacyCategory(category?: string | null, description = ""
     c === "Gasolina/Combustível" ||
     c === "Gasolina / Combustível" ||
     c === "Gasolina / Combustivel" ||
-    c === "Gasolina/Combustivel"
+    c === "Gasolina/Combustivel" ||
+    c === "Combustível (Gasolina / Etanol)" ||
+    c === "Combustivel (Gasolina / Etanol)" ||
+    c === "Combustível" ||
+    c === "Combustivel" ||
+    c === "Abastecimento Gasolina/Etanol" ||
+    c === "Abastecimento Gasolina / Etanol" ||
+    c === "Abastecimento" ||
+    c === "Etanol" ||
+    c === "Gasolina / Etanol" ||
+    c === "Gasolina/Etanol" ||
+    c === "Posto / Combustível" ||
+    c === "Posto / Combustivel" ||
+    c === "Posto"
   ) {
-    return "Combustível (Gasolina / Etanol)";
+    return "Gasolina";
   }
 
   // Divisões baseadas em descrição
@@ -831,48 +856,53 @@ export function migrateLegacyCategory(category?: string | null, description = ""
   return c;
 }
 
-export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = [
-  { name: "Salário", flow: "INCOME" },
-  { name: "Receita Extra", flow: "INCOME" },
-  { name: "Benefícios (VA/Combustível)", flow: "INCOME" },
-  { name: "Comissão", flow: "INCOME" },
-  { name: "Serviços", flow: "INCOME" },
-  { name: "Rendimentos", flow: "INCOME" },
+export function sortCategoriesAlphabetically<T extends { name: string }>(categories: T[]): T[] {
+  return [...categories].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
+}
+
+export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = sortCategoriesAlphabetically([
+  { name: "A Receber", flow: "RECEIVABLE" },
+  { name: "Academia", flow: "EXPENSE" },
+  { name: "Água & Gás", flow: "EXPENSE" },
+  { name: "Alimentação", flow: "EXPENSE" },
+  { name: "Aluguel", flow: "EXPENSE" },
   { name: "Aporte / Investimento", flow: "INVESTMENT" },
+  { name: "Assinaturas", flow: "EXPENSE" },
+  { name: "Benefícios (VA/Combustível)", flow: "INCOME" },
+  { name: "Celular / Telefonia", flow: "EXPENSE" },
+  { name: "Comissão", flow: "INCOME" },
+  { name: "Cuidados Pessoais", flow: "EXPENSE" },
+  { name: "Cursos", flow: "EXPENSE" },
+  { name: "Delivery", flow: "EXPENSE" },
+  { name: "Educação", flow: "EXPENSE" },
+  { name: "Estacionamento", flow: "EXPENSE", isAuto: true },
+  { name: "Farmácia", flow: "EXPENSE" },
+  { name: "Gasolina", flow: "EXPENSE", isAuto: true },
+  { name: "Gastos Pessoais", flow: "EXPENSE" },
+  { name: "Impostos & Taxas", flow: "EXPENSE" },
+  { name: "Internet", flow: "EXPENSE" },
+  { name: "IPVA", flow: "EXPENSE", isAuto: true },
+  { name: "Lazer", flow: "EXPENSE" },
+  { name: "Licenciamento", flow: "EXPENSE", isAuto: true },
+  { name: "Manutenção", flow: "EXPENSE", isAuto: true },
+  { name: "Moradia", flow: "EXPENSE" },
+  { name: "Pagamento de Fatura", flow: "NEUTRAL" },
+  { name: "Recebimento de Empréstimo", flow: "NEUTRAL" },
+  { name: "Receita Extra", flow: "INCOME" },
+  { name: "Rendimentos", flow: "INCOME" },
   { name: "Resgate", flow: "INVESTMENT" },
   { name: "Resgate Caixinha", flow: "INVESTMENT" },
-  { name: "Transferência entre Contas", flow: "NEUTRAL" },
-  { name: "Recebimento de Empréstimo", flow: "NEUTRAL" },
-  { name: "Pagamento de Fatura", flow: "NEUTRAL" },
-  { name: "A Receber", flow: "RECEIVABLE" },
-  { name: "Alimentação", flow: "EXPENSE" },
   { name: "Restaurante", flow: "EXPENSE" },
-  { name: "Delivery", flow: "EXPENSE" },
-  { name: "Moradia", flow: "EXPENSE" },
-  { name: "Aluguel", flow: "EXPENSE" },
-  { name: "Água & Gás", flow: "EXPENSE" },
-  { name: "Celular / Telefonia", flow: "EXPENSE" },
-  { name: "Impostos & Taxas", flow: "EXPENSE" },
-  { name: "Transporte / Uber", flow: "EXPENSE" },
-  { name: "Cuidados Pessoais", flow: "EXPENSE" },
-  { name: "Gastos Pessoais", flow: "EXPENSE" },
+  { name: "Salário", flow: "INCOME" },
   { name: "Saúde", flow: "EXPENSE" },
-  { name: "Farmácia", flow: "EXPENSE" },
-  { name: "Academia", flow: "EXPENSE" },
-  { name: "Assinaturas", flow: "EXPENSE" },
-  { name: "Internet", flow: "EXPENSE" },
-  { name: "Lazer", flow: "EXPENSE" },
-  { name: "Educação", flow: "EXPENSE" },
-  { name: "Cursos", flow: "EXPENSE" },
-  { name: "Combustível (Gasolina / Etanol)", flow: "EXPENSE", isAuto: true },
-  { name: "Gasolina", flow: "EXPENSE", isAuto: true },
-  { name: "Manutenção", flow: "EXPENSE", isAuto: true },
-  { name: "Troca de Óleo", flow: "EXPENSE", isAuto: true },
-  { name: "IPVA", flow: "EXPENSE", isAuto: true },
-  { name: "Licenciamento", flow: "EXPENSE", isAuto: true },
   { name: "Seguro", flow: "EXPENSE", isAuto: true },
-  { name: "Estacionamento", flow: "EXPENSE", isAuto: true }
-];
+  { name: "Serviços", flow: "INCOME" },
+  { name: "Transferência entre Contas", flow: "NEUTRAL" },
+  { name: "Transporte / Uber", flow: "EXPENSE" },
+  { name: "Troca de Óleo", flow: "EXPENSE", isAuto: true }
+]);
+
+export const OFFICIAL_CATEGORIES = DEFAULT_CATEGORIES_CATALOG.map((c) => c.name);
 
 export const DEFAULT_PAYMENT_METHODS: string[] = [
   "PIX",
