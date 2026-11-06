@@ -235,7 +235,7 @@ import { TransactionModal, SmartDateInputBR } from "./components/TransactionModa
 import { ProfileModal } from "./components/ProfileModal";
 import KpiAuditModal from "./components/KpiAuditModal";
 import { AmbientBackgroundFX, AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
-import { AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber";
+import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
 import {
   calculateVehicleConsumption,
   calculateVehicleTco,

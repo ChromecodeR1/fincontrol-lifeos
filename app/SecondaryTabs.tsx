@@ -39,7 +39,7 @@ import { parseDateParts } from "./lib/domain/date-br";
 import { BanksTab } from "./components/BanksTab";
 import { VehiclesTab } from "./components/VehiclesTab";
 import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
-import { AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber";
+import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
 import { COINDEX_LOGO_VARIANTS, CoindexLogoVariant, CoindexIcon } from "./components/CoindexLogo";
 
 /**
@@ -287,6 +287,439 @@ export interface SecondaryTabsProps {
   setLogFilter: (f: string) => void;
 }
 
+// ============================================================================
+// SPRINT 47: CARD DO STRAVA PROGRESS + METAS ISOLADO COM REACT.MEMO (144HZ ZERO-JANK)
+// Desacopla o scrubbing do mouse da árvore do SecondaryTabs para 144fps contínuos
+// ============================================================================
+interface StravaProgressGridProps {
+  stravaProgressPoints: any[];
+  stravaSport: "run" | "all";
+  setStravaSport: (s: "run" | "all") => void;
+  stravaPeriod: "7D" | "1M" | "3M" | "6M" | "1Y";
+  setStravaPeriod: (p: "7D" | "1M" | "3M" | "6M" | "1Y") => void;
+  stravaGearRef: React.RefObject<HTMLButtonElement | null>;
+  stravaSettingsOpen: boolean;
+  setStravaSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  stravaChartSettings: ChartWidgetSettings;
+  handleUpdateStravaChartSettings: (s: ChartWidgetSettings) => void;
+  currentWeekStats: any;
+  weeklyRunGoalKm: number;
+  annualProgressStats: any;
+  setEditWeeklyGoal: (v: string) => void;
+  setEditAnnualGoal: (v: string) => void;
+  setIsGoalsModalOpen: (open: boolean) => void;
+  stravaYTicks: number[];
+  stravaYTop: number;
+}
+
+const StravaProgressGrid = React.memo(function StravaProgressGrid(props: StravaProgressGridProps) {
+  const {
+    stravaProgressPoints,
+    stravaSport,
+    setStravaSport,
+    stravaPeriod,
+    setStravaPeriod,
+    stravaGearRef,
+    stravaSettingsOpen,
+    setStravaSettingsOpen,
+    stravaChartSettings,
+    handleUpdateStravaChartSettings,
+    currentWeekStats,
+    weeklyRunGoalKm,
+    annualProgressStats,
+    setEditWeeklyGoal,
+    setEditAnnualGoal,
+    setIsGoalsModalOpen,
+    stravaYTicks,
+    stravaYTop
+  } = props;
+
+  // Encontra último ponto com corrida
+  const defaultIndex = useMemo(() => {
+    for (let i = stravaProgressPoints.length - 1; i >= 0; i--) {
+      if (stravaProgressPoints[i]?.distanceKm > 0) return i;
+    }
+    return Math.max(0, stravaProgressPoints.length - 1);
+  }, [stravaProgressPoints]);
+
+  const [selectedPointIndex, setSelectedPointIndex] = useState<number>(defaultIndex);
+
+  useEffect(() => {
+    setSelectedPointIndex(defaultIndex);
+  }, [stravaPeriod, defaultIndex]);
+
+  const activeStravaPoint =
+    stravaProgressPoints[selectedPointIndex] ||
+    stravaProgressPoints[defaultIndex] ||
+    stravaProgressPoints[stravaProgressPoints.length - 1] || {
+      rangeLabel: "Semana Selecionada",
+      distanceKm: 0,
+      movingTimeMin: 0,
+      elevationGain: 0
+    };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+      {/* COLUNA ESQUERDA (lg:col-span-8): CARD DO GRÁFICO INTERATIVO STRAVA PROGRESS */}
+      <div className="lg:col-span-8 bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+        <div>
+          {/* Barra de Pílulas no Topo do Card */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            {/* À esquerda: Pílula seletora de esporte */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/60 border border-[var(--cupertino-border)]">
+              <button
+                type="button"
+                onClick={() => setStravaSport("run")}
+                className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                  stravaSport === "run"
+                    ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                🏃 Corrida
+              </button>
+              <button
+                type="button"
+                onClick={() => setStravaSport("all")}
+                className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                  stravaSport === "all"
+                    ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                🔥 Todos os Esportes
+              </button>
+            </div>
+
+            {/* À direita: As 5 pílulas oficiais de período do Strava + Engrenagem */}
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 p-0.5 rounded-xl bg-slate-900/60 border border-[var(--cupertino-border)]">
+                {(["7D", "1M", "3M", "6M", "1Y"] as const).map((p) => {
+                  const isActive = stravaPeriod === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setStravaPeriod(p)}
+                      className={`rounded-lg px-3 py-1 text-xs font-bold transition-all cursor-pointer border ${
+                        isActive
+                          ? "border-[#FC4C02] bg-[#FC4C02]/10 text-[#FC4C02]"
+                          : "border-transparent text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Popover de Configurações */}
+              <div className="relative">
+                <button
+                  ref={stravaGearRef}
+                  type="button"
+                  onClick={() => setStravaSettingsOpen((prev) => !prev)}
+                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-[var(--cupertino-border)] transition cursor-pointer"
+                  title="Configurações do gráfico Strava"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
+
+                <ChartSettingsPopover
+                  isOpen={stravaSettingsOpen}
+                  onClose={() => setStravaSettingsOpen(false)}
+                  anchorRef={stravaGearRef}
+                  chartKind="area"
+                  hasMultipleSeries={false}
+                  settings={stravaChartSettings}
+                  onChange={handleUpdateStravaChartSettings}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Cabeçalho Dinâmico de Telemetria Acima do Gráfico */}
+          <div className="mb-4">
+            <h4 className="text-lg font-bold text-[var(--cupertino-text)] mb-3 tracking-tight">
+              {activeStravaPoint.rangeLabel}
+            </h4>
+
+            <div className="grid grid-cols-3 gap-3 border-b border-[var(--cupertino-border)] pb-3">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                  Distância
+                </span>
+                <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
+                  <AnimatedMetric value={activeStravaPoint.distanceKm} decimals={2} />{" "}
+                  <span className="text-sm font-semibold text-slate-400">km</span>
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                  Tempo
+                </span>
+                <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
+                  {Math.floor(activeStravaPoint.movingTimeMin / 60)}h{" "}
+                  {String(Math.round(activeStravaPoint.movingTimeMin % 60)).padStart(2, "0")}m
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                  Ganho Elev.
+                </span>
+                <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
+                  {Math.round(activeStravaPoint.elevationGain)}{" "}
+                  <span className="text-sm font-semibold text-slate-400">m</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Área do Gráfico Recharts Estilo Strava Progress */}
+        <div
+          style={{ height: getChartHeightPx(stravaChartSettings.height, 220) }}
+          className="w-full select-none"
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={stravaProgressPoints}
+              margin={{ top: 12, right: 12, left: 4, bottom: 4 }}
+              accessibilityLayer={false}
+              onMouseMove={(state: any) => {
+                if (state && typeof state.activeTooltipIndex === "number" && state.activeTooltipIndex >= 0) {
+                  setSelectedPointIndex(state.activeTooltipIndex);
+                }
+              }}
+              onClick={(state: any) => {
+                if (state && typeof state.activeTooltipIndex === "number" && state.activeTooltipIndex >= 0) {
+                  setSelectedPointIndex(state.activeTooltipIndex);
+                }
+              }}
+            >
+              <defs>
+                <linearGradient id="stravaOrangeGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FC4C02" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#FC4C02" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+
+              <CartesianGrid vertical={false} stroke="rgba(148, 163, 184, 0.15)" />
+
+              <XAxis
+                dataKey="xLabel"
+                stroke="#64748B"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+              />
+
+              <YAxis
+                orientation="right"
+                stroke="#64748B"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                domain={[0, stravaYTop]}
+                ticks={stravaYTicks}
+                tickFormatter={(v) => `${v} km`}
+                width={45}
+              />
+
+              <Tooltip
+                content={() => null}
+                cursor={{ stroke: "#FC4C02", strokeWidth: 1.5, strokeDasharray: "3 3" }}
+              />
+
+              {stravaProgressPoints[selectedPointIndex] && (
+                <ReferenceLine
+                  x={stravaProgressPoints[selectedPointIndex].xKey}
+                  stroke="#FC4C02"
+                  strokeWidth={2}
+                />
+              )}
+
+              <Area
+                type="linear"
+                dataKey="distanceKm"
+                name="Distância"
+                stroke="#FC4C02"
+                strokeWidth={2.5}
+                fill="url(#stravaOrangeGrad)"
+                dot={(props: any) => {
+                  const { cx, cy, index } = props;
+                  if (cx == null || cy == null || isNaN(cx) || isNaN(cy)) return null;
+                  const isSel = index === selectedPointIndex;
+                  if (isSel) {
+                    return (
+                      <g
+                        key={`strava-dot-${index}`}
+                        className="cursor-pointer"
+                        onClick={() => setSelectedPointIndex(index)}
+                      >
+                        <circle cx={cx} cy={cy} r={10} fill="rgba(252, 76, 2, 0.22)" />
+                        <circle cx={cx} cy={cy} r={6} fill="#FC4C02" stroke="#FFFFFF" strokeWidth={2.5} />
+                      </g>
+                    );
+                  }
+                  return (
+                    <circle
+                      key={`strava-dot-${index}`}
+                      cx={cx}
+                      cy={cy}
+                      r={4.5}
+                      fill="#131824"
+                      stroke="#FC4C02"
+                      strokeWidth={2.5}
+                      className="cursor-pointer transition-transform hover:scale-125"
+                      onClick={() => setSelectedPointIndex(index)}
+                    />
+                  );
+                }}
+                activeDot={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* COLUNA DIREITA (lg:col-span-4): CARD DUPLO DE METAS (ESTA SEMANA + ESTE ANO) */}
+      <div className="lg:col-span-4 bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-lg flex flex-col justify-between relative">
+        {/* Botão de Edição das Metas no Canto Superior Direito */}
+        <button
+          type="button"
+          onClick={() => {
+            setEditWeeklyGoal(String(weeklyRunGoalKm));
+            setEditAnnualGoal(String(annualProgressStats.annualGoal));
+            setIsGoalsModalOpen(true);
+          }}
+          className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-[var(--cupertino-border)] transition cursor-pointer"
+          title="Editar metas de corrida"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Metade Superior: ESTA SEMANA */}
+        <div className="flex flex-col items-center">
+          <h5 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 text-center">
+            ESTA SEMANA
+          </h5>
+
+          <div className="text-2xl font-extrabold tabular-nums text-center text-[var(--cupertino-text)] mt-1">
+            <AnimatedMetric value={currentWeekStats.weeklyCurrentKm} decimals={1} /> / {weeklyRunGoalKm} km
+          </div>
+
+          <div className="flex items-center justify-between gap-3 my-4 w-full px-2">
+            {/* Dias da Semana (S T Q Q S S D) */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {currentWeekStats.daysInfo.map((d: any, i: number) => (
+                <div key={i} className="flex flex-col items-center gap-1.5">
+                  <div
+                    className={`w-3.5 sm:w-4 h-1 rounded-full transition-colors ${
+                      d.hasRun || d.isToday ? "bg-[#FC4C02]" : "bg-slate-700"
+                    }`}
+                  />
+                  <span className="text-[10px] font-bold text-slate-400">{d.letter}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Anel Circular com Tênis de Corrida */}
+            <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
+              <svg className="w-16 h-16 -rotate-90 transform" viewBox="0 0 60 60">
+                <circle
+                  cx="30"
+                  cy="30"
+                  r="24"
+                  stroke="rgba(148, 163, 184, 0.2)"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <circle
+                  cx="30"
+                  cy="30"
+                  r="24"
+                  stroke="#FC4C02"
+                  strokeWidth="4"
+                  strokeDasharray={2 * Math.PI * 24}
+                  strokeDashoffset={
+                    2 *
+                    Math.PI *
+                    24 *
+                    (1 - Math.min(1, currentWeekStats.weeklyCurrentKm / Math.max(1, weeklyRunGoalKm)))
+                  }
+                  strokeLinecap="round"
+                  fill="none"
+                  className="transition-all duration-500 ease-out animate-svg-draw"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center text-[#FC4C02]">
+                <Footprints className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Rodapé de ESTA SEMANA */}
+          <p className="text-center text-xs text-slate-400 font-medium">
+            {currentWeekStats.weeklyHours}h {currentWeekStats.weeklyMins}min • {currentWeekStats.weeklyElev} m de subida
+          </p>
+        </div>
+
+        {/* Divisor Separando as Duas Metades */}
+        <div className="border-t border-[var(--cupertino-border)] pt-4 mt-4" />
+
+        {/* Metade Inferior: ESTE ANO (Com Barra de Ritmo e Marcador HOJE) */}
+        <div className="flex flex-col items-center">
+          <h5 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 text-center">
+            ESTE ANO
+          </h5>
+
+          <div className="text-2xl font-extrabold tabular-nums text-center text-[var(--cupertino-text)] mt-1">
+            <AnimatedMetric value={annualProgressStats.ytdKm} decimals={0} /> / {annualProgressStats.annualGoal} km
+          </div>
+
+          {/* Barra de Progresso Anual com Marcador HOJE */}
+          <div className="relative h-3.5 w-full bg-slate-800/90 rounded-sm overflow-visible my-5">
+            <div
+              className="bg-[#34D399] h-full rounded-l-sm transition-all duration-500"
+              style={{ width: `${annualProgressStats.progressPct}%` }}
+            />
+            <div
+              className="absolute -top-1 bottom-[-8px] w-[2px] bg-slate-300 pointer-events-none"
+              style={{ left: `${annualProgressStats.todayPct}%` }}
+            >
+              <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-slate-300 whitespace-nowrap">
+                HOJE
+              </span>
+            </div>
+          </div>
+
+          {/* Frase de Status do Ritmo */}
+          <div className="text-center mt-3">
+            {annualProgressStats.paceDeltaKm < 0 && (
+              <span className="text-xs font-semibold text-[#FC4C02]">
+                {Math.abs(annualProgressStats.paceDeltaKm)} km abaixo do ritmo
+              </span>
+            )}
+            {annualProgressStats.paceDeltaKm > 0 && (
+              <span className="text-xs font-semibold text-[#34D399]">
+                {annualProgressStats.paceDeltaKm} km acima do ritmo
+              </span>
+            )}
+            {annualProgressStats.paceDeltaKm === 0 && (
+              <span className="text-xs font-semibold text-slate-300">
+                Exatamente no ritmo da meta
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function SecondaryTabs(props: SecondaryTabsProps) {
   const {
     activeTab, moneyBlur, currentUser, currentUserAvatar, themeMode, changeThemeMode,
@@ -410,7 +843,6 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   const [stravaInnerTab, setStravaInnerTab] = useState<"progress" | "activities">("progress");
   const [stravaSport, setStravaSport] = useState<"run" | "all">("run");
   const [stravaPeriod, setStravaPeriod] = useState<"7D" | "1M" | "3M" | "6M" | "1Y">("3M");
-  const [selectedPointIndex, setSelectedPointIndex] = useState<number>(0);
   const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
   const [editWeeklyGoal, setEditWeeklyGoal] = useState<string>("15");
   const [editAnnualGoal, setEditAnnualGoal] = useState<string>("500");
@@ -1088,9 +1520,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     return Math.max(0, stravaProgressPoints.length - 1);
   }, [stravaProgressPoints, stravaPeriod, hasDatedActivities]);
 
-  useEffect(() => {
-    setSelectedPointIndex(lastActiveStravaPointIdx);
-  }, [stravaPeriod, lastActiveStravaPointIdx]);
+  // SPRINT 47: selectedPointIndex isolado no StravaProgressGrid memoizado para 144Hz zero-jank
 
   // Estatísticas da Semana Atual
   const currentWeekStats = useMemo(() => {
@@ -2145,15 +2575,6 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     const stravaYTop = Math.max(10, Math.ceil((stravaYMaxRaw * 1.15) / 5) * 5);
     const stravaYMid = Math.round(stravaYTop / 2);
     const stravaYTicks = [0, stravaYMid, stravaYTop];
-    const activeStravaPoint =
-      stravaProgressPoints[selectedPointIndex] ||
-      stravaProgressPoints[lastActiveStravaPointIdx] ||
-      stravaProgressPoints[stravaProgressPoints.length - 1] || {
-        rangeLabel: "Semana Selecionada",
-        distanceKm: 0,
-        movingTimeMin: 0,
-        elevationGain: 0
-      };
 
     return (
       <div className="space-y-6">
@@ -2468,368 +2889,26 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               {isSyncingStrava && (
                 <div className="absolute inset-0 rounded-2xl cupertino-shimmer pointer-events-none z-20 opacity-40" />
               )}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-              {/* COLUNA ESQUERDA (lg:col-span-8): CARD DO GRÁFICO INTERATIVO STRAVA PROGRESS */}
-              <div className="lg:col-span-8 bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-lg flex flex-col justify-between">
-                <div>
-                  {/* Barra de Pílulas no Topo do Card */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                    {/* À esquerda: Pílula seletora de esporte */}
-                    <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/60 border border-[var(--cupertino-border)]">
-                      <button
-                        type="button"
-                        onClick={() => setStravaSport("run")}
-                        className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                          stravaSport === "run"
-                            ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
-                            : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        🏃 Corrida
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setStravaSport("all")}
-                        className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                          stravaSport === "all"
-                            ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
-                            : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        🔥 Todos os Esportes
-                      </button>
-                    </div>
-
-                    {/* À direita: As 5 pílulas oficiais de período do Strava + Engrenagem */}
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex items-center gap-1 p-0.5 rounded-xl bg-slate-900/60 border border-[var(--cupertino-border)]">
-                        {(["7D", "1M", "3M", "6M", "1Y"] as const).map((p) => {
-                          const isActive = stravaPeriod === p;
-                          return (
-                            <button
-                              key={p}
-                              type="button"
-                              onClick={() => setStravaPeriod(p)}
-                              className={`rounded-lg px-3 py-1 text-xs font-bold transition-all cursor-pointer border ${
-                                isActive
-                                  ? "border-[#FC4C02] bg-[#FC4C02]/10 text-[#FC4C02]"
-                                  : "border-transparent text-slate-400 hover:text-slate-200"
-                              }`}
-                            >
-                              {p}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Popover de Configurações */}
-                      <div className="relative">
-                        <button
-                          ref={stravaGearRef}
-                          type="button"
-                          onClick={() => setStravaSettingsOpen((prev) => !prev)}
-                          className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-[var(--cupertino-border)] transition cursor-pointer"
-                          title="Configurações do gráfico Strava"
-                        >
-                          <Settings className="w-3.5 h-3.5" />
-                        </button>
-
-                        <ChartSettingsPopover
-                          isOpen={stravaSettingsOpen}
-                          onClose={() => setStravaSettingsOpen(false)}
-                          anchorRef={stravaGearRef}
-                          chartKind="area"
-                          hasMultipleSeries={false}
-                          settings={stravaChartSettings}
-                          onChange={handleUpdateStravaChartSettings}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Cabeçalho Dinâmico de Telemetria Acima do Gráfico */}
-                  <div className="mb-4">
-                    <h4 className="text-lg font-bold text-[var(--cupertino-text)] mb-3 tracking-tight">
-                      {activeStravaPoint.rangeLabel}
-                    </h4>
-
-                    <div className="grid grid-cols-3 gap-3 border-b border-[var(--cupertino-border)] pb-3">
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
-                          Distância
-                        </span>
-                        <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
-                          <AnimatedMetric value={activeStravaPoint.distanceKm} decimals={2} />{" "}
-                          <span className="text-sm font-semibold text-slate-400">km</span>
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
-                          Tempo
-                        </span>
-                        <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
-                          {Math.floor(activeStravaPoint.movingTimeMin / 60)}h{" "}
-                          {String(Math.round(activeStravaPoint.movingTimeMin % 60)).padStart(2, "0")}m
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
-                          Ganho Elev.
-                        </span>
-                        <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
-                          {Math.round(activeStravaPoint.elevationGain)}{" "}
-                          <span className="text-sm font-semibold text-slate-400">m</span>
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Área do Gráfico Recharts Estilo Strava Progress */}
-                <div
-                  style={{ height: getChartHeightPx(stravaChartSettings.height, 220) }}
-                  className="w-full select-none"
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={stravaProgressPoints}
-                      margin={{ top: 12, right: 12, left: 4, bottom: 4 }}
-                      accessibilityLayer={false}
-                      onMouseMove={(state: any) => {
-                        if (state && typeof state.activeTooltipIndex === "number" && state.activeTooltipIndex >= 0) {
-                          setSelectedPointIndex(state.activeTooltipIndex);
-                        }
-                      }}
-                      onClick={(state: any) => {
-                        if (state && typeof state.activeTooltipIndex === "number" && state.activeTooltipIndex >= 0) {
-                          setSelectedPointIndex(state.activeTooltipIndex);
-                        }
-                      }}
-                    >
-                      <defs>
-                        <linearGradient id="stravaOrangeGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#FC4C02" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#FC4C02" stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-
-                      <CartesianGrid vertical={false} stroke="rgba(148, 163, 184, 0.15)" />
-
-                      <XAxis
-                        dataKey="xKey"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: "#94a3b8", fontSize: 10, fontWeight: 700 }}
-                        tickFormatter={(_, idx) => {
-                          const pt = stravaProgressPoints[idx];
-                          if (!pt) return "";
-                          if (stravaPeriod === "7D") return pt.label;
-                          if (stravaPeriod === "1M" || stravaPeriod === "1Y") return pt.monthShort;
-                          if (idx === 0 || pt.monthShort !== stravaProgressPoints[idx - 1]?.monthShort) {
-                            return pt.monthShort;
-                          }
-                          return "";
-                        }}
-                      />
-
-                      <YAxis
-                        orientation="right"
-                        axisLine={false}
-                        tickLine={false}
-                        domain={[0, stravaYTop]}
-                        ticks={stravaYTicks}
-                        tick={{ fill: "#94a3b8", fontSize: 11 }}
-                        tickFormatter={(v) => `${Math.round(v)} km`}
-                      />
-
-                      <Tooltip content={() => null} cursor={false} />
-
-                      {stravaProgressPoints[selectedPointIndex] && (
-                        <ReferenceLine
-                          x={stravaProgressPoints[selectedPointIndex].xKey}
-                          stroke="#FC4C02"
-                          strokeWidth={2}
-                        />
-                      )}
-
-                      <Area
-                        type="linear"
-                        dataKey="distanceKm"
-                        name="Distância"
-                        stroke="#FC4C02"
-                        strokeWidth={2.5}
-                        fill="url(#stravaOrangeGrad)"
-                        dot={(dotProps: any) => {
-                          const { cx, cy, index } = dotProps;
-                          if (cx == null || cy == null || isNaN(cx) || isNaN(cy)) return null;
-                          const isSel = index === selectedPointIndex;
-                          if (isSel) {
-                            return (
-                              <g
-                                key={`strava-dot-${index}`}
-                                className="cursor-pointer"
-                                onClick={() => setSelectedPointIndex(index)}
-                              >
-                                <circle cx={cx} cy={cy} r={10} fill="rgba(252, 76, 2, 0.22)" />
-                                <circle cx={cx} cy={cy} r={5.5} fill="#FC4C02" stroke="#FFFFFF" strokeWidth={1.5} />
-                              </g>
-                            );
-                          }
-                          return (
-                            <circle
-                              key={`strava-dot-${index}`}
-                              cx={cx}
-                              cy={cy}
-                              r={4.5}
-                              fill="#131824"
-                              stroke="#FC4C02"
-                              strokeWidth={2.5}
-                              className="cursor-pointer transition-transform hover:scale-125"
-                              onClick={() => setSelectedPointIndex(index)}
-                            />
-                          );
-                        }}
-                        activeDot={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* COLUNA DIREITA (lg:col-span-4): CARD DUPLO DE METAS (ESTA SEMANA + ESTE ANO) */}
-              <div className="lg:col-span-4 bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-lg flex flex-col justify-between relative">
-                {/* Botão de Edição das Metas no Canto Superior Direito */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditWeeklyGoal(String(weeklyRunGoalKm));
-                    setEditAnnualGoal(String(annualProgressStats.annualGoal));
-                    setIsGoalsModalOpen(true);
-                  }}
-                  className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-[var(--cupertino-border)] transition cursor-pointer"
-                  title="Editar metas de corrida"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Metade Superior: ESTA SEMANA */}
-                <div className="flex flex-col items-center">
-                  <h5 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 text-center">
-                    ESTA SEMANA
-                  </h5>
-
-                  <div className="text-2xl font-extrabold tabular-nums text-center text-[var(--cupertino-text)] mt-1">
-                    <AnimatedMetric value={currentWeekStats.weeklyCurrentKm} decimals={1} /> / {weeklyRunGoalKm} km
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 my-4 w-full px-2">
-                    {/* Dias da Semana (S T Q Q S S D) */}
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      {currentWeekStats.daysInfo.map((d, i) => (
-                        <div key={i} className="flex flex-col items-center gap-1.5">
-                          <div
-                            className={`w-3.5 sm:w-4 h-1 rounded-full transition-colors ${
-                              d.hasRun || d.isToday ? "bg-[#FC4C02]" : "bg-slate-700"
-                            }`}
-                          />
-                          <span className="text-[10px] font-bold text-slate-400">{d.letter}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Anel Circular com Tênis de Corrida */}
-                    <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
-                      <svg className="w-16 h-16 -rotate-90 transform" viewBox="0 0 60 60">
-                        <circle
-                          cx="30"
-                          cy="30"
-                          r="24"
-                          stroke="rgba(148, 163, 184, 0.2)"
-                          strokeWidth="4"
-                          fill="none"
-                        />
-                        <circle
-                          cx="30"
-                          cy="30"
-                          r="24"
-                          stroke="#FC4C02"
-                          strokeWidth="4"
-                          strokeDasharray={2 * Math.PI * 24}
-                          strokeDashoffset={
-                            2 *
-                            Math.PI *
-                            24 *
-                            (1 - Math.min(1, currentWeekStats.weeklyCurrentKm / Math.max(1, weeklyRunGoalKm)))
-                          }
-                          strokeLinecap="round"
-                          fill="none"
-                          className="transition-all duration-500 ease-out animate-svg-draw"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center text-[#FC4C02]">
-                        <Footprints className="w-5 h-5" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Rodapé de ESTA SEMANA */}
-                  <p className="text-center text-xs text-slate-400 font-medium">
-                    {currentWeekStats.weeklyHours}h {currentWeekStats.weeklyMins}min • {currentWeekStats.weeklyElev} m de subida
-                  </p>
-                </div>
-
-                {/* Divisor Separando as Duas Metades */}
-                <div className="border-t border-[var(--cupertino-border)] pt-4 mt-4" />
-
-                {/* Metade Inferior: ESTE ANO (Com Barra de Ritmo e Marcador HOJE) */}
-                <div className="flex flex-col items-center">
-                  <h5 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 text-center">
-                    ESTE ANO
-                  </h5>
-
-                  <div className="text-2xl font-extrabold tabular-nums text-center text-[var(--cupertino-text)] mt-1">
-                    <AnimatedMetric value={annualProgressStats.ytdKm} decimals={0} /> / {annualProgressStats.annualGoal} km
-                  </div>
-
-                  {/* Barra de Progresso Anual com Marcador HOJE */}
-                  <div className="relative h-3.5 w-full bg-slate-800/90 rounded-sm overflow-visible my-5">
-                    <div
-                      className="bg-[#34D399] h-full rounded-l-sm transition-all duration-500"
-                      style={{ width: `${annualProgressStats.progressPct}%` }}
-                    />
-                    <div
-                      className="absolute -top-1 bottom-[-8px] w-[2px] bg-slate-300 pointer-events-none"
-                      style={{ left: `${annualProgressStats.todayPct}%` }}
-                    >
-                      <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-slate-300 whitespace-nowrap">
-                        HOJE
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Frase de Status do Ritmo */}
-                  <div className="text-center mt-3">
-                    {annualProgressStats.paceDeltaKm < 0 && (
-                      <span className="text-xs font-semibold text-[#FC4C02]">
-                        {Math.abs(annualProgressStats.paceDeltaKm)} km abaixo do ritmo
-                      </span>
-                    )}
-                    {annualProgressStats.paceDeltaKm > 0 && (
-                      <span className="text-xs font-semibold text-[#34D399]">
-                        {annualProgressStats.paceDeltaKm} km acima do ritmo
-                      </span>
-                    )}
-                    {annualProgressStats.paceDeltaKm === 0 && (
-                      <span className="text-xs font-semibold text-slate-300">
-                        Exatamente no ritmo da meta
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+              <StravaProgressGrid
+                stravaProgressPoints={stravaProgressPoints}
+                stravaSport={stravaSport}
+                setStravaSport={setStravaSport}
+                stravaPeriod={stravaPeriod}
+                setStravaPeriod={setStravaPeriod}
+                stravaGearRef={stravaGearRef}
+                stravaSettingsOpen={stravaSettingsOpen}
+                setStravaSettingsOpen={setStravaSettingsOpen}
+                stravaChartSettings={stravaChartSettings}
+                handleUpdateStravaChartSettings={handleUpdateStravaChartSettings}
+                currentWeekStats={currentWeekStats}
+                weeklyRunGoalKm={weeklyRunGoalKm}
+                annualProgressStats={annualProgressStats}
+                setEditWeeklyGoal={setEditWeeklyGoal}
+                setEditAnnualGoal={setEditAnnualGoal}
+                setIsGoalsModalOpen={setIsGoalsModalOpen}
+                stravaYTicks={stravaYTicks}
+                stravaYTop={stravaYTop}
+              />
           </div>
           )}
 

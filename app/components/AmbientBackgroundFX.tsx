@@ -50,13 +50,30 @@ export const AMBIENT_FX_OPTIONS: { id: AmbientFxMode; label: string; icon: strin
 export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({ mode = "hybrid" }) => {
   const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [coords, setCoords] = useState<{ x: number; y: number }>({ x: 50, y: 30 });
+  const spotlightRef = useRef<HTMLDivElement>(null);
+  const rafId = useRef<number | null>(null);
+  const lastMousePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Spotlight Mouse Move Listener (otimizado com requestAnimationFrame)
+  // 1. Pausa Inteligente quando Aba Inativa (document.hidden) para poupar GPU/bateria
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (containerRef.current) {
+        if (document.hidden) {
+          containerRef.current.classList.add("tab-inactive-paused");
+        } else {
+          containerRef.current.classList.remove("tab-inactive-paused");
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
+  // 2. Cursor Spotlight com requestAnimationFrame Coalescido e ZERO setState
   useEffect(() => {
     if (!mounted || (mode !== "spotlight" && mode !== "hybrid")) return;
 
@@ -66,22 +83,28 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({ mode =
       if (isTouch || prefersReduced) return;
     }
 
-    let rafId: number | null = null;
-
     const handleMouseMove = (e: MouseEvent) => {
-      if (rafId) return;
-      rafId = window.requestAnimationFrame(() => {
-        const xPct = Math.round((e.clientX / window.innerWidth) * 100);
-        const yPct = Math.round((e.clientY / window.innerHeight) * 100);
-        setCoords({ x: xPct, y: yPct });
-        rafId = null;
+      lastMousePos.current.x = e.clientX;
+      lastMousePos.current.y = e.clientY;
+
+      if (rafId.current !== null) return;
+
+      rafId.current = window.requestAnimationFrame(() => {
+        if (spotlightRef.current) {
+          spotlightRef.current.style.setProperty("--spot-x", `${lastMousePos.current.x}px`);
+          spotlightRef.current.style.setProperty("--spot-y", `${lastMousePos.current.y}px`);
+        }
+        rafId.current = null;
       });
     };
 
     window.addEventListener("mousemove", handleMouseMove, { passive: true });
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
-      if (rafId) window.cancelAnimationFrame(rafId);
+      if (rafId.current) {
+        window.cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
     };
   }, [mounted, mode]);
 
@@ -97,16 +120,16 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({ mode =
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none"
+      className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none [contain:strict]"
       aria-hidden="true"
       style={{ transform: "none" }}
     >
-      {/* 1. AURORA CUPERTINO MESH */}
+      {/* 1. AURORA CUPERTINO MESH (GPU Compositor puro com translate3d e will-change) */}
       {showAurora && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden [contain:strict]">
           {/* Esfera 1: Cupertino Blue (#0A84FF) - Topo Esquerdo */}
           <div
-            className={`absolute -top-32 -left-32 w-[620px] h-[620px] rounded-full blur-[130px] transition-opacity duration-1000 ${
+            className={`absolute -top-32 -left-32 w-[620px] h-[620px] rounded-full blur-[130px] transition-opacity duration-1000 [will-change:transform] ${
               mode === "hybrid" ? "opacity-[0.12] dark:opacity-[0.14]" : "opacity-[0.14] dark:opacity-[0.18]"
             }`}
             style={{
@@ -117,7 +140,7 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({ mode =
 
           {/* Esfera 2: Cupertino Indigo/Purple (#5E5CE6) - Topo Direito */}
           <div
-            className={`absolute -top-28 -right-28 w-[640px] h-[640px] rounded-full blur-[140px] transition-opacity duration-1000 ${
+            className={`absolute -top-28 -right-28 w-[640px] h-[640px] rounded-full blur-[140px] transition-opacity duration-1000 [will-change:transform] ${
               mode === "hybrid" ? "opacity-[0.10] dark:opacity-[0.14]" : "opacity-[0.13] dark:opacity-[0.17]"
             }`}
             style={{
@@ -128,7 +151,7 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({ mode =
 
           {/* Esfera 3: Cupertino Emerald (#30D158) - Centro Inferior */}
           <div
-            className={`absolute -bottom-40 left-1/4 w-[700px] h-[600px] rounded-full blur-[150px] transition-opacity duration-1000 ${
+            className={`absolute -bottom-40 left-1/4 w-[700px] h-[600px] rounded-full blur-[150px] transition-opacity duration-1000 [will-change:transform] ${
               mode === "hybrid" ? "opacity-[0.08] dark:opacity-[0.12]" : "opacity-[0.11] dark:opacity-[0.15]"
             }`}
             style={{
@@ -142,7 +165,7 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({ mode =
       {/* 2. LINEAR ARCHITECTURAL GRID */}
       {showGrid && (
         <div
-          className={`absolute inset-0 pointer-events-none transition-opacity duration-700 ${
+          className={`absolute inset-0 pointer-events-none transition-opacity duration-700 [contain:strict] ${
             mode === "hybrid" ? "opacity-[0.035] dark:opacity-[0.06]" : "opacity-[0.06] dark:opacity-[0.10]"
           }`}
           style={{
@@ -160,7 +183,7 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({ mode =
 
       {/* 3. TITANIUM LIGHT RAYS & MATTE */}
       {showRays && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden [contain:strict]">
           {/* Feixes Volumétricos Cônicos */}
           <div
             className="absolute -top-[20%] left-1/2 -translate-x-1/2 w-[120vw] h-[80vh] blur-[90px] opacity-[0.14] dark:opacity-[0.20] transition-opacity duration-1000"
@@ -179,14 +202,15 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({ mode =
         </div>
       )}
 
-      {/* 4. INTERACTIVE CURSOR SPOTLIGHT */}
+      {/* 4. INTERACTIVE CURSOR SPOTLIGHT (GPU Compositor 144Hz via CSS Custom Properties) */}
       {showSpotlight && (
         <div
-          className={`absolute inset-0 pointer-events-none transition-opacity duration-500 ${
+          ref={spotlightRef}
+          className={`absolute inset-0 pointer-events-none transition-opacity duration-500 [contain:strict] ${
             mode === "hybrid" ? "opacity-70" : "opacity-100"
           }`}
           style={{
-            background: `radial-gradient(650px circle at ${coords.x}% ${coords.y}%, rgba(10, 132, 255, 0.10), rgba(94, 92, 230, 0.04) 40%, transparent 70%)`
+            background: `radial-gradient(650px circle at var(--spot-x, 50vw) var(--spot-y, 30vh), rgba(10, 132, 255, 0.10), rgba(94, 92, 230, 0.04) 40%, transparent 70%)`
           }}
         />
       )}

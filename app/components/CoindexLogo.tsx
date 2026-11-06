@@ -100,9 +100,9 @@ export function CoindexIcon({
 
       {/* ========================================================
           GRUPO ESQUERDO: ELO "C" EM TITÂNIO (cx=44, cy=42, r=26)
-          Translada -1.5px no hover magnético
+          Translada -1.5px no hover magnético com GPU compositor
           ======================================================== */}
-      <g className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-[1.5px]">
+      <g className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform] group-hover:-translate-x-[1.5px]">
         {/* Camada 1: Arco Completo da Letra "C" */}
         <path
           d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
@@ -142,9 +142,9 @@ export function CoindexIcon({
 
       {/* ========================================================
           GRUPO DIREITO: ANEL COMPLETO APPLE BLUE (cx=76, cy=42, r=26)
-          Translada +1.5px no hover magnético
+          Translada +1.5px no hover magnético com GPU compositor
           ======================================================== */}
-      <g className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[1.5px]">
+      <g className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform] group-hover:translate-x-[1.5px]">
         {/* Camada 2: Anel Completo Azul */}
         <circle
           cx="76"
@@ -174,7 +174,7 @@ export function CoindexIcon({
           INTERSECÇÃO INFERIOR: ELO ESQUERDO BRANCO "C" PASSA POR CIMA
           Corte de 3.5px (strokeWidth=17) com a cor do fundo
           ======================================================== */}
-      <g className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-[1.5px]">
+      <g className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform] group-hover:-translate-x-[1.5px]">
         {/* Recorte de fundo no azul */}
         <path
           d="M 44 68 A 26 26 0 0 0 64.49 58.01"
