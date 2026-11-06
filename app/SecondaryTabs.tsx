@@ -39,6 +39,8 @@ import { parseDateParts } from "./lib/domain/date-br";
 import { BanksTab } from "./components/BanksTab";
 import { VehiclesTab } from "./components/VehiclesTab";
 import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
+import { AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber";
+import { COINDEX_LOGO_VARIANTS, CoindexLogoVariant, CoindexIcon } from "./components/CoindexLogo";
 
 /**
  * Formata ritmo/pace esportivo exato em min:seg /km (AUD-15).
@@ -421,6 +423,38 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     }
     return 15;
   });
+
+  // SPRINT 46: Estado e Controle de Variante de Logo Coindex Minimalista
+  const [activeLogoVariant, setActiveLogoVariant] = useState<CoindexLogoVariant>("kinetic_arc");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("coindex_logo_variant") as CoindexLogoVariant | null;
+      if (saved && ["kinetic_arc", "equilibrium_rings", "ascending_bars", "precision_quadrant"].includes(saved)) {
+        setActiveLogoVariant(saved);
+      }
+    } catch {}
+
+    const handleStorageChange = () => {
+      try {
+        const saved = localStorage.getItem("coindex_logo_variant") as CoindexLogoVariant | null;
+        if (saved && ["kinetic_arc", "equilibrium_rings", "ascending_bars", "precision_quadrant"].includes(saved)) {
+          setActiveLogoVariant(saved);
+        }
+      } catch {}
+    };
+
+    window.addEventListener("coindex_logo_change", handleStorageChange);
+    return () => window.removeEventListener("coindex_logo_change", handleStorageChange);
+  }, []);
+
+  const handleSelectLogoVariant = (variant: CoindexLogoVariant) => {
+    setActiveLogoVariant(variant);
+    try {
+      localStorage.setItem("coindex_logo_variant", variant);
+      window.dispatchEvent(new Event("coindex_logo_change"));
+    } catch {}
+  };
 
   // Lista de Devedores Únicos para Filtro
   const uniqueDebtors = useMemo(() => {
@@ -2371,8 +2405,11 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
         </div>
 
-        {/* SPRINT 41: PAINEL STRAVA PROGRESS REDESIGN & WIDGET DE METAS */}
-        <div className="bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-xl space-y-5">
+        {/* SPRINT 41 & 46: PAINEL STRAVA PROGRESS REDESIGN & WIDGET DE METAS */}
+        <div className="relative overflow-hidden bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-xl space-y-5">
+          {isSyncingStrava && (
+            <div className="absolute top-0 left-0 right-0 h-1 bg-[#FC4C02] cupertino-shimmer z-30" />
+          )}
           {/* Abas Superiores de Navegação Interna: Progresso vs Atividades */}
           <div className="flex items-center justify-between border-b border-[var(--cupertino-border)] pb-3">
             <div className="flex items-center gap-6">
@@ -2427,7 +2464,11 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
 
           {/* VISÃO 1: PROGRESSO (GRID 12 COLUNAS: 8 COL GRÁFICO + 4 COL METAS) */}
           {stravaInnerTab === "progress" && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            <div className="relative">
+              {isSyncingStrava && (
+                <div className="absolute inset-0 rounded-2xl cupertino-shimmer pointer-events-none z-20 opacity-40" />
+              )}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
               {/* COLUNA ESQUERDA (lg:col-span-8): CARD DO GRÁFICO INTERATIVO STRAVA PROGRESS */}
               <div className="lg:col-span-8 bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] rounded-2xl p-5 shadow-lg flex flex-col justify-between">
                 <div>
@@ -2518,7 +2559,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                           Distância
                         </span>
                         <span className="tabular-nums text-2xl font-extrabold text-[var(--cupertino-text)]">
-                          {activeStravaPoint.distanceKm.toFixed(2).replace(".", ",")}{" "}
+                          <AnimatedMetric value={activeStravaPoint.distanceKm} decimals={2} />{" "}
                           <span className="text-sm font-semibold text-slate-400">km</span>
                         </span>
                       </div>
@@ -2680,7 +2721,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   </h5>
 
                   <div className="text-2xl font-extrabold tabular-nums text-center text-[var(--cupertino-text)] mt-1">
-                    {currentWeekStats.weeklyCurrentKm.toFixed(1).replace(".", ",")} / {weeklyRunGoalKm} km
+                    <AnimatedMetric value={currentWeekStats.weeklyCurrentKm} decimals={1} /> / {weeklyRunGoalKm} km
                   </div>
 
                   <div className="flex items-center justify-between gap-3 my-4 w-full px-2">
@@ -2724,7 +2765,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                           }
                           strokeLinecap="round"
                           fill="none"
-                          className="transition-all duration-500 ease-out"
+                          className="transition-all duration-500 ease-out animate-svg-draw"
                         />
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center text-[#FC4C02]">
@@ -2749,7 +2790,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   </h5>
 
                   <div className="text-2xl font-extrabold tabular-nums text-center text-[var(--cupertino-text)] mt-1">
-                    {Math.round(annualProgressStats.ytdKm)} / {annualProgressStats.annualGoal} km
+                    <AnimatedMetric value={annualProgressStats.ytdKm} decimals={0} /> / {annualProgressStats.annualGoal} km
                   </div>
 
                   {/* Barra de Progresso Anual com Marcador HOJE */}
@@ -2789,6 +2830,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 </div>
               </div>
             </div>
+          </div>
           )}
 
           {/* VISÃO 2: ATIVIDADES (TABELA COMPLETA DE TREINOS COM FEED OFICIAL) */}
@@ -3866,6 +3908,62 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                       {opt.label}
                     </h4>
                     <p className="text-[11px] text-slate-400 mt-1 leading-snug">{opt.desc}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* SPRINT 46: SELEÇÃO DA IDENTIDADE VETORIAL MINIMALISTA COINDEX */}
+        <div className="glass-card p-6 rounded-3xl border border-[var(--cupertino-border)] space-y-4 shadow-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                <CoindexIcon className="w-5 h-5" variant={activeLogoVariant} />
+                <span>Identidade Vetorial Minimalista (Símbolo Coindex)</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Escolha o conceito geométrico do logotipo exibido na Topbar, Sidebar e ícones do sistema.
+              </p>
+            </div>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30">
+              Conceito: {COINDEX_LOGO_VARIANTS.find((v) => v.id === activeLogoVariant)?.name}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {COINDEX_LOGO_VARIANTS.map((v) => {
+              const isSelected = activeLogoVariant === v.id;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => handleSelectLogoVariant(v.id)}
+                  className={`p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 apple-press ${
+                    isSelected
+                      ? "bg-[#0A84FF]/15 border-[#0A84FF]/50 shadow-md ring-1 ring-[#0A84FF]/40 -translate-y-0.5"
+                      : "bg-white/[0.03] hover:bg-white/[0.06] border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-10 h-10 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-center p-1.5 shadow-inner">
+                      <CoindexIcon className="w-full h-full" variant={v.id} />
+                    </div>
+                    {isSelected ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0A84FF] text-white">
+                        ATIVO
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-500">Selecionar</span>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className={`text-xs font-bold ${isSelected ? "text-white" : "text-slate-200"}`}>
+                      {v.name}
+                    </h4>
+                    <p className="text-[10px] text-[#0A84FF] font-semibold mt-0.5">{v.tagline}</p>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-snug">{v.desc}</p>
                   </div>
                 </button>
               );

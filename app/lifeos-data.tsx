@@ -380,10 +380,22 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.33.0";
-export const PREVIOUS_VERSION = "0.32.0";
+export const APP_VERSION = "0.34.0";
+export const PREVIOUS_VERSION = "0.33.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.34.0",
+    date: "Nov/2026",
+    title: "Sprint 46: Motor de Motions 120Hz Apple Spring, Number Ticker CountUp, Loaders Shimmer Contextuais e Nova Identidade Vetorial Minimalista",
+    highlights: [
+      "Nova Identidade Vetorial Minimalista: 4 conceitos geométricos em vetor SVG puro (Kinetic Arc [Padrão Apple Copilot], Equilibrium Rings [Audi], Ascending Bars [Adidas/Bauhaus] e Precision Quadrant [BMW/Braun]) com seletor em tempo real.",
+      "Number Ticker 120Hz (AnimatedNumber): Animação fluida de transição numérica com interpolação ease-out quártica nos 4 Slim KPIs, Patrimônio Líquido, Donut e Metas Strava.",
+      "Loaders Shimmer Contextuais: Shimmer contínuo nos estados de carregamento do Supabase, painel Strava Progress, taxa CDI BCB e importação bancária CSV/OFX.",
+      "Micro-Interações Táteis Apple Spring: Resposta tátil ao clique (.apple-press scale 0.97), animação de traçado SVG (@keyframes svgDrawIn) e flash de linha atualizada (@keyframes rowSuccessFlash).",
+      "Garantia Anti-Modal Trap: Remoção estrita de transforms residuais em containers pais garantindo integridade das modais de 100dvh."
+    ]
+  },
   {
     version: "0.33.0",
     date: "Nov/2026",

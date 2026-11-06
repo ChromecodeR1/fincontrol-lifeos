@@ -235,6 +235,7 @@ import { TransactionModal, SmartDateInputBR } from "./components/TransactionModa
 import { ProfileModal } from "./components/ProfileModal";
 import KpiAuditModal from "./components/KpiAuditModal";
 import { AmbientBackgroundFX, AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
+import { AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber";
 import {
   calculateVehicleConsumption,
   calculateVehicleTco,
@@ -5894,6 +5895,7 @@ export default function CoindexApp() {
         dot: "bg-amber-400 animate-pulse shadow-[0_0_8px_#f59e0b]",
         label: "Sincronizando...",
         status: "syncing",
+        icon: <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />,
         timestamp: sheetsSyncStatus.timestamp || new Date().toLocaleTimeString("pt-BR")
       };
     }
@@ -5903,6 +5905,7 @@ export default function CoindexApp() {
         dot: "bg-rose-500 shadow-[0_0_8px_#f43f5e]",
         label: "Erro de Sync",
         status: "error",
+        icon: <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />,
         timestamp: sheetsSyncStatus.timestamp || ""
       };
     }
@@ -5912,6 +5915,7 @@ export default function CoindexApp() {
         dot: "bg-emerald-400 shadow-[0_0_8px_#10b981]",
         label: "Sincronizado",
         status: "synced",
+        icon: <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 stroke-[2.5]" />,
         timestamp: sheetsSyncStatus.timestamp || ""
       };
     }
@@ -5920,6 +5924,7 @@ export default function CoindexApp() {
       dot: "bg-slate-400",
       label: "Offline (Local)",
       status: "offline",
+      icon: <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />,
       timestamp: sheetsSyncStatus.timestamp || ""
     };
   }, [isSyncing, sheetsSyncStatus, currentUser]);
@@ -6134,7 +6139,11 @@ export default function CoindexApp() {
                     {currentUser}
                   </strong>
                   <span className={`text-[10px] flex items-center gap-1.5 font-medium ${syncIndicator.color.split(" ")[0]}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${syncIndicator.dot}`} />
+                    {syncIndicator.status === "syncing" ? (
+                      <Loader2 className="w-2.5 h-2.5 animate-spin shrink-0" />
+                    ) : (
+                      <span className={`w-1.5 h-1.5 rounded-full ${syncIndicator.dot}`} />
+                    )}
                     <span>{syncIndicator.label}</span>
                   </span>
                 </div>
@@ -6389,16 +6398,16 @@ export default function CoindexApp() {
             </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
-                {/* Indicador de Sincronização em Tempo Real (Sprint 22) */}
+                {/* Indicador de Sincronização em Tempo Real (Sprint 22 & 46) */}
                 <div
-                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono font-medium backdrop-blur-md transition ${syncIndicator.color}`}
+                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono font-medium backdrop-blur-md transition-all duration-300 ${syncIndicator.color}`}
                   title={
                     syncIndicator.timestamp
                       ? `${syncIndicator.label} — Última sync: ${syncIndicator.timestamp}`
                       : syncIndicator.label
                   }
                 >
-                  <span className={`w-2 h-2 rounded-full ${syncIndicator.dot}`} />
+                  {syncIndicator.icon}
                   <span>{syncIndicator.label}</span>
                   {syncIndicator.timestamp && (
                     <span className="text-[10px] opacity-70">({syncIndicator.timestamp})</span>
@@ -6781,7 +6790,7 @@ export default function CoindexApp() {
                         </div>
                       </div>
                       <p className="kpi-val-income text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#30D158] leading-tight mt-0.5">
-                        +{formatBRL(monthSummary.income)}
+                        +<AnimatedBRL value={monthSummary.income} />
                       </p>
                     </div>
                     <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
@@ -6822,7 +6831,7 @@ export default function CoindexApp() {
                         </div>
                       </div>
                       <p className="kpi-val-expense text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#FF453A] leading-tight mt-0.5">
-                        -{formatBRL(monthSummary.expense)}
+                        -<AnimatedBRL value={monthSummary.expense} />
                       </p>
                     </div>
                     <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
@@ -6863,7 +6872,7 @@ export default function CoindexApp() {
                         </div>
                       </div>
                       <p className="kpi-val-invest text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#0A84FF] leading-tight mt-0.5">
-                        +{formatBRL(monthSummary.aportes)}
+                        +<AnimatedBRL value={monthSummary.aportes} />
                       </p>
                     </div>
                     <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
@@ -6904,7 +6913,7 @@ export default function CoindexApp() {
                           monthSummary.balance >= 0 ? "text-[#30D158]" : "text-[#FF453A]"
                         }`}
                       >
-                        {monthSummary.balance >= 0 ? "+" : ""}{formatBRL(monthSummary.balance)}
+                        {monthSummary.balance >= 0 ? "+" : ""}<AnimatedBRL value={monthSummary.balance} />
                       </p>
                     </div>
 
@@ -7252,7 +7261,7 @@ export default function CoindexApp() {
                                 <div className="flex flex-wrap items-center gap-2.5">
                                   <div className="flex flex-wrap items-baseline gap-2">
                                     <span className={`text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums tracking-tight ${moneyBlur}`}>
-                                      {formatBRL(patrimonyStats.currentValue)}
+                                      <AnimatedBRL value={patrimonyStats.currentValue} />
                                     </span>
                                     <span
                                       className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-mono font-bold tabular-nums border ${
@@ -7274,11 +7283,15 @@ export default function CoindexApp() {
                                     </span>
                                   </div>
 
-                                  {/* SPRINT 30: Badge Cupertino com Rendimento CDI Oficial BCB */}
+                                  {/* SPRINT 30 & 46: Badge Cupertino com Rendimento CDI Oficial BCB */}
                                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold shadow-xs">
+                                    <span className="relative flex h-2 w-2 mr-0.5">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                                    </span>
                                     <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                                     <span>
-                                      +{formatBRL(yieldMode === "liquido" ? (patrimonyEvolution.netYieldEstimated || 0) : (patrimonyEvolution.grossYieldAccumulated || 0))} de Rendimento
+                                      +<AnimatedBRL value={yieldMode === "liquido" ? (patrimonyEvolution.netYieldEstimated || 0) : (patrimonyEvolution.grossYieldAccumulated || 0)} /> de Rendimento
                                     </span>
                                     <span className="text-[10px] text-emerald-400/80 font-normal">
                                       ({patrimonyEvolution.appliedCdiPercentage || 115}% CDI • BCB Ao Vivo)
@@ -7287,7 +7300,7 @@ export default function CoindexApp() {
                                       type="button"
                                       onClick={() => setShowAdjustmentInput((prev) => !prev)}
                                       title="Calibrar Ajuste de Saldo Real do App (Nubank/BTG)"
-                                      className="ml-1 text-emerald-400/70 hover:text-white cursor-pointer transition p-0.5"
+                                      className="ml-1 text-emerald-400/70 hover:text-white cursor-pointer transition p-0.5 apple-press"
                                     >
                                       <SlidersHorizontal className="w-3 h-3" />
                                     </button>
@@ -7726,7 +7739,7 @@ export default function CoindexApp() {
                                   Total Gasto
                                 </span>
                                 <span className={`text-sm sm:text-base font-extrabold text-white font-mono tabular-nums ${moneyBlur}`}>
-                                  {formatBRL(totalExpenses)}
+                                  <AnimatedBRL value={totalExpenses} />
                                 </span>
                               </div>
                             </div>

@@ -21,7 +21,8 @@ import {
   ChevronDown,
   X,
   FileText,
-  Check
+  Check,
+  Loader2
 } from "lucide-react";
 import {
   Transaction,
@@ -314,6 +315,8 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [ingestResult, setIngestResult] = useState<BankIngestResult | null>(null);
   const [isParsingFile, setIsParsingFile] = useState(false);
+  const [isImportConfirming, setIsImportConfirming] = useState(false);
+  const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
 
   // Configurações de ordenação e filtros
   const [sortConfig, setSortConfig] = useState<{ key: TxSortKey; dir: SortDirection } | null>({
@@ -383,9 +386,17 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
       notes: `Importado via Extrato (${ingestResult.bankName})`
     }));
 
-    onBatchImportTransactions(newTxs);
-    setIsImportModalOpen(false);
-    setIngestResult(null);
+    setIsImportConfirming(true);
+    setTimeout(() => {
+      onBatchImportTransactions(newTxs);
+      setImportSuccessMessage(`${newTxs.length} lançamentos importados com sucesso!`);
+      setTimeout(() => {
+        setIsImportConfirming(false);
+        setImportSuccessMessage(null);
+        setIsImportModalOpen(false);
+        setIngestResult(null);
+      }, 750);
+    }, 450);
   }, [ingestResult, onBatchImportTransactions]);
 
   // 1. Filtragem combinada por múltiplas colunas e busca diferida a 120fps
@@ -1421,6 +1432,9 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
       {isImportModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
           <div className="relative w-full max-w-2xl max-h-[84dvh] flex flex-col overflow-hidden rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl my-auto text-xs p-6 space-y-4">
+            {(isParsingFile || isImportConfirming) && (
+              <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-500 cupertino-shimmer z-30" />
+            )}
             {/* Cabeçalho */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
@@ -1445,7 +1459,15 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
             </div>
 
             {/* Conteúdo: Dropzone ou Preview */}
-            {!ingestResult ? (
+            {importSuccessMessage ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-3 animate-cupertino-in">
+                <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shadow-lg">
+                  <CheckCircle2 className="w-8 h-8 stroke-[2.5]" />
+                </div>
+                <h4 className="text-sm font-bold text-white">{importSuccessMessage}</h4>
+                <p className="text-xs text-slate-400">Reconciliando saldo e tabela financeira...</p>
+              </div>
+            ) : !ingestResult ? (
               <div
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
@@ -1479,6 +1501,14 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     />
                   </label>
                 </div>
+                {isParsingFile && (
+                  <div className="w-full space-y-2 mt-4 max-w-xs mx-auto">
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-full w-full bg-emerald-500 cupertino-shimmer" />
+                    </div>
+                    <p className="text-[11px] text-emerald-400 font-mono animate-pulse">Processando extrato bancário...</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4 flex-1 overflow-hidden flex flex-col min-h-0">
@@ -1608,11 +1638,20 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     <button
                       type="button"
                       onClick={handleConfirmBatchImport}
-                      disabled={!ingestResult.transactions.some((t) => t.selected)}
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+                      disabled={isImportConfirming || !ingestResult.transactions.some((t) => t.selected)}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg transition flex items-center gap-1.5 cursor-pointer apple-press"
                     >
-                      <Check className="w-4 h-4" />
-                      <span>Confirmar Importação ({ingestResult.transactions.filter((t) => t.selected).length})</span>
+                      {isImportConfirming ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Importando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Confirmar Importação ({ingestResult.transactions.filter((t) => t.selected).length})</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

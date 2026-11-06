@@ -398,3 +398,73 @@ select:focus-visible {
   50% { transform: translate(30px, -30px) scale(1.12); }
   100% { transform: translate(-40px, 20px) scale(0.97); }
 }
+
+/* ============================================================================
+   SPRINT 46: APPLE SPRING MOTIONS, SKELETON SHIMMER & MICRO-INTERAÇÕES
+   ============================================================================ */
+
+/* Micro-interação tátil de clique / toque Apple */
+.apple-press {
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease;
+}
+.apple-press:active {
+  transform: scale(0.97);
+}
+
+/* Traçado SVG progressivo suave (sparklines, anéis de meta e gráficos) */
+@keyframes svgDrawIn {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.animate-svg-draw {
+  stroke-dasharray: 1000;
+  animation: svgDrawIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Flash suave de linha atualizada ou criada */
+@keyframes rowSuccessFlash {
+  0% {
+    background-color: rgba(48, 209, 88, 0.22);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.row-success-flash {
+  animation: rowSuccessFlash 900ms ease-out forwards;
+}
+
+/* Skeleton Shimmer Contextual Cupertino (Dark & Light) */
+@keyframes cupertinoShimmerWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.cupertino-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: cupertinoShimmerWave 1.4s infinite linear;
+}
+
+html[data-theme="light"] .cupertino-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.04) 25%,
+    rgba(15, 23, 42, 0.10) 50%,
+    rgba(15, 23, 42, 0.04) 75%
+  );
+  background-size: 200% 100%;
+}

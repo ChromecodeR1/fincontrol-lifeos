@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.33.0`  
-> **Última Atualização:** 5 de Novembro de 2026 (Pós-Sprint 45 — Motor de Efeitos Especiais de Background "Cupertino Ambient FX" com 6 Modos Selecionáveis, Refração de Vidro Líquido e Spotlight Interativo)  
+> **Versão da Aplicação:** `0.34.0`  
+> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 46 — Motor de Motions 120Hz Apple Spring, Number Ticker CountUp, Loaders Shimmer Contextuais e Nova Identidade Vetorial Minimalista)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -841,6 +841,28 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Passo 3 — Refinamento de Translucidez e Refração de Vidro Líquido (`globals.css`):**
       - `--cupertino-card` ajustado para `rgba(19, 24, 36, 0.78)` no modo escuro e `rgba(255, 255, 255, 0.84)` no modo claro, ambos com `backdrop-filter: blur(20px) saturate(160%)`.
       - Contêineres de página (`.dashboard-root-wrapper` e `.dashboard-main-content`) configurados como transparentes, permitindo difração luminosa autêntica sob os cards Bento Grid sem degradação de contraste ou legibilidade.
+
+  - **Sprint 46 (Novembro de 2026 — Motor de Motions 120Hz Apple Spring, Number Ticker CountUp, Loaders Shimmer Contextuais e Nova Identidade Vetorial Minimalista):**
+    - **Passo 1 — Nova Identidade Vetorial Minimalista (`CoindexLogo.tsx` e `icon.svg`):**
+      - Substituição do antigo hexágono "Fintech Prism" por 4 conceitos geométricos vetoriais puros em SVG:
+        1. `kinetic_arc` (Padrão — Inspiração Nike / Apple Copilot): Arco fluido aerodinâmico em vetor contínuo formando um "C" ascendente em degradê `#0A84FF` -> `#5E5CE6`.
+        2. `equilibrium_rings` (Inspiração Audi / Bauhaus): Dois anéis geométricos entrelaçados com espessura uniforme e espaço negativo limpo formando um "C" simétrico (`#0A84FF` e `#F8FAFC`).
+        3. `ascending_bars` (Inspiração Adidas / Precision): Três barras paralelas a 35 graus com cantos arredondados na curvatura de um "C" ascendente (`#F8FAFC` e `#30D158`).
+        4. `precision_quadrant` (Inspiração BMW / Braun): Emblema circular técnico dividido em quadrantes de precisão com abertura angular formando "C" e índice.
+      - Wordmark **`COINDEX`** em tipografia geométrica pura (`font-extrabold tracking-[0.08em] uppercase`) com micro-interação tátil de escala e hover glow.
+      - Seletor em tempo real na aba Configurações com persistência em `localStorage` (`coindex_logo_variant`) e evento global `coindex_logo_change`.
+      - Atualização sincronizada de `app/icon.svg` com a base `#0B0E14` e símbolo minimalista.
+    - **Passo 2 — Motor de Interpolação Numérica `useAnimatedNumber` (120Hz CountUp) & Micro-Motions:**
+      - Hook puro `useAnimatedNumber` com interpolação quártica `1 - Math.pow(1 - t, 4)` e respeito a `prefers-reduced-motion`.
+      - Componentes `<AnimatedBRL />` e `<AnimatedMetric />` aplicados nos 4 Slim KPI cards, Total do Patrimônio Acumulado, Total Central do Donut de Despesas e métricas de distância do painel Strava Progress.
+      - Regra Anti-Modal Trap: Container pai sem `transform` residual (`transform: none`), garantindo compatibilidade com modais em tela cheia (`100dvh`).
+      - Classes táteis em `globals.css`: `.apple-press` (scale 0.97 nos botões), `@keyframes svgDrawIn` (traçado progressivo de gráficos e anéis de corrida) e `@keyframes rowSuccessFlash` (flash verde em linhas editadas).
+    - **Passo 3 — Sistema de Loaders Contextuais & Shimmer Cupertino:**
+      - Classe `.cupertino-shimmer` em `globals.css` com suporte nativo a temas Claro e Escuro.
+      - **Loader 1 (Topbar & Sidebar):** Indicador de sync do Supabase com spinner girando (`Loader2`) durante `syncing` e transição com check verde (`✓ Sincronizado`).
+      - **Loader 2 (Painel Strava Progress):** Barra superior indeterminada em `#FC4C02` + overlay `.cupertino-shimmer` durante `isSyncingStrava`.
+      - **Loader 3 (Taxa CDI BCB):** Micro-dot pulsante (`animate-ping`) verde na badge `115% CDI • BCB Ao Vivo`.
+      - **Loader 4 (Importação CSV/OFX e Modais):** Barra de progresso deslizante durante o processamento de arquivo e transição com check icon na confirmação da importação.
 
 ---
 

@@ -644,6 +644,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         onSubmit={handleFormSubmit}
         className="relative w-full max-w-lg max-h-[86dvh] flex flex-col overflow-hidden rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl my-auto text-xs"
       >
+        {isSavingTx && (
+          <div className="absolute top-0 left-0 right-0 h-1 bg-[#0A84FF] cupertino-shimmer z-50" />
+        )}
         {/* Cabeçalho Fixo no Topo */}
         <div className="shrink-0 px-5 pt-4 pb-3 border-b border-[var(--cupertino-border)] space-y-3">
           <div className="flex items-center justify-between">
@@ -1921,7 +1924,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 ))
               }
               onClick={handleSaveAndNewClick}
-              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-[var(--cupertino-border)] text-slate-200 hover:text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-[var(--cupertino-border)] text-slate-200 hover:text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-sm apple-press"
             >
               {isSavingTx ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 text-[#0A84FF]" />}
               <span>Salvar e Criar Outro</span>
@@ -1938,7 +1941,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 !formState.thirdPartyName?.trim()
               ))
             }
-            className={`min-h-[44px] px-5 py-2.5 rounded-xl text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer ${
+            className={`min-h-[44px] px-5 py-2.5 rounded-xl text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer apple-press ${
               formState.isTransfer
                 ? "bg-sky-600 hover:bg-sky-500 shadow-lg shadow-sky-600/25"
                 : isPostoExpress
