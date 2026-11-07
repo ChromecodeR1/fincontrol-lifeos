@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.40.0`  
-> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 52 — Implementação da Suite Completa de 18 Micro-Animações 144Hz GPU-Accelerated)  
+> **Versão da Aplicação:** `0.41.0`  
+> **Última Atualização:** 7 de Novembro de 2026 (Pós-Sprint 53 — Limpeza de UI, Correção de Tipografia nos Controles Deslizantes, Trava Correta de Animações, Topbar Compacta e WebSocket Binance em Tempo Real)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1030,6 +1030,27 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Extração do grid de progresso e metas em subcomponente memoizado (`React.memo`) com estado local de `selectedPointIndex`.
       - Scrubbing interativo no gráfico Recharts roda a 144fps atualizando exclusivamente o card isolado, sem disparar render da árvore de abas secundárias.
       - Calibração de `backdrop-filter` para `blur(16px) saturate(150%)` reduzindo o tempo de rasterização para `< 1.2ms` em telas 2K/4K.
+
+  - **Sprint 53 (Novembro de 2026 — Limpeza de UI, Correção de Tipografia nos Controles Deslizantes, Trava Correta de Animações, Topbar Compacta e WebSocket Binance em Tempo Real):**
+    - **Passo 1 — Remoção da Sub-linha Acordeão e Chevrons na Tabela:**
+      - Eliminação das sub-linhas acordeão (`|- Valor Total Original...`) e ícones de expansão chevron (`>`) nas tabelas de Lançamentos (`TransactionsTableAdvanced.tsx`) e Valores a Receber / Devedores (`SecondaryTabs.tsx`). As tabelas agora exibem linhas limpas, navegação ultra-direta e visual minimalista sem interferências verticais.
+    - **Passo 2 — Correção do Corte na Letra 'g' de "Pagos":**
+      - Substituição de `leading-none` por `leading-normal` com `overflow-visible` e acréscimo de respiro vertical (`py-1.5 px-3.5`) no componente `SlidingSegmentedControl.tsx`. O descendente inferior das letras `g`, `p`, `y` não sofre mais nenhum corte horizontal.
+    - **Passo 3 — Remoção da Barrinha Branca Vertical na Sidebar:**
+      - Exclusão do indicador vertical branco posicionado dentro do botão ativo na barra lateral esquerda em `app/page.tsx`, mantendo a estética visual homogênea e o preenchimento arredondado estilo Apple iOS/macOS.
+    - **Passo 4 — Topbar Minimalista com Botão '+' Compacto:**
+      - Substituição do botão largo com texto "+ Novo Lançamento" por um botão quadrado compacto (`min-h-[44px] min-w-[44px] rounded-xl`) contendo apenas o ícone vetorial `<Plus className="w-4 h-4" />` e atributo de acessibilidade `title="Novo Lançamento"`.
+    - **Passo 5 — Migração do Seletor de Tema para as Configurações:**
+      - Transferência do controle segmentado de tema (Claro / Escuro) do cabeçalho superior para a aba de Configurações em `SecondaryTabs.tsx`, consolidando todas as preferências de aparência e atmosfera em um único local.
+    - **Passo 6 — Correção da Lógica Invertida de "Reduzir Animações":**
+      - Alinhamento semântico estrito do controle: "Sim" ativa o Modo Econômico (Sólido Puro, `bgFxMode="none"`, `data-animations="off"`); "Não" mantém o modo ativo de alta fidelidade (144Hz Híbrido Copilot, `bgFxMode="hybrid"`, `data-animations="on"`).
+    - **Passo 7 — Saneamento de Configurações:**
+      - Remoção dos cards legados de seleção de logotipo (a geometria "The Equilibrium Link" é agora a identidade permanente oficial) e do card obsoleto de banco de dados Google Sheets, mantendo a arquitetura 100% orientada à nuvem Supabase.
+    - **Passo 8 — Correção do Duplo '+ + Novo Aporte':**
+      - Remoção do caractere textual `+` duplicado no botão de aporte em `InvestmentsTab.tsx`, exibindo harmoniosamente o ícone vetorial `<Plus />` seguido do texto "Novo Aporte".
+    - **Passo 9 — Cotações em Tempo Real via WebSocket da Binance e Rota Sem Cache:**
+      - Conexão nativa por WebSocket (`wss://stream.binance.com:9443/stream?streams=btcbrl@ticker/bnbbrl@ticker/ethbrl@ticker/solbrl@ticker`) atualizando instantaneamente as cotações a cada segundo com reconexão resiliente e badge pulsante `⚡ AO VIVO`.
+      - Rota `/api/market-pulse` configurada com `dynamic = "force-dynamic"`, `revalidate = 0`, `cache: "no-store"` e cabeçalhos estritos anti-cache (`no-store, no-cache, max-age=0`), servindo como fallback confiável a cada 8 segundos para câmbio e CDI.
 
 ---
 

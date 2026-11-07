@@ -19,7 +19,6 @@ import {
   Pencil,
   Trash2,
   ChevronDown,
-  ChevronRight,
   X,
   FileText,
   Check,
@@ -99,92 +98,66 @@ const TransactionRow = React.memo<TransactionRowProps>(({
   onEdit,
   onDelete
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
   const inst = parseInstallmentInfo(tx);
   const label = tx.installmentInfo || (inst.current && inst.total ? `${inst.current}/${inst.total}` : null);
   const displayName = inst.isInstallment && label ? inst.baseDescription : tx.description;
 
-  const hasAccountingBreakdown = Boolean(
-    tx.isSplit ||
-    tx.isSplitChild ||
-    tx.category === "A Receber" ||
-    (tx.paidAmount != null && tx.paidAmount > 0) ||
-    tx.linkedReceivableId
-  );
-
   return (
-    <React.Fragment>
-      <tr className="hover:bg-white/[0.03] transition-colors">
-        {/* Data Formatada com DD/MM/AAAA */}
-        <td className="py-3.5 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap">
-          {formatDateBR(tx.date)}
-        </td>
+    <tr className="hover:bg-white/[0.03] transition-colors">
+      {/* Data Formatada com DD/MM/AAAA */}
+      <td className="py-3.5 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap">
+        {formatDateBR(tx.date)}
+      </td>
 
-        {/* Descrição & Selo de Parcela */}
-        <td className="py-3.5 px-3 font-semibold text-slate-100">
-          <div className="flex items-center gap-2.5">
-            {displayLogo ? (
-              <img
-                src={displayLogo}
-                alt="Ícone"
-                className="w-7 h-7 rounded-xl object-cover border border-white/15 shrink-0"
-              />
-            ) : (
-              <div
-                className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
-                style={{ backgroundColor: `${catColor}20`, border: `1px solid ${catColor}45` }}
-              >
-                {renderCategorySemanticIcon(tx.category, catColor)}
-              </div>
-            )}
-            <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              {hasAccountingBreakdown && (
-                <button
-                  type="button"
-                  onClick={() => setIsExpanded((prev) => !prev)}
-                  className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-amber-400 transition cursor-pointer shrink-0"
-                  title={isExpanded ? "Recolher detalhes contábeis" : "Expandir árvore contábil"}
+      {/* Descrição & Selo de Parcela */}
+      <td className="py-3.5 px-3 font-semibold text-slate-100">
+        <div className="flex items-center gap-2.5">
+          {displayLogo ? (
+            <img
+              src={displayLogo}
+              alt="Ícone"
+              className="w-7 h-7 rounded-xl object-cover border border-white/15 shrink-0"
+            />
+          ) : (
+            <div
+              className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
+              style={{ backgroundColor: `${catColor}20`, border: `1px solid ${catColor}45` }}
+            >
+              {renderCategorySemanticIcon(tx.category, catColor)}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center flex-wrap gap-1.5">
+              <span className="truncate">{displayName}</span>
+              {label && (
+                <span
+                  className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-500/20 to-indigo-500/20 text-violet-300 border border-violet-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
+                  title={`Parcela ${label}`}
                 >
-                  <ChevronRight
-                    className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                      isExpanded ? "rotate-90 text-amber-400" : ""
-                    }`}
-                  />
-                </button>
+                  <Layers className="w-2.5 h-2.5 text-violet-400 inline" />
+                  <span>{label}</span>
+                </span>
               )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center flex-wrap gap-1.5">
-                  <span className="truncate">{displayName}</span>
-                  {label && (
-                    <span
-                      className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-500/20 to-indigo-500/20 text-violet-300 border border-violet-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
-                      title={`Parcela ${label}`}
-                    >
-                      <Layers className="w-2.5 h-2.5 text-violet-400 inline" />
-                      <span>{label}</span>
-                    </span>
-                  )}
-                  {tx.isSplit && (
-                    <span
-                      className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
-                      title={`Gasto dividido com ${tx.thirdPartyName || "alguém"}. Sua parte: ${formatBRL(tx.personalAmount ?? (tx.amount - (tx.thirdPartyAmount || 0)))}`}
-                    >
-                      <span>🤝 Dividido</span>
-                    </span>
-                  )}
-                  {tx.isSplitChild && (
-                    <span
-                      className="px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
-                      title="Item a receber gerado automaticamente por divisão de gasto"
-                    >
-                      <span>🤝 Divisão a Receber</span>
-                    </span>
-                  )}
-                </div>
-              </div>
+              {tx.isSplit && (
+                <span
+                  className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
+                  title={`Gasto dividido com ${tx.thirdPartyName || "alguém"}. Sua parte: ${formatBRL(tx.personalAmount ?? (tx.amount - (tx.thirdPartyAmount || 0)))}`}
+                >
+                  <span>🤝 Dividido</span>
+                </span>
+              )}
+              {tx.isSplitChild && (
+                <span
+                  className="px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
+                  title="Item a receber gerado automaticamente por divisão de gasto"
+                >
+                  <span>🤝 Divisão a Receber</span>
+                </span>
+              )}
             </div>
           </div>
-        </td>
+        </div>
+      </td>
 
         {/* Categoria */}
         <td className="py-3.5 px-3">
@@ -313,57 +286,9 @@ const TransactionRow = React.memo<TransactionRowProps>(({
           </div>
         </td>
       </tr>
-
-      {/* SPRINT 52: Accordion Sub-gaveta da Árvore Contábil do Lançamento */}
-      {hasAccountingBreakdown && (
-        <tr className="border-b border-white/5 bg-slate-950/40">
-          <td colSpan={8} className="p-0">
-            <div className="accordion-grid-wrapper" data-open={isExpanded}>
-              <div className="accordion-grid-inner px-5 py-3 bg-black/25 text-xs font-mono space-y-1.5 border-l-2 border-amber-400/60 ml-4 my-1 rounded-r-xl">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <span className="text-slate-500 font-bold">├─ Valor Total Original:</span>
-                  <strong className="text-white tabular-nums">{formatBRL(tx.amount)}</strong>
-                  <span className="text-slate-500 text-[10px]">({formatDateBR(tx.date)})</span>
-                </div>
-                {tx.isSplit && (
-                  <>
-                    <div className="flex items-center gap-2 text-amber-300">
-                      <span className="text-slate-500 font-bold">├─ Sua Parte (Gasto Próprio):</span>
-                      <strong className="tabular-nums">
-                        {formatBRL(tx.personalAmount ?? (tx.amount - (tx.thirdPartyAmount || 0)))}
-                      </strong>
-                    </div>
-                    <div className="flex items-center gap-2 text-sky-400">
-                      <span className="text-slate-500 font-bold">├─ Parte de {tx.thirdPartyName || "Terceiro"}:</span>
-                      <strong className="tabular-nums">{formatBRL(tx.thirdPartyAmount || 0)}</strong>
-                    </div>
-                  </>
-                )}
-                {tx.paidAmount != null && tx.paidAmount > 0 && (
-                  <div className="flex items-center gap-2 text-emerald-400">
-                    <span className="text-slate-500 font-bold">├─ Pagamentos / Abatimentos Recebidos:</span>
-                    <strong className="tabular-nums">{formatBRL(tx.paidAmount)}</strong>
-                  </div>
-                )}
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <span className="text-slate-500 font-bold">└─ Saldo Restante em Aberto:</span>
-                  <strong className="tabular-nums">
-                    {formatBRL(Math.max(0, tx.amount - (tx.paidAmount || 0)))}
-                  </strong>
-                  {tx.status === "Pago" && (
-                    <span className="text-emerald-400 text-[10px] font-sans font-bold ml-1">
-                      ✓ 100% Quitado
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </td>
-        </tr>
-      )}
-    </React.Fragment>
-  );
-});
+    );
+  }
+);
 TransactionRow.displayName = "TransactionRow";
 
 // ==============================================================================

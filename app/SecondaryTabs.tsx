@@ -8,7 +8,8 @@ import {
   Users, Share2, Layers, AlertTriangle, XCircle, Eye, EyeOff, Filter, Loader2,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronRight, Check, X, RotateCcw,
   SlidersHorizontal, Settings, Fuel, Gauge, DollarSign, Award, Info, Landmark, PiggyBank,
-  Sparkles, ExternalLink, ShoppingBag, Circle, Footprints, Lock, Timer, Heart, Calendar, MapPin
+  Sparkles, ExternalLink, ShoppingBag, Circle, Footprints, Lock, Timer, Heart, Calendar, MapPin,
+  Sun, Moon
 } from "lucide-react";
 import {
   ResponsiveContainer, Tooltip, Legend, XAxis, YAxis, CartesianGrid,
@@ -41,7 +42,6 @@ import { VehiclesTab } from "./components/VehiclesTab";
 import { InvestmentsTab } from "./components/InvestmentsTab";
 import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
 import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
-import { COINDEX_LOGO_VARIANTS, CoindexLogoVariant, CoindexIcon } from "./components/CoindexLogo";
 import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
 import { triggerAuraBurst } from "./components/MotionEngine144";
 
@@ -151,6 +151,8 @@ export interface SecondaryTabsProps {
   selectedMonth?: string;
   bgFxMode?: AmbientFxMode;
   handleSelectBgFxMode?: (mode: AmbientFxMode) => void;
+  cupertinoTheme?: "light" | "dark";
+  toggleCupertinoTheme?: (theme: "light" | "dark") => void;
   handleLaunchFixedTransactions?: (targetMonth?: string) => Promise<{ createdCount: number; totalCount: number }>;
   filteredTransactions: Transaction[];
   transactions: Transaction[];
@@ -752,7 +754,7 @@ const StravaProgressGrid = React.memo(function StravaProgressGrid(props: StravaP
 export default function SecondaryTabs(props: SecondaryTabsProps) {
   const {
     activeTab, moneyBlur, currentUser, currentUserAvatar, themeMode, changeThemeMode,
-    bgFxMode, handleSelectBgFxMode,
+    bgFxMode, handleSelectBgFxMode, cupertinoTheme, toggleCupertinoTheme,
     setShowChangelogModal, staticStatus, editingStatusId, setEditingStatusId, newStatusItem,
     setNewStatusItem, handleSaveStaticStatus, saveStaticStatus, filteredTransactions, transactions,
     searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, onAddTransaction, onSaveInvestmentTx, onBatchImportTransactions, dailyQuotaInfo, cdiAnnualRate, getFlowType,
@@ -811,8 +813,6 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   const [receivableStatusFilter, setReceivableStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("all");
   const [receivableSortCol, setReceivableSortCol] = useState<"date" | "debtor" | "description" | "amount" | "status">("date");
   const [receivableSortDir, setReceivableSortDir] = useState<"asc" | "desc">("desc");
-  // SPRINT 52: Accordion Row Expansion em Valores a Receber
-  const [expandedReceivables, setExpandedReceivables] = useState<Record<string, boolean>>({});
 
   // SPRINT 38: Estados da Central Analítica de Bioimpedância (Passo 3)
   const [bioPeriodFilter, setBioPeriodFilter] = useState<"1M" | "3M" | "6M" | "1A" | "Tudo">("6M");
@@ -906,37 +906,6 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   const [manualRunElevation, setManualRunElevation] = useState("");
   const [manualRunHr, setManualRunHr] = useState("");
 
-  // SPRINT 46: Estado e Controle de Variante de Logo Coindex Minimalista
-  const [activeLogoVariant, setActiveLogoVariant] = useState<CoindexLogoVariant>("equilibrium_link");
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("coindex_logo_variant") as CoindexLogoVariant | null;
-      if (saved && ["equilibrium_link", "kinetic_arc", "ascending_bars", "precision_quadrant"].includes(saved)) {
-        setActiveLogoVariant(saved);
-      }
-    } catch {}
-
-    const handleStorageChange = () => {
-      try {
-        const saved = localStorage.getItem("coindex_logo_variant") as CoindexLogoVariant | null;
-        if (saved && ["equilibrium_link", "kinetic_arc", "ascending_bars", "precision_quadrant"].includes(saved)) {
-          setActiveLogoVariant(saved);
-        }
-      } catch {}
-    };
-
-    window.addEventListener("coindex_logo_change", handleStorageChange);
-    return () => window.removeEventListener("coindex_logo_change", handleStorageChange);
-  }, []);
-
-  const handleSelectLogoVariant = (variant: CoindexLogoVariant) => {
-    setActiveLogoVariant(variant);
-    try {
-      localStorage.setItem("coindex_logo_variant", variant);
-      window.dispatchEvent(new Event("coindex_logo_change"));
-    } catch {}
-  };
 
   // Lista de Devedores Únicos para Filtro
   const uniqueDebtors = useMemo(() => {
@@ -2444,45 +2413,27 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     const isPaid = item.status === "Pago" || item.remaining <= 0;
                     const isPartial = !isPaid && item.effectivePaid > 0 && item.remaining > 0;
                     const paidPct = Math.min(100, Math.round((item.effectivePaid / Math.max(1, item.amount)) * 100));
-                    const isExpanded = Boolean(expandedReceivables[item.id]);
 
                     return (
-                      <React.Fragment key={item.id}>
-                        <tr className="hover:bg-white/[0.03] transition-colors">
-                          <td className="py-1.5 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap min-w-[100px]">
-                            {formatDateBR(item.date)}
-                          </td>
-                          <td className="py-1.5 px-3 font-semibold text-white max-w-[240px]">
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedReceivables((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
-                                }
-                                className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-amber-400 transition cursor-pointer shrink-0"
-                                title={isExpanded ? "Recolher detalhes contábeis" : "Expandir árvore contábil"}
-                              >
-                                <ChevronRight
-                                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                                    isExpanded ? "rotate-90 text-amber-400" : ""
-                                  }`}
-                                />
-                              </button>
-                              <div className="min-w-0 flex-1">
-                                <span className="truncate block">{item.description}</span>
-                                {item.cardUsed && (
-                                  <span className="block text-[10px] text-indigo-400 truncate">
-                                    {item.paymentMethod} • {item.cardUsed}
-                                  </span>
-                                )}
-                                {item.bankAccount && !item.cardUsed && (
-                                  <span className="block text-[10px] text-sky-400 truncate">
-                                    {item.paymentMethod} • {item.bankAccount}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
+                      <tr key={item.id} className="hover:bg-white/[0.03] transition-colors">
+                        <td className="py-1.5 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap min-w-[100px]">
+                          {formatDateBR(item.date)}
+                        </td>
+                        <td className="py-1.5 px-3 font-semibold text-white max-w-[240px]">
+                          <div className="min-w-0 flex-1">
+                            <span className="truncate block">{item.description}</span>
+                            {item.cardUsed && (
+                              <span className="block text-[10px] text-indigo-400 truncate">
+                                {item.paymentMethod} • {item.cardUsed}
+                              </span>
+                            )}
+                            {item.bankAccount && !item.cardUsed && (
+                              <span className="block text-[10px] text-sky-400 truncate">
+                                {item.paymentMethod} • {item.bankAccount}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                           <td className="py-1.5 px-3">
                             <DebtorInputCell txId={item.id} initialValue={item.debtorName} onCommit={handleAssignDebtor} />
                           </td>
@@ -2632,41 +2583,9 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                             </div>
                           </td>
                         </tr>
-
-                        {/* SPRINT 52: Accordion Sub-gaveta da Árvore Contábil */}
-                        <tr className="border-b border-white/5 bg-slate-950/40">
-                          <td colSpan={7} className="p-0">
-                            <div className="accordion-grid-wrapper" data-open={isExpanded}>
-                              <div className="accordion-grid-inner px-5 py-3 bg-black/25 text-xs font-mono space-y-1.5 border-l-2 border-amber-400/60 ml-3 my-1 rounded-r-xl">
-                                <div className="flex items-center gap-2 text-slate-300">
-                                  <span className="text-slate-500 font-bold">├─ Valor Total Original:</span>
-                                  <strong className="text-white tabular-nums">{formatBRL(item.amount)}</strong>
-                                  <span className="text-slate-500 text-[10px]">({formatDateBR(item.date)})</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-emerald-400">
-                                  <span className="text-slate-500 font-bold">├─ Pagamentos / Abatimentos:</span>
-                                  <strong className="tabular-nums">{formatBRL(item.effectivePaid)}</strong>
-                                  <span className="text-slate-400 text-[10px]">
-                                    ({paidPct}% amortizado {item.paymentMethod ? `via ${item.paymentMethod}` : ""})
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-amber-400">
-                                  <span className="text-slate-500 font-bold">└─ Saldo Restante em Aberto:</span>
-                                  <strong className="tabular-nums">{formatBRL(item.remaining)}</strong>
-                                  {item.remaining <= 0 && (
-                                    <span className="text-emerald-400 text-[10px] font-sans font-bold ml-1">
-                                      ✓ 100% Quitado
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      </React.Fragment>
-                    );
-                  })
-                )}
+                      );
+                    })
+                  )}
               </tbody>
             </table>
           </div>
@@ -4746,7 +4665,43 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
         </div>
 
-        {/* SPRINT 49: CONTROLE UNIFICADO "REDUZIR ANIMAÇÕES: [SIM | NÃO]" */}
+        {/* SPRINT 53: CONTROLE DE TEMA (CLARO / ESCURO) */}
+        <div className="glass-card p-6 rounded-3xl border border-[var(--cupertino-border)] space-y-4 shadow-xl">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                <Sun className="w-4 h-4 text-amber-400" /> Tema da Interface (Claro / Escuro)
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
+                Alterne entre o tema Claro (Apple Cupertino Light Glass) e Escuro (Cyber-Glassmorphism Dark) com transição de alta fluidez.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:items-end gap-1.5">
+              <span className="text-[11px] font-semibold text-slate-400">Modo de Exibição:</span>
+              <SlidingSegmentedControl
+                options={[
+                  {
+                    id: "light",
+                    label: "Claro",
+                    icon: <Sun className="w-3.5 h-3.5 text-amber-500" />
+                  },
+                  {
+                    id: "dark",
+                    label: "Escuro",
+                    icon: <Moon className="w-3.5 h-3.5 text-sky-400" />
+                  }
+                ]}
+                value={cupertinoTheme ?? "dark"}
+                onChange={(val) => toggleCupertinoTheme?.(val as "light" | "dark")}
+                size="sm"
+                activeColor={cupertinoTheme === "light" ? "bg-white text-slate-900 shadow-sm" : "bg-slate-800 text-white shadow-sm"}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* SPRINT 49 / SPRINT 53: CONTROLE UNIFICADO "REDUZIR ANIMAÇÕES: [SIM | NÃO]" */}
         <div className="glass-card p-6 rounded-3xl border border-[var(--cupertino-border)] space-y-4 shadow-xl">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
@@ -4767,12 +4722,12 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   { id: "sim", label: "Sim" },
                   { id: "nao", label: "Não" }
                 ]}
-                value={bgFxMode !== "none" ? "sim" : "nao"}
+                value={bgFxMode === "none" ? "sim" : "nao"}
                 onChange={(val) => {
                   if (val === "sim") {
-                    handleSelectBgFxMode?.("hybrid");
-                  } else {
                     handleSelectBgFxMode?.("none");
+                  } else {
+                    handleSelectBgFxMode?.("hybrid");
                   }
                 }}
                 size="sm"
@@ -4784,12 +4739,12 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           <div className="p-3 rounded-2xl bg-slate-950/60 border border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
             <div className="flex items-center gap-2">
               <span className="text-base">
-                {bgFxMode !== "none" ? "✨" : "⬛"}
+                {bgFxMode === "none" ? "⬛" : "✨"}
               </span>
               <span>
-                {bgFxMode !== "none"
-                  ? "Modo Ativo: Híbrido Copilot (Fusão Aurora Cupertino + Micro-Grid + Spotlight sutil ativo a 144Hz)"
-                  : "Modo Ativo: Sólido Puro (Efeitos decorativos e motions atmosféricos desativados para máxima performance)"}
+                {bgFxMode === "none"
+                  ? "Modo Econômico: Animações Reduzidas (Sólido Puro — efeitos decorativos e atmosferas desativados)"
+                  : "144Hz ATIVO — Híbrido Copilot (Aurora Cupertino + Micro-Grid + Spotlight ativo em 144Hz)"}
               </span>
             </div>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${bgFxMode !== "none" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-slate-800 text-slate-300 border border-white/10"}`}>
@@ -4798,154 +4753,14 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
         </div>
 
-        {/* SPRINT 46: SELEÇÃO DA IDENTIDADE VETORIAL MINIMALISTA COINDEX */}
-        <div className="glass-card p-6 rounded-3xl border border-[var(--cupertino-border)] space-y-4 shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                <CoindexIcon className="w-5 h-5" variant={activeLogoVariant} />
-                <span>Identidade Vetorial Minimalista (Símbolo Coindex)</span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Escolha o conceito geométrico do logotipo exibido na Topbar, Sidebar e ícones do sistema.
-              </p>
-            </div>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/30">
-              Conceito: {COINDEX_LOGO_VARIANTS.find((v) => v.id === activeLogoVariant)?.name}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {COINDEX_LOGO_VARIANTS.map((v) => {
-              const isSelected = activeLogoVariant === v.id;
-              return (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => handleSelectLogoVariant(v.id)}
-                  className={`p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 apple-press ${
-                    isSelected
-                      ? "bg-[#0A84FF]/15 border-[#0A84FF]/50 shadow-md ring-1 ring-[#0A84FF]/40 -translate-y-0.5"
-                      : "bg-white/[0.03] hover:bg-white/[0.06] border-white/10 hover:border-white/20"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="w-10 h-10 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-center p-1.5 shadow-inner">
-                      <CoindexIcon className="w-full h-full" variant={v.id} />
-                    </div>
-                    {isSelected ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0A84FF] text-white">
-                        ATIVO
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-semibold text-slate-500">Selecionar</span>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className={`text-xs font-bold ${isSelected ? "text-white" : "text-slate-200"}`}>
-                      {v.name}
-                    </h4>
-                    <p className="text-[10px] text-[#0A84FF] font-semibold mt-0.5">{v.tagline}</p>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-snug">{v.desc}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* PAINEL DE SISTEMAS INTEGRADOS (GOOGLE SHEETS & STRAVA) */}
+        {/* PAINEL DE SISTEMAS INTEGRADOS (PATRIMÔNIO OFICIAL & STRAVA) */}
         <div className="space-y-3">
           <div>
             <h3 className="text-base font-extrabold text-white">Sistemas Integrados & Cloud Sync</h3>
-            <p className="text-xs text-slate-400">As conexões só são disparadas quando você clica no botão de sincronizar. Se houver falha, o status fica vermelho informando o motivo.</p>
+            <p className="text-xs text-slate-400">As conexões só são disparadas sob comando. Se houver falha, o status informa o diagnóstico de rede em tempo real.</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
-            {/* CARD GOOGLE SHEETS */}
-            <div className={`glass-card p-6 rounded-3xl border flex flex-col justify-between space-y-4 transition-all ${
-              sheetsSyncStatus?.state === "error" ? "border-rose-500/60" : "border-emerald-500/25"
-            }`}>
-              <div className="space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`p-2.5 rounded-xl ${sheetsSyncStatus?.state === "error" ? "bg-rose-500/15 text-rose-400" : "bg-emerald-500/15 text-emerald-400"}`}>
-                      <Table2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-extrabold text-white">Google Sheets Cloud DB</h4>
-                      <p className="text-[11px] text-slate-400">Sincronização bidirecional sob comando</p>
-                    </div>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold border flex items-center gap-1 ${
-                    sheetsSyncStatus?.state === "error"
-                      ? "bg-rose-500/20 text-rose-300 border-rose-500/50"
-                      : sheetsSyncStatus?.state === "success"
-                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
-                      : sheetApiUrl
-                      ? "bg-slate-800 text-slate-300 border-white/10"
-                      : "bg-slate-900 text-slate-400 border-white/5"
-                  }`}>
-                    {sheetsSyncStatus?.state === "error" ? (
-                      <><XCircle className="w-3.5 h-3.5 text-rose-400" /> Integração Inválida</>
-                    ) : sheetsSyncStatus?.state === "success" ? (
-                      <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Sincronizado</>
-                    ) : sheetApiUrl ? (
-                      "Pronto p/ Sincronizar"
-                    ) : (
-                      "Não Configurado"
-                    )}
-                  </span>
-                </div>
-
-                <div>
-                  <label className="text-slate-400 block mb-1">URL do App da Web (Google Apps Script terminado em /exec)</label>
-                  <input
-                    type="url"
-                    placeholder="https://script.google.com/macros/s/.../exec"
-                    value={sheetApiUrl}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSheetApiUrl(val);
-                      localStorage.setItem("lifeos_sheets_url", val.trim());
-                      if (setSheetsSyncStatus) setSheetsSyncStatus({ state: "idle", message: "" });
-                    }}
-                    className={inputClass}
-                  />
-                </div>
-
-                {sheetsSyncStatus && sheetsSyncStatus.state !== "idle" && (
-                  <div className={`p-3.5 rounded-2xl border text-[11px] flex items-start gap-2.5 ${
-                    sheetsSyncStatus.state === "error"
-                      ? "bg-rose-950/70 border-rose-500/50 text-rose-200"
-                      : "bg-emerald-950/50 border-emerald-500/30 text-emerald-200"
-                  }`}>
-                    {sheetsSyncStatus.state === "error" ? (
-                      <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    )}
-                    <div>
-                      <strong className="block font-bold">
-                        {sheetsSyncStatus.state === "error" ? "Integração Inválida:" : "Sincronização Concluída:"}
-                      </strong>
-                      <span>{sheetsSyncStatus.message}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={syncFromGoogleSheets}
-                disabled={isSyncing}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition cursor-pointer"
-              >
-                {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                <span>{isSyncing ? "Sincronizando Planilha..." : "Sincronizar Planilha"}</span>
-              </button>
-            </div>
-
             {/* CARD IMPORTAÇÃO OFICIAL HISTÓRICA DO PATRIMÔNIO (SPRINT 18) */}
             <div className="glass-card p-6 rounded-3xl border border-indigo-500/25 flex flex-col justify-between space-y-4">
               <div className="space-y-3.5">

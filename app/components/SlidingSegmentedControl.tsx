@@ -104,9 +104,9 @@ export function SlidingSegmentedControl<T extends string | number = string>({
   }, [value, updatePosition]);
 
   const sizeClasses = {
-    xs: "text-[11px] py-1 px-2.5 min-h-[26px] gap-1.5",
-    sm: "text-xs py-1.5 px-3 min-h-[32px] gap-1.5",
-    md: "text-xs sm:text-sm py-2 px-3.5 min-h-[36px] gap-2"
+    xs: "text-[11px] py-1.5 px-3 min-h-[28px] gap-1.5",
+    sm: "text-xs py-1.5 px-3.5 min-h-[32px] gap-1.5",
+    md: "text-xs sm:text-sm py-2 px-4 min-h-[36px] gap-2"
   }[size];
 
   // Determina cor do texto selecionado com base no activeColor
@@ -186,14 +186,14 @@ export function SlidingSegmentedControl<T extends string | number = string>({
                 onChange(opt.id);
               }
             }}
-            className={`relative z-10 inline-flex items-center justify-center text-center font-semibold leading-none rounded-lg whitespace-nowrap cursor-pointer transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed select-none ${
+            className={`relative z-10 inline-flex items-center justify-center text-center font-semibold leading-normal rounded-lg whitespace-nowrap cursor-pointer transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed select-none overflow-visible ${
               fullWidth ? "flex-1" : ""
             } ${sizeClasses} ${
               isSelected ? activeTextColor : "text-slate-400 hover:text-slate-200"
             }`}
           >
             {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-            <span className="truncate">{opt.label}</span>
+            <span className="truncate overflow-visible leading-normal inline-block">{opt.label}</span>
             {opt.badge && <span className="ml-1 shrink-0">{opt.badge}</span>}
           </button>
         );

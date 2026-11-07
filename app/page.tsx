@@ -6703,10 +6703,7 @@ export default function CoindexApp() {
                   }`}
                   title={tab.label}
                 >
-                  {/* Indicador Luminoso Lateral */}
-                  {activeTab === tab.id && (
-                    <span className="absolute left-1.5 top-3 bottom-3 w-1 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.85)]" />
-                  )}
+                  {/* Ícone e Rótulo da Aba */}
                   <div className="shrink-0 transition-transform duration-200 cubic-bezier(0.22, 1, 0.36, 1) group-hover:scale-125 group-hover:-translate-y-0.5">
                     {tab.icon}
                   </div>
@@ -7109,26 +7106,6 @@ export default function CoindexApp() {
                   )}
                 </div>
 
-                {/* SELETOR SEGMENTED CONTROL APPLE (CLARO / ESCURO) COM MOTION DESLIZANTE */}
-                <SlidingSegmentedControl
-                  options={[
-                    {
-                      id: "light",
-                      label: <span className="hidden sm:inline">Claro</span>,
-                      icon: <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    },
-                    {
-                      id: "dark",
-                      label: <span className="hidden sm:inline">Escuro</span>,
-                      icon: <Moon className="w-3.5 h-3.5 text-sky-400" />
-                    }
-                  ]}
-                  value={cupertinoTheme}
-                  onChange={(val) => toggleCupertinoTheme(val as "light" | "dark")}
-                  size="sm"
-                  activeColor={cupertinoTheme === "light" ? "bg-white text-slate-900 shadow-sm" : "bg-slate-800 text-white shadow-sm"}
-                />
-
                 {/* BOTÃO DE PRIVACIDADE SOMENTE COM O SÍMBOLO DO OLHO */}
                 <button
                   type="button"
@@ -7147,12 +7124,14 @@ export default function CoindexApp() {
                   {privacyMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
 
+                {/* BOTÃO NOVO LANÇAMENTO COMPACTO */}
                 <button
                   type="button"
                   onClick={() => handleOpenNewTxModal()}
-                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+                  className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white flex items-center justify-center transition cursor-pointer shadow-sm apple-press"
+                  title="Novo Lançamento"
                 >
-                  <Plus className="w-4 h-4" /> Novo Lançamento
+                  <Plus className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -8969,6 +8948,8 @@ export default function CoindexApp() {
               changeThemeMode={changeThemeMode}
               bgFxMode={bgFxMode}
               handleSelectBgFxMode={handleSelectBgFxMode}
+              cupertinoTheme={cupertinoTheme}
+              toggleCupertinoTheme={toggleCupertinoTheme}
               setShowChangelogModal={setShowChangelogModal}
               staticStatus={staticStatus}
               editingStatusId={editingStatusId}

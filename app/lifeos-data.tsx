@@ -399,10 +399,26 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.40.0";
-export const PREVIOUS_VERSION = "0.39.1";
+export const APP_VERSION = "0.41.0";
+export const PREVIOUS_VERSION = "0.40.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.41.0",
+    date: "Nov/2026",
+    title: "Sprint 53: Limpeza de UI, Correção de Tipografia nos Controles Deslizantes, Trava Correta de Animações, Topbar Compacta e WebSocket Binance em Tempo Real",
+    highlights: [
+      "Remoção da Sub-linha Acordeão e Chevrons na Tabela: Eliminação das sub-linhas e setas nas tabelas de Lançamentos e Valores a Receber, proporcionando linhas limpas, navegação ultra-direta e visual minimalista.",
+      "Correção do Corte na Letra 'g' de 'Pagos': Ajuste de leading-normal, overflow-visible e respiro vertical (py-1.5 px-3.5) no componente SlidingSegmentedControl, eliminando qualquer corte horizontal da haste inferior da letra 'g'.",
+      "Remoção da Barrinha Branca Vertical na Sidebar: Remoção do indicador vertical duplicado dentro do botão ativo na navegação lateral, mantendo apenas a pílula azul suave estilo macOS/iOS.",
+      "Topbar Minimalista com Botão '+' Compacto: Substituição do botão largo '+ Novo Lançamento' por um botão quadrado compacto de alta precisão com ícone '+', liberando espaço e equilibrando o cabeçalho superior.",
+      "Migração do Seletor de Tema (Claro / Escuro): Transferência do controle segmentado de tema da Topbar para a aba Configurações, agrupado na seção de aparência do sistema.",
+      "Correção da Lógica Invertida de 'Reduzir Animações': Alinhamento semântico estrito onde 'Sim' ativa o Modo Econômico (Sólido Puro, data-animations='off') e 'Não' mantém o modo padrão 144Hz Híbrido Copilot (data-animations='on').",
+      "Saneamento de Configurações: Remoção dos cards legados de seleção de logotipo (mantendo permanentemente o Equilibrium Link oficial) e do card obsoleto de Google Sheets Cloud DB.",
+      "Correção do Duplo '+ + Novo Aporte': Eliminação do caractere '+' redundante no rótulo do botão de novo aporte no módulo de Investimentos.",
+      "Cotações de BTC e Mercado em Tempo Real via WebSocket da Binance: Conexão WebSocket nativa contínua nos streams btcbrl@ticker, bnbbrl@ticker, ethbrl@ticker e solbrl@ticker da Binance com atualizações a cada segundo, badge pulsante '⚡ AO VIVO' e polling rápido sem cache de fallback."
+    ]
+  },
   {
     version: "0.40.0",
     date: "Nov/2026",

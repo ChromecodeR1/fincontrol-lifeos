@@ -120,7 +120,7 @@ const FALLBACK_TICKERS: Record<string, MarketTickerItem> = {
   }
 };
 
-export async function GET() {
+export async function GET(_request: Request) {
   const resultTickers: Record<string, MarketTickerItem> = { ...FALLBACK_TICKERS };
 
   try {
@@ -136,12 +136,12 @@ export async function GET() {
         const [tickerRes, klinesRes] = await Promise.all([
           fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${c.binancePair}`, {
             signal: AbortSignal.timeout(4500),
-            next: { revalidate: 60 },
+            cache: "no-store",
             headers: { Accept: "application/json" }
           }),
           fetch(`https://api.binance.com/api/v3/klines?symbol=${c.binancePair}&interval=1d&limit=30`, {
             signal: AbortSignal.timeout(4500),
-            next: { revalidate: 60 },
+            cache: "no-store",
             headers: { Accept: "application/json" }
           })
         ]);
@@ -191,17 +191,17 @@ export async function GET() {
         const [latestRes, usdHistRes, eurHistRes] = await Promise.all([
           fetch("https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL", {
             signal: AbortSignal.timeout(4500),
-            next: { revalidate: 60 },
+            cache: "no-store",
             headers: { Accept: "application/json" }
           }),
           fetch("https://economia.awesomeapi.com.br/json/daily/USD-BRL/30", {
             signal: AbortSignal.timeout(4500),
-            next: { revalidate: 60 },
+            cache: "no-store",
             headers: { Accept: "application/json" }
           }),
           fetch("https://economia.awesomeapi.com.br/json/daily/EUR-BRL/30", {
             signal: AbortSignal.timeout(4500),
-            next: { revalidate: 60 },
+            cache: "no-store",
             headers: { Accept: "application/json" }
           })
         ]);
@@ -291,7 +291,7 @@ export async function GET() {
           "https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados/ultimos/1?formato=json",
           {
             signal: AbortSignal.timeout(4500),
-            next: { revalidate: 60 },
+            cache: "no-store",
             headers: { Accept: "application/json" }
           }
         );
@@ -340,7 +340,9 @@ export async function GET() {
   return NextResponse.json(payload, {
     status: 200,
     headers: {
-      "Cache-Control": "s-maxage=60, stale-while-revalidate=300"
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0"
     }
   });
 }
