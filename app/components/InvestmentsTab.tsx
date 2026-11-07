@@ -692,22 +692,18 @@ export function InvestmentsTab({
 
               {/* Botões de Ação: Selecionar Janela + Customizar Gráficos */}
               <div className="flex items-center gap-3">
-                <div className="inline-flex p-1 rounded-xl bg-slate-900 border border-white/10 text-xs">
-                  {(["24H", "7D", "1M", "1Y"] as const).map((range) => (
-                    <button
-                      key={range}
-                      type="button"
-                      onClick={() => setSelectedChartRange(range)}
-                      className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer ${
-                        selectedChartRange === range
-                          ? "bg-white/20 text-white font-bold"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      {range}
-                    </button>
-                  ))}
-                </div>
+                <SlidingSegmentedControl
+                  options={[
+                    { id: "24H", label: "24H" },
+                    { id: "7D", label: "7D" },
+                    { id: "1M", label: "1M" },
+                    { id: "1Y", label: "1Y" }
+                  ]}
+                  value={selectedChartRange}
+                  onChange={(val) => setSelectedChartRange(val as "24H" | "7D" | "1M" | "1Y")}
+                  size="xs"
+                  activeColor="bg-white/20 text-white"
+                />
 
                 <div className="relative">
                   <button

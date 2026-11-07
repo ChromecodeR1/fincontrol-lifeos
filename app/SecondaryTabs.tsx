@@ -370,79 +370,45 @@ const StravaProgressGrid = React.memo(function StravaProgressGrid(props: StravaP
             {/* À esquerda: Seletor de Granularidade e Esporte */}
             <div className="flex flex-wrap items-center gap-2">
               {/* Pílula de Granularidade: [📍 Cada Corrida | 📅 Por Semana] */}
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/60 border border-[var(--cupertino-border)]">
-                <button
-                  type="button"
-                  onClick={() => setStravaGranularity("per_run")}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                    stravaGranularity === "per_run"
-                      ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold shadow-sm"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  📍 Cada Corrida
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStravaGranularity("weekly")}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                    stravaGranularity === "weekly"
-                      ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold shadow-sm"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  📅 Por Semana
-                </button>
-              </div>
+              <SlidingSegmentedControl
+                options={[
+                  { id: "per_run", label: "📍 Cada Corrida" },
+                  { id: "weekly", label: "📅 Por Semana" }
+                ]}
+                value={stravaGranularity}
+                onChange={(val) => setStravaGranularity(val as "per_run" | "weekly")}
+                size="xs"
+                activeColor="bg-[#FC4C02]"
+              />
 
               {/* Pílula seletora de esporte */}
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/60 border border-[var(--cupertino-border)]">
-                <button
-                  type="button"
-                  onClick={() => setStravaSport("run")}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                    stravaSport === "run"
-                      ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  🏃 Corrida
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStravaSport("all")}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                    stravaSport === "all"
-                      ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  🔥 Todos
-                </button>
-              </div>
+              <SlidingSegmentedControl
+                options={[
+                  { id: "run", label: "🏃 Corrida" },
+                  { id: "all", label: "🔥 Todos" }
+                ]}
+                value={stravaSport}
+                onChange={(val) => setStravaSport(val as "run" | "all")}
+                size="xs"
+                activeColor="bg-[#FC4C02]"
+              />
             </div>
 
             {/* À direita: As 5 pílulas oficiais de período do Strava + Engrenagem */}
             <div className="flex items-center gap-1.5">
-              <div className="flex items-center gap-1 p-0.5 rounded-xl bg-slate-900/60 border border-[var(--cupertino-border)]">
-                {(["7D", "1M", "3M", "6M", "1Y"] as const).map((p) => {
-                  const isActive = stravaPeriod === p;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setStravaPeriod(p)}
-                      className={`rounded-lg px-3 py-1 text-xs font-bold transition-all cursor-pointer border ${
-                        isActive
-                          ? "border-[#FC4C02] bg-[#FC4C02]/10 text-[#FC4C02]"
-                          : "border-transparent text-slate-400 hover:text-slate-200"
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-              </div>
+              <SlidingSegmentedControl
+                options={[
+                  { id: "7D", label: "7D" },
+                  { id: "1M", label: "1M" },
+                  { id: "3M", label: "3M" },
+                  { id: "6M", label: "6M" },
+                  { id: "1Y", label: "1Y" }
+                ]}
+                value={stravaPeriod}
+                onChange={(val) => setStravaPeriod(val as "7D" | "1M" | "3M" | "6M" | "1Y")}
+                size="xs"
+                activeColor="bg-[#FC4C02]"
+              />
 
               {/* Popover de Configurações */}
               <div className="relative">
@@ -3326,31 +3292,19 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   </div>
 
                   {/* Filtro por distância mínima */}
-                  <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-900/60 border border-[var(--cupertino-border)]">
-                    {[
+                  <SlidingSegmentedControl
+                    options={[
                       { id: "all", label: "Todas" },
                       { id: "3k", label: "> 3km" },
                       { id: "5k", label: "> 5km" },
                       { id: "10k", label: "> 10km" },
                       { id: "21k", label: "> 21km" }
-                    ].map((tab) => {
-                      const isActive = runDistFilter === tab.id;
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => setRunDistFilter(tab.id as any)}
-                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
-                            isActive
-                              ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
-                              : "text-slate-400 hover:text-white"
-                          }`}
-                        >
-                          {tab.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                    ]}
+                    value={runDistFilter}
+                    onChange={(val) => setRunDistFilter(val as any)}
+                    size="xs"
+                    activeColor="bg-[#FC4C02]"
+                  />
 
                   {/* Filtro por Mês */}
                   {availableRunMonths.length > 0 && (
@@ -3554,31 +3508,19 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 </div>
 
                 {/* Filtro por distância mínima */}
-                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-900/60 border border-[var(--cupertino-border)]">
-                  {[
+                <SlidingSegmentedControl
+                  options={[
                     { id: "all", label: "Todas" },
                     { id: "3k", label: "> 3km" },
                     { id: "5k", label: "> 5km" },
                     { id: "10k", label: "> 10km" },
                     { id: "21k", label: "> 21km" }
-                  ].map((tab) => {
-                    const isActive = runDistFilter === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setRunDistFilter(tab.id as any)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
-                          isActive
-                            ? "bg-[#FC4C02]/20 border border-[#FC4C02]/40 text-[#FC4C02] font-bold"
-                            : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                  ]}
+                  value={runDistFilter}
+                  onChange={(val) => setRunDistFilter(val as any)}
+                  size="xs"
+                  activeColor="bg-[#FC4C02]"
+                />
 
                 {/* Filtro por Mês */}
                 {availableRunMonths.length > 0 && (
@@ -4557,30 +4499,17 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </div>
 
             {/* Alternador de Modo: Nota/Objetivo vs Desejo de Compra */}
-            <div className="grid grid-cols-2 p-1 rounded-2xl bg-slate-950 border border-white/10 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => setNewNote({ ...newNote, itemType: "note" })}
-                className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  newNote.itemType !== "wish"
-                    ? "bg-[#0A84FF] text-white shadow-sm font-semibold"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" /> Nota / Objetivo
-              </button>
-              <button
-                type="button"
-                onClick={() => setNewNote({ ...newNote, itemType: "wish" })}
-                className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition ${
-                  newNote.itemType === "wish"
-                    ? "bg-amber-600 text-white shadow"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <ShoppingBag className="w-3.5 h-3.5" /> Desejo de Compra (R$)
-              </button>
-            </div>
+            <SlidingSegmentedControl
+              options={[
+                { id: "note", label: "Nota / Objetivo", icon: <FileText className="w-3.5 h-3.5" /> },
+                { id: "wish", label: "Desejo de Compra (R$)", icon: <ShoppingBag className="w-3.5 h-3.5" /> }
+              ]}
+              value={newNote.itemType === "wish" ? "wish" : "note"}
+              onChange={(val) => setNewNote({ ...newNote, itemType: val as "note" | "wish" })}
+              fullWidth
+              size="sm"
+              activeColor={newNote.itemType === "wish" ? "bg-amber-600 text-white shadow-sm" : "bg-[#0A84FF] text-white shadow-sm"}
+            />
 
             {/* Título */}
             <div className="space-y-1">

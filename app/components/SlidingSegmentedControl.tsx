@@ -19,7 +19,7 @@ export interface SlidingSegmentedControlProps<T extends string | number = string
   indicatorVariant?: "pill" | "underline";
   size?: "xs" | "sm" | "md";
   fullWidth?: boolean;
-  activeColor?: string; // e.g. "bg-[#0A84FF]", "bg-indigo-600", "bg-[#FC4C02]"
+  activeColor?: string; // e.g. "bg-[#0A84FF]", "bg-indigo-600", "bg-[#FC4C02]", "bg-amber-500 text-slate-950"
 }
 
 export function SlidingSegmentedControl<T extends string | number = string>({
@@ -35,11 +35,11 @@ export function SlidingSegmentedControl<T extends string | number = string>({
 }: SlidingSegmentedControlProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<Map<T, HTMLButtonElement>>(new Map());
-  const [style, setStyle] = useState<{ left: number; width: number; height: number; top: number }>({
-    left: 0,
+  const [pillStyle, setPillStyle] = useState<{ x: number; y: number; width: number; height: number }>({
+    x: 0,
+    y: 0,
     width: 0,
-    height: 0,
-    top: 0
+    height: 0
   });
   const [isReady, setIsReady] = useState(false);
 
@@ -47,47 +47,77 @@ export function SlidingSegmentedControl<T extends string | number = string>({
     const container = containerRef.current;
     if (!container) return;
 
-    const activeButton = buttonRefs.current.get(value);
-    if (!activeButton) return;
+    const activeBtn = buttonRefs.current.get(value);
+    if (!activeBtn) return;
 
-    const containerRect = container.getBoundingClientRect();
-    const activeRect = activeButton.getBoundingClientRect();
+    let x = activeBtn.offsetLeft;
+    let y = activeBtn.offsetTop;
+    const width = activeBtn.offsetWidth;
+    const height = activeBtn.offsetHeight;
 
-    setStyle({
-      left: activeRect.left - containerRect.left,
-      width: activeRect.width,
-      height: activeRect.height,
-      top: activeRect.top - containerRect.top
-    });
-    setIsReady(true);
+    // Fallback de alta precisão caso offsetParent não seja o container direto
+    if (activeBtn.offsetParent !== container) {
+      const cRect = container.getBoundingClientRect();
+      const bRect = activeBtn.getBoundingClientRect();
+      x = bRect.left - cRect.left;
+      y = bRect.top - cRect.top;
+    }
+
+    if (width > 0 && height > 0) {
+      setPillStyle({ x, y, width, height });
+      setIsReady(true);
+    }
   }, [value]);
 
   useLayoutEffect(() => {
     updatePosition();
+    const rafId = requestAnimationFrame(updatePosition);
+    return () => cancelAnimationFrame(rafId);
   }, [updatePosition, options, value]);
 
   useEffect(() => {
-    const handleResize = () => updatePosition();
-    window.addEventListener("resize", handleResize);
-
-    const container = containerRef.current;
-    let observer: ResizeObserver | null = null;
-    if (container && typeof ResizeObserver !== "undefined") {
-      observer = new ResizeObserver(() => updatePosition());
-      observer.observe(container);
+    // Sincroniza após o carregamento de fontes personalizadas
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        requestAnimationFrame(updatePosition);
+      });
     }
 
+    const container = containerRef.current;
+    const activeBtn = buttonRefs.current.get(value);
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => {
+      requestAnimationFrame(updatePosition);
+    });
+
+    if (container) observer.observe(container);
+    if (activeBtn) observer.observe(activeBtn);
+
+    const handleResize = () => requestAnimationFrame(updatePosition);
+    window.addEventListener("resize", handleResize);
+
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", handleResize);
-      if (observer) observer.disconnect();
     };
-  }, [updatePosition]);
+  }, [value, updatePosition]);
 
   const sizeClasses = {
-    xs: "text-[11px] py-1 px-2.5 min-h-[28px] gap-1",
+    xs: "text-[11px] py-1 px-2.5 min-h-[26px] gap-1.5",
     sm: "text-xs py-1.5 px-3 min-h-[32px] gap-1.5",
-    md: "text-xs sm:text-sm py-2 px-3.5 min-h-[38px] gap-2"
+    md: "text-xs sm:text-sm py-2 px-3.5 min-h-[36px] gap-2"
   }[size];
+
+  // Determina cor do texto selecionado com base no activeColor
+  const activeTextColor =
+    activeColor.includes("text-slate-950")
+      ? "text-slate-950"
+      : activeColor.includes("text-slate-900")
+      ? "text-slate-900"
+      : activeColor.includes("text-black")
+      ? "text-black"
+      : "text-white";
 
   return (
     <div
@@ -98,22 +128,37 @@ export function SlidingSegmentedControl<T extends string | number = string>({
       role="tablist"
     >
       {/* Indicador deslizante (Pill ou Underline) */}
-      {isReady && style.width > 0 && (
+      {isReady && pillStyle.width > 0 && (
         indicatorVariant === "pill" ? (
           <div
-            className={`absolute rounded-lg shadow-sm transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] pointer-events-none ${activeColor} ${pillClassName}`}
+            aria-hidden="true"
+            className={`absolute rounded-lg pointer-events-none z-0 shadow-sm ${activeColor} ${pillClassName}`}
             style={{
-              transform: `translate3d(${style.left}px, ${style.top}px, 0)`,
-              width: `${style.width}px`,
-              height: `${style.height}px`
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: `${pillStyle.width}px`,
+              height: `${pillStyle.height}px`,
+              transform: `translate3d(${pillStyle.x}px, ${pillStyle.y}px, 0)`,
+              transition: isReady
+                ? "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), width 260ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms cubic-bezier(0.22, 1, 0.36, 1)"
+                : "none"
             }}
           />
         ) : (
           <div
-            className={`absolute bottom-0 rounded-full transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] pointer-events-none h-[2px] ${activeColor} ${pillClassName}`}
+            aria-hidden="true"
+            className={`absolute pointer-events-none z-0 rounded-full h-[2px] ${activeColor} ${pillClassName}`}
             style={{
-              transform: `translate3d(${style.left}px, 0, 0)`,
-              width: `${style.width}px`
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: `${pillStyle.width}px`,
+              height: "2px",
+              transform: `translate3d(${pillStyle.x}px, ${pillStyle.y + pillStyle.height - 2}px, 0)`,
+              transition: isReady
+                ? "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), width 260ms cubic-bezier(0.22, 1, 0.36, 1)"
+                : "none"
             }}
           />
         )
@@ -141,12 +186,10 @@ export function SlidingSegmentedControl<T extends string | number = string>({
                 onChange(opt.id);
               }
             }}
-            className={`relative z-10 font-semibold transition-colors duration-200 flex items-center justify-center rounded-lg whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`relative z-10 inline-flex items-center justify-center text-center font-semibold leading-none rounded-lg whitespace-nowrap cursor-pointer transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed select-none ${
               fullWidth ? "flex-1" : ""
             } ${sizeClasses} ${
-              isSelected
-                ? "text-white font-bold"
-                : "text-slate-400 hover:text-slate-200"
+              isSelected ? activeTextColor : "text-slate-400 hover:text-slate-200"
             }`}
           >
             {opt.icon && <span className="shrink-0">{opt.icon}</span>}

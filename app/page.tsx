@@ -7028,26 +7028,17 @@ export default function CoindexApp() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-900 border border-white/5 text-[11px] font-bold">
-                        <button
-                          type="button"
-                          onClick={() => setBellViewMode("unread")}
-                          className={`py-1.5 rounded-lg transition cursor-pointer ${
-                            bellViewMode === "unread" ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
-                          }`}
-                        >
-                          Pendentes ({unreadNotifications.length})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBellViewMode("viewed")}
-                          className={`py-1.5 rounded-lg transition cursor-pointer ${
-                            bellViewMode === "viewed" ? "bg-[#0A84FF] text-white shadow-sm" : "text-slate-400 hover:text-white"
-                          }`}
-                        >
-                          Visualizadas ({viewedNotifications.length})
-                        </button>
-                      </div>
+                      <SlidingSegmentedControl
+                        options={[
+                          { id: "unread", label: `Pendentes (${unreadNotifications.length})` },
+                          { id: "viewed", label: `Visualizadas (${viewedNotifications.length})` }
+                        ]}
+                        value={bellViewMode}
+                        onChange={(val) => setBellViewMode(val as "unread" | "viewed")}
+                        size="xs"
+                        fullWidth
+                        activeColor="bg-[#0A84FF]"
+                      />
 
                       <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                         {bellViewMode === "unread" ? (

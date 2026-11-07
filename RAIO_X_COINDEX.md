@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.39.0`  
-> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 51 — Correção Definitiva da Renderização do Gráfico Strava Progress, Ingestão Paginada de Corridas Individuais na API, Modo 'Cada Corrida' e Histórico Detalhado Linha por Linha)  
+> **Versão da Aplicação:** `0.39.1`  
+> **Última Atualização:** 6 de Novembro de 2026 (Pós-Hotfix Sprint 49.1 — Correção Global do Desalinhamento da Pílula Azul Deslizante em Todos os Controles Segmentados Unidos)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -868,6 +868,17 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - **Loader 2 (Painel Strava Progress):** Barra superior indeterminada em `#FC4C02` + overlay `.cupertino-shimmer` durante `isSyncingStrava`.
       - **Loader 3 (Taxa CDI BCB):** Micro-dot pulsante (`animate-ping`) verde na badge `115% CDI • BCB Ao Vivo`.
       - **Loader 4 (Importação CSV/OFX e Modais):** Barra de progresso deslizante durante o processamento de arquivo e transição com check icon na confirmação da importação.
+
+  - **Hotfix Sprint 49.1 (Novembro de 2026 — Correção Global do Desalinhamento Vertical e Horizontal da Pílula Azul Deslizante em Todos os Controles Segmentados Unidos):**
+    - **Diagnóstico da Causa-Raiz Geométrica:**
+      - O indicador deslizante (`.absolute`) em `SlidingSegmentedControl.tsx` não continha propriedades explícitas de `top: 0` e `left: 0`. Em containers `flex items-center`, o posicionamento estático padrão `auto` empurrava a pílula para a linha base do flex, e o `transform: translate3d(x, y, 0)` era somado sobre essa posição já deslocada, empurrando a pílula para a borda inferior.
+      - Além disso, a alternância de peso tipográfico entre `font-normal`/`font-semibold` para `font-bold` no item ativo causava expansão de largura (`offsetWidth`) posterior à medição, gerando desalinhamento horizontal visível em textos como `"Na Fatura"`.
+    - **Solução Pixel-Perfect Bounding Box Implementada:**
+      - **Ancoragem Absoluta Estrita:** `position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0;` no elemento da pílula deslizante, garantindo que o `translate3d(x, y, 0)` parta da origem exata `(0, 0)` do container relativo.
+      - **Métricas Fidedignas do DOM:** Leitura direta de `activeBtn.offsetLeft`, `activeBtn.offsetTop`, `activeBtn.offsetWidth` e `activeBtn.offsetHeight` relativos ao `offsetParent` com fallback robusto via `getBoundingClientRect()`.
+      - **Estabilidade Tipográfica:** Padronização simétrica de `font-semibold` e `leading-none` tanto para o estado selecionado quanto não selecionado, eliminando qualquer layout shift na largura dos botões.
+      - **Observabilidade Contínua:** Rastreamento reativo em `useLayoutEffect`, `requestAnimationFrame`, `ResizeObserver` (observando container e botão ativo) e listener de `document.fonts.ready` para carregamento assíncrono de fontes.
+      - **Padronização Universal:** Aplicado em todos os controles unidos do sistema em `TransactionsTableAdvanced.tsx`, `page.tsx`, `SecondaryTabs.tsx`, `TransactionModal.tsx`, `VehiclesTab.tsx` e `InvestmentsTab.tsx`.
 
   - **Sprint 51 (Novembro de 2026 — Correção Definitiva da Renderização do Gráfico Strava Progress, Ingestão Paginada de Corridas Individuais na API, Modo 'Cada Corrida' e Histórico Detalhado Linha por Linha):**
     - **Passo 1 — Correção da Renderização do Gráfico em Linha Strava Progress (`AreaChart`):**

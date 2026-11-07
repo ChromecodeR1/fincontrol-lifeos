@@ -399,10 +399,22 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.39.0";
-export const PREVIOUS_VERSION = "0.38.0";
+export const APP_VERSION = "0.39.1";
+export const PREVIOUS_VERSION = "0.39.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.39.1",
+    date: "Nov/2026",
+    title: "Hotfix Sprint 49.1: Correção Global do Desalinhamento da Pílula Azul Deslizante em Todos os Controles Segmentados",
+    highlights: [
+      "Pixel-Perfect Bounding Box: Ancoragem absoluta estrita com top: 0 e left: 0 no indicador deslizante, eliminando o duplo deslocamento vertical e horizontal em containers flex items-center.",
+      "Métricas Nativas offsetLeft / offsetTop: Posicionamento e dimensionamento diretos via offsetLeft, offsetTop, offsetWidth e offsetHeight do botão ativo relativo ao container pai.",
+      "Eliminação de Layout Shift por Font-Weight: Padronização constante em font-semibold em ambos os estados (ativo e inativo), garantindo que a largura do botão não se altere após a medição.",
+      "Sincronização com Fontes e Redimensionamento: Rastreamento em useLayoutEffect, requestAnimationFrame, ResizeObserver no container e botão ativo, e listener document.fonts.ready.",
+      "Padronização Global dos Controles Unidos: Correção aplicada no componente universal SlidingSegmentedControl e em todos os seletores de filtros, regimes, períodos e abas do sistema."
+    ]
+  },
   {
     version: "0.39.0",
     date: "Nov/2026",
