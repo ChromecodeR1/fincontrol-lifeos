@@ -246,6 +246,7 @@ import {
   calculateVehicleTco,
   isFuelTransaction
 } from "./lib/domain/vehicle-math";
+import { reconcileReceivablesAndCashbook } from "./lib/domain/cashbook-sync";
 
 type QuickFilterType = "ALL" | "FIXO" | "VARIAVEL" | "CARTAO" | "PIX";
 
@@ -1714,6 +1715,7 @@ export default function CoindexApp() {
         const savedReadNotifs = localStorage.getItem("lifeos_read_notifications_v1");
         if (savedReadNotifs) setReadNotificationIds(JSON.parse(savedReadNotifs));
 
+        const tombstonesOnStart = getTombstones(currentUserId);
         const sTxs = getUserItem("lifeos_txs_v8");
         let initialTxs: Transaction[] = [];
         if (sTxs) {
@@ -1723,15 +1725,23 @@ export default function CoindexApp() {
             ...t,
             category: migrateLegacyCategory(t.category, t.description)
           }));
-          initialTxs = migratedTxs;
-          setTransactions(migratedTxs);
-          setUserItem("lifeos_txs_v8", JSON.stringify(migratedTxs));
+          // SPRINT 50: Reconciliação Contábil Bidirecional no Carregamento Inicial
+          const { transactions: reconciledTxs, purgedIds } = reconcileReceivablesAndCashbook(
+            migratedTxs,
+            tombstonesOnStart
+          );
+          if (purgedIds.length > 0) {
+            recordTombstones(purgedIds, currentUserId);
+          }
+          initialTxs = reconciledTxs;
+          setTransactions(reconciledTxs);
+          setUserItem("lifeos_txs_v8", JSON.stringify(reconciledTxs), currentUserId);
+          localStorage.setItem("lifeos_txs_v8", JSON.stringify(reconciledTxs));
         }
         const sDebtors = localStorage.getItem("lifeos_debtors_v8");
         if (sDebtors) setDebtorMap(JSON.parse(sDebtors));
 
         // SPRINT 47.1: Auto-Resgate e Sincronização Síncrona Tripla de Bancos e Cartões
-        const tombstonesOnStart = getTombstones(currentUserId);
         const { rescuedBanks, rescuedCards } = rescueMissingBanksAndCards(
           INITIAL_BANKS,
           INITIAL_CARDS,
@@ -1944,7 +1954,32 @@ export default function CoindexApp() {
             }
           });
 
-          const merged = Array.from(mergedMap.values()).sort((a, b) => compareDatesBR(b.date, a.date));
+          const rawMerged = Array.from(mergedMap.values()).sort((a, b) => compareDatesBR(b.date, a.date));
+
+          // SPRINT 50: Reconciliação Contábil Bidirecional Central (SSOT) no Supabase Merge
+          const { transactions: reconciledMerged, purgedIds, updatedTxs } = reconcileReceivablesAndCashbook(
+            rawMerged,
+            currentTombstones
+          );
+
+          if (purgedIds.length > 0) {
+            recordTombstones(purgedIds, targetUserId);
+            try {
+              await deleteTransactionsInDb(purgedIds);
+            } catch (err) {
+              console.error("Erro ao expurgar recebimentos fantasmas no Supabase:", err);
+            }
+          }
+
+          if (updatedTxs.length > 0) {
+            try {
+              await upsertTransactionsInDb(updatedTxs, debtorMap);
+            } catch (err) {
+              console.error("Erro ao sincronizar lançamentos corrigidos no Supabase:", err);
+            }
+          }
+
+          const merged = reconciledMerged.sort((a, b) => compareDatesBR(b.date, a.date));
 
           setTransactions(merged);
           setUserItem("lifeos_txs_v8", JSON.stringify(merged), targetUserId);
@@ -2644,8 +2679,7 @@ export default function CoindexApp() {
       if (
         lower.includes("transferência") ||
         lower.includes("pagamento de fatura") ||
-        lower.includes("pagamento fatura") ||
-        lower.includes("recebimento de empréstimo")
+        lower.includes("pagamento fatura")
       ) {
         return "NEUTRAL";
       }
@@ -2654,7 +2688,9 @@ export default function CoindexApp() {
         lower.includes("benefício") ||
         lower.includes("comissão") ||
         lower.includes("rendimento") ||
-        lower.includes("serviço")
+        lower.includes("serviço") ||
+        lower.includes("recebimento de empréstimo") ||
+        lower.includes("recebimento de emprestimo")
       ) {
         return "INCOME";
       }
@@ -4416,6 +4452,14 @@ export default function CoindexApp() {
             finalLinkedReceivableId = undefined;
           }
 
+          const isSettlementEdit =
+            normalizedCategory === "Recebimento de Empréstimo" ||
+            Boolean(existingTx?.isReceivableSettlement);
+          const settlementLinkedId = isSettlementEdit
+            ? newTx.linkedReceivableId || existingTx?.linkedReceivableId
+            : finalLinkedReceivableId;
+
+          let updatedParentDebt: Transaction | null = null;
           let updatedEditedItem: Transaction | null = null;
           setTransactions((prev) => {
             let next = prev.map((t) => {
@@ -4426,7 +4470,8 @@ export default function CoindexApp() {
                   description: sanitizeText(newTx.description),
                   amount: totalAmount,
                   category: normalizedCategory,
-                  flowType: resolvedFlow,
+                  flowType: isSettlementEdit ? "INCOME" : resolvedFlow,
+                  isReceivableSettlement: isSettlementEdit ? true : t.isReceivableSettlement,
                   costType: newTx.costType,
                   paymentMethod: newTx.paymentMethod,
                   cardUsed: savedCardUsed,
@@ -4448,7 +4493,7 @@ export default function CoindexApp() {
                   thirdPartyAmount: parsedThirdAmount,
                   thirdPartyName: cleanThirdName,
                   personalAmount: calculatedPersonal,
-                  linkedReceivableId: finalLinkedReceivableId,
+                  linkedReceivableId: settlementLinkedId,
                   indexer: newTx.indexer,
                   cdiPercentage: newTx.cdiPercentage ? parseFloat(newTx.cdiPercentage) : undefined,
                   rev: (t.rev ?? 0) + 1,
@@ -4462,6 +4507,24 @@ export default function CoindexApp() {
               }
               return t;
             });
+
+            // Se editou um recebimento com dívida vinculada, sincroniza o paidAmount da dívida mãe
+            if (isSettlementEdit && settlementLinkedId) {
+              const pDebt = next.find((t) => t.id === settlementLinkedId);
+              if (pDebt) {
+                const otherSettlements = next.filter(
+                  (t) => t.linkedReceivableId === settlementLinkedId && t.id !== editingTxId
+                );
+                const newPaid = otherSettlements.reduce((sum, s) => safeAdd(sum, s.amount), totalAmount);
+                updatedParentDebt = {
+                  ...pDebt,
+                  paidAmount: Math.max(0, newPaid),
+                  status: newPaid >= pDebt.amount ? "Pago" : "Pendente",
+                  updatedAt: nowIso
+                };
+                next = next.map((t) => (t.id === settlementLinkedId ? updatedParentDebt! : t));
+              }
+            }
 
             if (childIdToDelete) {
               next = next.filter((t) => t.id !== childIdToDelete);
@@ -4490,9 +4553,10 @@ export default function CoindexApp() {
           }
 
           const finalEdited: Transaction | null = updatedEditedItem || editedItem;
-          const itemsToDb: Transaction[] = finalEdited
-            ? (childItemToUpsert ? [finalEdited, childItemToUpsert] : [finalEdited])
-            : [];
+          const itemsToDb: Transaction[] = [];
+          if (finalEdited) itemsToDb.push(finalEdited);
+          if (childItemToUpsert) itemsToDb.push(childItemToUpsert);
+          if (updatedParentDebt) itemsToDb.push(updatedParentDebt);
           if (itemsToDb.length > 0) await upsertTransactionsInDb(itemsToDb, nextDebtorMap);
 
           // Sincroniza telemetria de combustível se aplicável
@@ -4598,13 +4662,18 @@ export default function CoindexApp() {
           };
         }
 
+        const isNewSettlement =
+          normalizedCategory === "Recebimento de Empréstimo" || Boolean(newTx.linkedReceivableId);
+        const resolvedLinkedId = isNewSettlement ? newTx.linkedReceivableId : childId;
+
         const item: Transaction = {
           id: parentId,
           date: normalizedDate,
           description: sanitizeText(newTx.description),
           amount: totalAmount,
           category: normalizedCategory,
-          flowType: resolvedFlow,
+          flowType: isNewSettlement ? "INCOME" : resolvedFlow,
+          isReceivableSettlement: isNewSettlement ? true : undefined,
           costType: newTx.costType,
           paymentMethod: newTx.paymentMethod,
           cardUsed: savedCardUsed,
@@ -4618,7 +4687,7 @@ export default function CoindexApp() {
           fullTank: resolvedFullTank,
           invoiceMonth: itemInvoiceMonth,
           cashMonth: itemCashMonth,
-          debtor: normalizedCategory === "A Receber" ? sanitizeText(newTx.debtor) : undefined,
+          debtor: normalizedCategory === "A Receber" ? sanitizeText(newTx.debtor) : (isNewSettlement ? newTx.debtor : undefined),
           isTransfer: isTransferTx,
           sourceBank: newTx.sourceBank || resolvedBank,
           destinationBank: newTx.destinationBank,
@@ -4626,12 +4695,29 @@ export default function CoindexApp() {
           thirdPartyAmount: parsedThirdAmount,
           thirdPartyName: cleanThirdName,
           personalAmount: calculatedPersonal,
-          linkedReceivableId: childId,
+          linkedReceivableId: resolvedLinkedId,
           indexer: newTx.indexer,
           cdiPercentage: newTx.cdiPercentage ? parseFloat(newTx.cdiPercentage) : undefined,
           rev: 1,
           updatedAt: nowIso
         };
+
+        let updatedParentDebtForNew: Transaction | null = null;
+        if (isNewSettlement && newTx.linkedReceivableId) {
+          const pDebt = transactions.find((t) => t.id === newTx.linkedReceivableId);
+          if (pDebt) {
+            const existingSettlements = transactions.filter(
+              (t) => t.linkedReceivableId === pDebt.id
+            );
+            const newPaid = existingSettlements.reduce((sum, s) => safeAdd(sum, s.amount), totalAmount);
+            updatedParentDebtForNew = {
+              ...pDebt,
+              paidAmount: Math.max(0, newPaid),
+              status: newPaid >= pDebt.amount ? "Pago" : "Pendente",
+              updatedAt: nowIso
+            };
+          }
+        }
 
         const nextDebtorMap = { ...debtorMap };
         if (childItem && cleanThirdName) {
@@ -4640,7 +4726,11 @@ export default function CoindexApp() {
           localStorage.setItem("lifeos_debtors_v8", JSON.stringify(nextDebtorMap));
         }
 
-        const toSaveList = childItem ? [item, childItem] : [item];
+        const toSaveList: Transaction[] = [
+          item,
+          ...(childItem ? [childItem] : []),
+          ...(updatedParentDebtForNew ? [updatedParentDebtForNew] : [])
+        ];
         setTransactions((prev) => {
           const next = [...toSaveList, ...prev.filter((t) => !toSaveList.some((s) => s.id === t.id))];
           try {
@@ -4831,16 +4921,53 @@ export default function CoindexApp() {
       nextStatus = "Pago";
     }
     const previousTx = { ...tx };
+    const isReceivableParent = tx.category === "A Receber" || tx.flowType === "RECEIVABLE";
+    const linkedSettlements = isReceivableParent ? transactions.filter((t) => t.linkedReceivableId === tx.id) : [];
+    const linkedSettlementIds = new Set(linkedSettlements.map((t) => t.id));
+
     const changedItem: Transaction = {
       ...tx,
       status: nextStatus,
       paidAmount: nextStatus === "Pago" ? tx.amount : 0,
       updatedAt: new Date().toISOString()
     };
-    const updated = transactions.map((t) => (t.id === tx.id ? changedItem : t));
-    setTransactions(updated);
-    setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
-    upsertTransactionsInDb([changedItem], debtorMap);
+
+    let nextList: Transaction[];
+    if (isReceivableParent && nextStatus === "Pendente" && linkedSettlements.length > 0) {
+      nextList = transactions
+        .filter((t) => !linkedSettlementIds.has(t.id))
+        .map((t) => (t.id === tx.id ? changedItem : t));
+      recordTombstones(Array.from(linkedSettlementIds), currentUserId);
+      void deleteTransactionsInDb(Array.from(linkedSettlementIds));
+    } else if (isReceivableParent && nextStatus === "Pago" && linkedSettlements.length === 0) {
+      const nowIso = new Date().toISOString();
+      const settlementTx: Transaction = {
+        id: `tx-recv-${Date.now()}`,
+        date: todayBR(),
+        description: `Recebimento: ${tx.debtor || debtorMap[tx.id] || "Devedor"} (${tx.description})`,
+        amount: tx.amount,
+        category: "Recebimento de Empréstimo",
+        flowType: "INCOME",
+        isReceivableSettlement: true,
+        linkedReceivableId: tx.id,
+        debtor: tx.debtor || debtorMap[tx.id] || "Devedor",
+        costType: "Variável",
+        paymentMethod: "PIX",
+        bankAccount: banks[0]?.name || "Nubank",
+        status: "Pago",
+        updatedAt: nowIso
+      };
+      nextList = [settlementTx, ...transactions.map((t) => (t.id === tx.id ? changedItem : t))];
+      void upsertTransactionsInDb([settlementTx, changedItem], debtorMap);
+    } else {
+      nextList = transactions.map((t) => (t.id === tx.id ? changedItem : t));
+      void upsertTransactionsInDb([changedItem], debtorMap);
+    }
+
+    setTransactions(nextList);
+    setUserItem("lifeos_txs_v8", JSON.stringify(nextList), currentUserId);
+    localStorage.setItem("lifeos_txs_v8", JSON.stringify(nextList));
+
     notify(
       "Situação Alterada",
       `${tx.description} marcado como ${nextStatus}.`,
@@ -4850,6 +4977,7 @@ export default function CoindexApp() {
         const reverted = transactions.map((t) => (t.id === tx.id ? previousTx : t));
         setTransactions(reverted);
         setUserItem("lifeos_txs_v8", JSON.stringify(reverted), currentUserId);
+        localStorage.setItem("lifeos_txs_v8", JSON.stringify(reverted));
         upsertTransactionsInDb([previousTx], debtorMap);
         notify("Alteração Desfeita!", `${tx.description} voltou para ${previousTx.status}.`, "info", "FINANCE");
       },
@@ -4877,17 +5005,45 @@ export default function CoindexApp() {
       confirmLabel: "Sim, Excluir",
       danger: true,
       onConfirm: async () => {
-        const childId = tx.linkedReceivableId;
-        const parentId = tx.linkedSplitParentId;
-        const orphanSettlements = transactions.filter((t) => t.linkedReceivableId === id);
-        const orphanIds = new Set(orphanSettlements.map((t) => t.id));
+        const isSettlement = tx.isReceivableSettlement === true || tx.category === "Recebimento de Empréstimo";
+        const childId = !isSettlement && tx.isSplit ? tx.linkedReceivableId : undefined;
+        const parentSplitId = tx.linkedSplitParentId;
+        const parentDebtId = isSettlement ? tx.linkedReceivableId : undefined;
+
+        // Se deletou uma dívida de Valores a Receber, localiza todos os recebimentos filhos vinculados
+        const childSettlements = !isSettlement ? transactions.filter((t) => t.linkedReceivableId === id) : [];
+        const childSettlementIds = new Set(childSettlements.map((t) => t.id));
+
         const previousTransactions = [...transactions];
-        const txsToRestore = transactions.filter((t) => t.id === id || t.id === childId || orphanIds.has(t.id));
+        const txsToRestore = transactions.filter(
+          (t) => t.id === id || (childId && t.id === childId) || childSettlementIds.has(t.id)
+        );
+
+        // Se deletou um recebimento no Livro Caixa, subtrai imediatamente da dívida mãe e volta para Pendente
+        let parentDebtToUpdate: Transaction | null = null;
+        if (parentDebtId) {
+          const parentDebt = transactions.find((t) => t.id === parentDebtId);
+          if (parentDebt) {
+            const remainingSettlements = transactions.filter(
+              (t) => t.id !== id && t.linkedReceivableId === parentDebtId
+            );
+            const newPaid = remainingSettlements.reduce((sum, s) => safeAdd(sum, s.amount), 0);
+            parentDebtToUpdate = {
+              ...parentDebt,
+              paidAmount: Math.max(0, newPaid),
+              status: newPaid >= parentDebt.amount ? "Pago" : "Pendente",
+              updatedAt: new Date().toISOString()
+            };
+          }
+        }
 
         const updated = transactions
-          .filter((t) => t.id !== id && t.id !== childId && !orphanIds.has(t.id))
+          .filter((t) => t.id !== id && (!childId || t.id !== childId) && !childSettlementIds.has(t.id))
           .map((t) => {
-            if (parentId && t.id === parentId) {
+            if (parentDebtToUpdate && t.id === parentDebtToUpdate.id) {
+              return parentDebtToUpdate;
+            }
+            if (parentSplitId && t.id === parentSplitId) {
               return {
                 ...t,
                 isSplit: false,
@@ -4904,16 +5060,37 @@ export default function CoindexApp() {
         if (childId) {
           recordTombstone(childId, currentUserId);
         }
-        orphanIds.forEach((oid) => recordTombstone(oid, currentUserId));
+        childSettlementIds.forEach((cid) => recordTombstone(cid, currentUserId));
+
         setTransactions(updated);
         setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
+        localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
+
+        // Sincroniza exclusão de abastecimento no fuelLogs
+        if (tx.category === "Gasolina" || tx.liters || tx.km) {
+          try {
+            const rawLogs = localStorage.getItem("lifeos_fuel_logs_v1");
+            if (rawLogs) {
+              const logs = JSON.parse(rawLogs);
+              const filteredLogs = logs.filter((l: any) => l.id !== id);
+              localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify(filteredLogs));
+            }
+          } catch (e) {
+            console.error("Erro ao sincronizar exclusão em lifeos_fuel_logs_v1", e);
+          }
+        }
+
         await deleteTransactionInDb(id);
         if (childId) {
           await deleteTransactionInDb(childId);
         }
-        for (const oid of orphanIds) {
-          await deleteTransactionInDb(oid);
+        for (const cid of childSettlementIds) {
+          await deleteTransactionInDb(cid);
         }
+        if (parentDebtToUpdate) {
+          await upsertTransactionsInDb([parentDebtToUpdate], debtorMap);
+        }
+
         notify(
           "Lançamento Removido",
           `"${tx.description}" excluído com sucesso.`,
@@ -4924,7 +5101,7 @@ export default function CoindexApp() {
             if (childId) {
               removeTombstone(childId, currentUserId);
             }
-            orphanIds.forEach((oid) => removeTombstone(oid, currentUserId));
+            childSettlementIds.forEach((cid) => removeTombstone(cid, currentUserId));
             const cleanRestored = txsToRestore.map((t) => {
               const c = { ...t };
               delete c.deletedAt;
@@ -4932,6 +5109,7 @@ export default function CoindexApp() {
             });
             setTransactions(previousTransactions);
             setUserItem("lifeos_txs_v8", JSON.stringify(previousTransactions), currentUserId);
+            localStorage.setItem("lifeos_txs_v8", JSON.stringify(previousTransactions));
             upsertTransactionsInDb(cleanRestored, debtorMap);
             notify("Lançamento Restaurado!", `"${tx.description}" foi restaurado com sucesso.`, "success", "FINANCE");
           },
@@ -5039,6 +5217,7 @@ export default function CoindexApp() {
     const nowIso = todayISO();
     const todayStr = todayBR();
     const debtorName = tx.debtor || debtorMap[tx.id] || "Devedor";
+    const isPartial = safeRemaining > 0;
 
     const changedTx: Transaction = {
       ...tx,
@@ -5050,12 +5229,15 @@ export default function CoindexApp() {
     const incomeTx: Transaction = {
       id: `tx-recv-${Date.now()}`,
       date: todayStr,
-      description: `Recebimento: ${debtorName} (${tx.description})`,
+      description: isPartial
+        ? `Recebimento Parcial: ${debtorName} (${tx.description})`
+        : `Recebimento: ${debtorName} (${tx.description})`,
       amount: cleanAmount,
       category: "Recebimento de Empréstimo",
-      flowType: "NEUTRAL",
+      flowType: "INCOME",
       isReceivableSettlement: true,
       linkedReceivableId: tx.id,
+      debtor: debtorName,
       costType: "Variável",
       paymentMethod: "PIX",
       bankAccount: targetBank,
@@ -5065,6 +5247,7 @@ export default function CoindexApp() {
 
     const updated = [incomeTx, ...transactions.map((t) => (t.id === tx.id ? changedTx : t))];
     setTransactions(updated);
+    setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
     localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
     upsertTransactionsInDb([changedTx, incomeTx], debtorMap);
     notify(

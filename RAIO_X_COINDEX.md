@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.37.0`  
-> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 49 — Arquitetura 100% Cloud-First no Supabase, Persistência Completa de Desejos/Cartões/Bancos, Motion Deslizante Horizontal "Sliding Pill" em Todos os Controles Unidos e Efeito Híbrido Copilot Fixo)  
+> **Versão da Aplicação:** `0.38.0`  
+> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 50 — Unificação Contábil do Livro Caixa como SSOT, Sincronização Bidirecional Estrita e Saneamento dos Recebimentos Fantasmas do Devedor Dio)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -45,6 +45,7 @@ fincontrol-lifeos/
 │   │   │   ├── bank-ingest.ts             # Parser seguro client-side para extratos CSV (Nubank, Inter, BTG) e OFX
 │   │   │   ├── purchase-simulator.ts      # Motor Preditivo de Simulação de Compras "Posso Comprar?"
 │   │   │   ├── vehicle-math.ts            # Motor Ponderado de Consumo km/L e TCO sem duplicidade contábil
+│   │   │   ├── cashbook-sync.ts           # Motor de Reconciliação e SSOT Bidirecional do Livro Caixa (Sprint 50)
 │   │   │   └── user-storage.ts            # Isolamento de Cache por Usuário (userId namespace, tombstones & soft delete)
 │   │   ├── services/coindex-supabase.ts   # CRUD completo e persistência no Supabase PostgreSQL
 │   │   ├── services/spotify-supabase.ts   # Persistência de tokens e preferências Spotify
@@ -867,6 +868,27 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - **Loader 2 (Painel Strava Progress):** Barra superior indeterminada em `#FC4C02` + overlay `.cupertino-shimmer` durante `isSyncingStrava`.
       - **Loader 3 (Taxa CDI BCB):** Micro-dot pulsante (`animate-ping`) verde na badge `115% CDI • BCB Ao Vivo`.
       - **Loader 4 (Importação CSV/OFX e Modais):** Barra de progresso deslizante durante o processamento de arquivo e transição com check icon na confirmação da importação.
+
+  - **Sprint 50 (Novembro de 2026 — Unificação Contábil do Livro Caixa como Fonte Única da Verdade, Sincronização Bidirecional Estrita e Saneamento dos Recebimentos Fantasmas do Devedor Dio):**
+    - **Passo 1 — Criação do Motor Contábil Puro `app/lib/domain/cashbook-sync.ts`:**
+      - A lista `transactions` (Livro Caixa) é consagrada como a Fonte Única da Verdade (SSOT). Todos os módulos satélites (Valores a Receber, Meus Veículos, Investimentos e Bancos) mantêm sincronização bidirecional estrita com precisão matemática em centavos inteiros (`toCents`, `fromCents`, `safeAdd`, `safeSub`).
+      - Função pura `reconcileReceivablesAndCashbook(transactions, tombstones)`:
+        - **Expurgo de Recebimentos Fantasmas / Órfãos:** Detecta e expurga os 8 lançamentos fantasmas em `30-10-2026` associados a `Recebimento: Dio (Emprestimo ao Dio)` (valores `R$ 20,00`, `R$ 20,00`, `R$ 62,88`, `R$ 22,80`, `R$ 30,80`, `R$ 102,70`, `R$ 20,64`, `R$ 0,05`), além de qualquer recebimento cujo empréstimo original não exista mais ou cuja dívida ativa esteja pendente com `paidAmount === 0`.
+        - **Reconciliação Exata da Dívida Parcial do Dio:** Para a dívida `Saldo restante de 2025 à receber` (`amount = 622.75`, `paidAmount = 500.00`), o lançamento de recebimento no Livro Caixa tem seu valor corrigido automaticamente de `R$ 622,75` para `500.00`, descrição ajustada para `"Recebimento Parcial: Dio (Saldo restante de 2025 à receber)"`, categoria `"Recebimento de Empréstimo"`, `flowType: "INCOME"` e `isReceivableSettlement: true`.
+        - **Simetria Matemática Estrita:** `parent.paidAmount` é sempre igual à soma exata em centavos dos lançamentos vivos de recebimento com `linkedReceivableId === parent.id`.
+    - **Passo 2 — Interligação Bidirecional em Tempo Real (`Livro Caixa` <-> `Valores a Receber`):**
+      - **Sentido 1 (`Valores a Receber` -> `Livro Caixa`):**
+        - Cliques em `+ Abater` ou `Quitar 100%` geram lançamento de entrada no Livro Caixa com `category: "Recebimento de Empréstimo"`, `flowType: "INCOME"`, `isReceivableSettlement: true`, `linkedReceivableId: parent.id`, recalculando o `paidAmount` da dívida mãe.
+        - Excluir uma dívida na aba `Valores a Receber` exclui atomicamente todos os recebimentos filhos no Livro Caixa e grava os tombstones no Supabase.
+        - Alternar status entre Pago e Pendente na aba `Valores a Receber` cria ou remove o lançamento de liquidação correspondente no Livro Caixa.
+      - **Sentido 2 (`Livro Caixa` -> `Valores a Receber`):**
+        - Excluir uma linha de recebimento no Livro Caixa subtrai imediatamente o valor do `paidAmount` da dívida mãe e reverte o status para `"Pendente"`.
+        - Editar o valor de um recebimento no Livro Caixa atualiza o `paidAmount` da dívida mãe centavo a centavo.
+        - Criação de Novo Lançamento na categoria `"Recebimento de Empréstimo"` no `TransactionModal.tsx` exibe o seletor inteligente `"Vincular a qual dívida em aberto? (Valores a Receber)"`, preenchendo o valor restante e abatendo automaticamente a dívida ao salvar.
+    - **Passo 3 — Interligação Bidirecional do Livro Caixa com Demais Módulos:**
+      - **Meus Veículos <-> Livro Caixa:** Ações de edição e exclusão de abastecimentos no Histórico Completo de Veículos (`VehiclesTab.tsx`) refletem instantaneamente no Livro Caixa e vice-versa, com recálculo em tempo real de odômetro, consumo médio ponderado (km/L) e TCO.
+      - **Investimentos <-> Livro Caixa:** Aportes e resgates alimentam os cofres patrimoniais em tempo real, sendo transações autênticas do Livro Caixa.
+      - **Persistência 100% Nuvem (Supabase):** Gravação síncrona dos tombstones de recebimentos fantasmas no Supabase PostgreSQL via `deleteTransactionsInDb` e `upsertTransactionsInDb`, garantindo que jamais retornem após F5.
 
   - **Sprint 49 (Novembro de 2026 — Arquitetura 100% Cloud-First no Supabase, Motion Deslizante Horizontal "Sliding Pill" e Efeito Híbrido Fixo):**
     - **Passo 1 — Arquitetura 100% Cloud-First (Supabase SSOT) para Desejos de Compra, Cartões e Bancos:**

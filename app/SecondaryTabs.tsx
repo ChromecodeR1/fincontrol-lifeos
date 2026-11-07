@@ -2373,6 +2373,8 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         updateChartThemeColor={updateChartThemeColor}
         handleOpenNewTxModal={handleOpenNewTxModal}
         onAddTransaction={onAddTransaction}
+        onDeleteTransaction={handleDeleteTransaction}
+        onEditTransaction={handleStartEditTransaction}
         notify={notify}
         moneyBlur={moneyBlur}
         autoLayout={autoLayout}

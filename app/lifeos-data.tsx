@@ -388,10 +388,23 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.37.0";
-export const PREVIOUS_VERSION = "0.36.0";
+export const APP_VERSION = "0.38.0";
+export const PREVIOUS_VERSION = "0.37.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.38.0",
+    date: "Nov/2026",
+    title: "Sprint 50: Unificação Contábil do Livro Caixa (SSOT), Sincronização Bidirecional Estrita e Saneamento de Recebimentos Fantasmas",
+    highlights: [
+      "Livro Caixa como Fonte Única da Verdade (SSOT): Unificação contábil integral onde transações do Livro Caixa e módulos especialistas (Valores a Receber, Veículos, Investimentos e Bancos) mantêm sincronização bidirecional em tempo real com precisão matemática ao centavo.",
+      "Expurgo de Recebimentos Fantasmas do Devedor Dio: Auditoria contábil automática que purga definitivamente os 8 recebimentos órfãos inflados em 30/10/2026, gerando tombstones imediatos no Supabase PostgreSQL.",
+      "Reconciliação Simétrica da Dívida Parcial de Dio: Corrigido o abatimento parcial de R$ 500,00 da dívida de R$ 622,75 com descrição 'Recebimento Parcial: Dio (Saldo restante de 2025 à receber)' e vínculo relacional estrito.",
+      "Seletor Inteligente em TransactionModal: Criação de lançamentos na categoria 'Recebimento de Empréstimo' permite escolher diretamente a dívida em aberto correspondente, sugerindo valor restante e vinculando o abatimento.",
+      "Mão Dupla nos Ajustes de Recebimentos: Excluir ou alterar o valor de um recebimento no Livro Caixa recalcula instantaneamente o paidAmount da dívida mãe e reverte status para Pendente; excluir uma dívida expurga todos os recebimentos filhos.",
+      "Telemetria Veicular Bidirecional: Ações de edição e exclusão direta no Histórico Completo de Veículos refletem instantaneamente no Livro Caixa com recálculo de odômetro, km/L e TCO."
+    ]
+  },
   {
     version: "0.37.0",
     date: "Nov/2026",
@@ -971,7 +984,7 @@ export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = sortCategoriesA
   { name: "Manutenção", flow: "EXPENSE", isAuto: true },
   { name: "Moradia", flow: "EXPENSE" },
   { name: "Pagamento de Fatura", flow: "NEUTRAL" },
-  { name: "Recebimento de Empréstimo", flow: "NEUTRAL" },
+  { name: "Recebimento de Empréstimo", flow: "INCOME" },
   { name: "Receita Extra", flow: "INCOME" },
   { name: "Rendimentos", flow: "INCOME" },
   { name: "Resgate", flow: "INVESTMENT" },
@@ -1285,11 +1298,15 @@ export function resolveTransactionFlowType(
     cat.includes("transferência") ||
     cat.includes("transferencia") ||
     cat.includes("pagamento de fatura") ||
-    cat.includes("pagamento fatura") ||
+    cat.includes("pagamento fatura")
+  ) {
+    return "NEUTRAL";
+  }
+  if (
     cat.includes("recebimento de empréstimo") ||
     cat.includes("recebimento de emprestimo")
   ) {
-    return "NEUTRAL";
+    return "INCOME";
   }
   if (cat === "a receber" || cat.includes("a receber")) {
     return "RECEIVABLE";

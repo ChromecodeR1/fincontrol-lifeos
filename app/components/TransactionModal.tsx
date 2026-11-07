@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Fuel, Wallet, X, Layers, Gauge, CreditCard, Loader2, ArrowLeftRight, Users, Sparkles, Plus, TrendingUp, Calendar } from "lucide-react";
+import { Fuel, Wallet, X, Layers, Gauge, CreditCard, Loader2, ArrowLeftRight, Users, Sparkles, Plus, TrendingUp, Calendar, HandCoins } from "lucide-react";
 import {
   BankItem,
   CategoryCatalogItem,
@@ -335,6 +335,37 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     () => [...categoriesCatalog].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })),
     [categoriesCatalog]
   );
+
+  // SPRINT 50: Dívidas em aberto para seleção inteligente em "Recebimento de Empréstimo"
+  const openDebts = useMemo(() => {
+    if (!transactions) return [];
+    return transactions
+      .filter((t) => {
+        if (t.isReceivableSettlement || t.category === "Recebimento de Empréstimo") return false;
+        const isReceivable =
+          t.category === "A Receber" ||
+          t.flowType === "RECEIVABLE" ||
+          Boolean(t.isSplitChild && t.linkedSplitParentId);
+        if (!isReceivable) return false;
+        const paid = t.paidAmount || 0;
+        const remaining = Math.max(0, Math.round((t.amount - paid) * 100) / 100);
+        return remaining > 0 && t.status !== "Pago";
+      })
+      .map((d) => {
+        const debtorName = (d.debtor || "").trim() || "Devedor não identificado";
+        const paid = d.paidAmount || 0;
+        const remaining = Math.max(0, Math.round((d.amount - paid) * 100) / 100);
+        return {
+          id: d.id,
+          debtor: debtorName,
+          description: d.description,
+          totalAmount: d.amount,
+          paidAmount: paid,
+          remaining,
+          date: d.date
+        };
+      });
+  }, [transactions]);
 
   const suggestions = useMemo(() => {
     if (editingTxId) return [];
@@ -1614,6 +1645,72 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   onChange={(e) => setFormState((prev) => ({ ...prev, debtor: e.target.value }))}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-amber-500/40 text-white"
                 />
+              </div>
+            )}
+
+            {/* SPRINT 50: Seletor Inteligente de Vínculo com Valores a Receber */}
+            {(formState.category === "Recebimento de Empréstimo" ||
+              formState.category.toLowerCase().includes("recebimento de empr")) && (
+              <div className="rounded-2xl p-4 bg-amber-950/25 border border-amber-500/30 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <label className="text-amber-300 font-bold text-xs flex items-center gap-1.5">
+                    <HandCoins className="w-4 h-4 text-amber-400" />
+                    <span>Vincular a qual dívida em aberto? (Valores a Receber)</span>
+                  </label>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold">
+                    Abatimento Automático
+                  </span>
+                </div>
+
+                {openDebts.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    Nenhuma dívida em aberto encontrada na aba Valores a Receber. O valor entrará como receita no caixa normalmente.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <select
+                      value={formState.linkedReceivableId || ""}
+                      onChange={(e) => {
+                        const debtId = e.target.value;
+                        const selectedDebt = openDebts.find((d) => d.id === debtId);
+                        if (selectedDebt) {
+                          setFormState((prev) => ({
+                            ...prev,
+                            linkedReceivableId: debtId,
+                            debtor: selectedDebt.debtor,
+                            description:
+                              prev.description && !prev.description.startsWith("Recebimento:")
+                                ? prev.description
+                                : `Recebimento: ${selectedDebt.debtor} (${selectedDebt.description})`,
+                            amount:
+                              prev.amount && parseFloat(prev.amount) > 0
+                                ? prev.amount
+                                : String(selectedDebt.remaining)
+                          }));
+                        } else {
+                          setFormState((prev) => ({
+                            ...prev,
+                            linkedReceivableId: undefined
+                          }));
+                        }
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-amber-500/40 text-xs text-white outline-none focus:border-amber-400 cursor-pointer"
+                    >
+                      <option value="">Selecione a dívida correspondente para abater...</option>
+                      {openDebts.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.debtor} — {d.description} (Faltam {formatBRL(d.remaining)})
+                        </option>
+                      ))}
+                    </select>
+
+                    {formState.linkedReceivableId && (
+                      <p className="text-[11px] text-amber-400/90 font-medium">
+                        Ao salvar, este lançamento abaterá a dívida selecionada em Valores a Receber e somará o valor pago.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

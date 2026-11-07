@@ -20,7 +20,9 @@ import {
   Wrench,
   FileCheck,
   Coins,
-  Plus
+  Plus,
+  Pencil,
+  Trash2
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -88,6 +90,8 @@ export interface VehiclesTabProps {
   updateChartThemeColor: (key: keyof ChartThemeColors, val: string) => void;
   handleOpenNewTxModal: (cat?: string) => void;
   onAddTransaction?: (tx: Transaction) => Promise<void> | void;
+  onDeleteTransaction?: (id: string) => void;
+  onEditTransaction?: (tx: Transaction) => void;
   notify: (title: string, subtitle?: string, type?: "success" | "warning" | "info", cat?: any) => void;
   moneyBlur: string;
   autoLayout?: DashboardWidgetConfig[];
@@ -112,6 +116,8 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
   updateChartThemeColor,
   handleOpenNewTxModal,
   onAddTransaction,
+  onDeleteTransaction,
+  onEditTransaction,
   notify,
   moneyBlur,
   autoLayout,
@@ -1355,14 +1361,40 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
                   {item.liters ? ` • ${item.liters}L` : ""}
                 </span>
               </div>
-              <div className="text-right">
-                <span className={`font-extrabold text-amber-400 block font-mono tabular-nums ${moneyBlur}`}>
-                  {formatBRL(item.amount)}
-                </span>
-                {item.km && (
-                  <span className="font-mono tabular-nums text-[11px] text-slate-400">
-                    {item.km.toLocaleString("pt-BR")} km
+              <div className="flex items-center gap-2.5">
+                <div className="text-right">
+                  <span className={`font-extrabold text-amber-400 block font-mono tabular-nums ${moneyBlur}`}>
+                    {formatBRL(item.amount)}
                   </span>
+                  {item.km && (
+                    <span className="font-mono tabular-nums text-[11px] text-slate-400">
+                      {item.km.toLocaleString("pt-BR")} km
+                    </span>
+                  )}
+                </div>
+                {(onEditTransaction || onDeleteTransaction) && (
+                  <div className="flex items-center gap-1 pl-2 border-l border-white/10">
+                    {onEditTransaction && (
+                      <button
+                        type="button"
+                        onClick={() => onEditTransaction(item)}
+                        className="p-1 rounded-lg bg-white/5 hover:bg-indigo-600/30 text-slate-400 hover:text-indigo-300 transition cursor-pointer"
+                        title="Editar abastecimento"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {onDeleteTransaction && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteTransaction(item.id)}
+                        className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 transition cursor-pointer"
+                        title="Excluir abastecimento"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
