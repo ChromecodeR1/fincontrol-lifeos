@@ -7,6 +7,7 @@ import ChartSettingsPopover, {
   ChartWidgetSettings,
   ChartWidgetSize
 } from "./ChartSettingsPopover";
+import { useProximityBorderGlow } from "./MotionEngine144";
 
 interface ChartCardProps {
   id: string;
@@ -57,6 +58,8 @@ export default function ChartCard({
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [canDrag, setCanDrag] = useState(false);
   const gearButtonRef = useRef<HTMLButtonElement | null>(null);
+  const { ref: glowRef, onMouseMove: handleGlowMouseMove, onMouseLeave: handleGlowMouseLeave } =
+    useProximityBorderGlow<HTMLDivElement>();
 
   const spanClass =
     size === "full"
@@ -81,6 +84,9 @@ export default function ChartCard({
 
   return (
     <div
+      ref={glowRef}
+      onMouseMove={handleGlowMouseMove}
+      onMouseLeave={handleGlowMouseLeave}
       draggable={canDrag}
       onDragStart={(e) => {
         if (!canDrag) {
@@ -108,11 +114,15 @@ export default function ChartCard({
         setCanDrag(false);
         onDragEndCard();
       }}
-      className={`${spanClass} min-w-0 overflow-hidden relative rounded-2xl border cupertino-card-hover h-full flex flex-col justify-between ${
+      className={`${spanClass} min-w-0 overflow-hidden relative rounded-2xl border cupertino-card-hover proximity-border-glow h-full flex flex-col justify-between ${
         isDropTarget
           ? "border-[#0A84FF] ring-2 ring-[#0A84FF] shadow-sm"
           : "border-slate-800/80"
-      } ${isDragging ? " scale-[0.99] opacity-60" : "opacity-100"} ${
+      } ${
+        isDragging
+          ? "scale-[1.015] rotate-[1deg] shadow-2xl ring-2 ring-[#0A84FF] opacity-90 z-50 transition-transform duration-200"
+          : "opacity-100"
+      } ${
         popoverOpen ? "z-[80] overflow-visible" : "z-10 focus-within:z-[80]"
       } bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm ${className}`}
     >

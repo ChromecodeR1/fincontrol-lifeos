@@ -6,7 +6,7 @@ import {
   RefreshCw, Activity, Brain, Target, Flame, Pencil,
   Image as ImageIcon, Download, Upload, Camera, User, FileText, HandCoins,
   Users, Share2, Layers, AlertTriangle, XCircle, Eye, EyeOff, Filter, Loader2,
-  ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Check, X, RotateCcw,
+  ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronRight, Check, X, RotateCcw,
   SlidersHorizontal, Settings, Fuel, Gauge, DollarSign, Award, Info, Landmark, PiggyBank,
   Sparkles, ExternalLink, ShoppingBag, Circle, Footprints, Lock, Timer, Heart, Calendar, MapPin
 } from "lucide-react";
@@ -43,6 +43,7 @@ import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroun
 import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
 import { COINDEX_LOGO_VARIANTS, CoindexLogoVariant, CoindexIcon } from "./components/CoindexLogo";
 import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
+import { triggerAuraBurst } from "./components/MotionEngine144";
 
 /**
  * Formata ritmo/pace esportivo exato em min:seg /km (AUD-15).
@@ -501,6 +502,7 @@ const StravaProgressGrid = React.memo(function StravaProgressGrid(props: StravaP
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={stravaProgressPoints}
+              syncId="coindex_strava_sync"
               margin={{ top: 12, right: 12, left: 4, bottom: 4 }}
               accessibilityLayer={false}
               onMouseMove={(state: any) => {
@@ -669,11 +671,15 @@ const StravaProgressGrid = React.memo(function StravaProgressGrid(props: StravaP
                   }
                   strokeLinecap="round"
                   fill="none"
-                  className="transition-all duration-500 ease-out animate-svg-draw"
+                  style={{
+                    transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1)"
+                  }}
+                  className="animate-svg-draw"
                 />
               </svg>
+              {/* Ponto luminoso na ponta do arco */}
               <div className="absolute inset-0 flex items-center justify-center text-[#FC4C02]">
-                <Footprints className="w-5 h-5" />
+                <Footprints className="w-5 h-5 drop-shadow-[0_0_8px_rgba(252,76,2,0.6)]" />
               </div>
             </div>
           </div>
@@ -697,15 +703,21 @@ const StravaProgressGrid = React.memo(function StravaProgressGrid(props: StravaP
             <AnimatedMetric value={annualProgressStats.ytdKm} decimals={0} /> / {annualProgressStats.annualGoal} km
           </div>
 
-          {/* Barra de Progresso Anual com Marcador HOJE */}
+          {/* Barra de Progresso Anual com Marcador HOJE com transição suave 750ms */}
           <div className="relative h-3.5 w-full bg-slate-800/90 rounded-sm overflow-visible my-5">
             <div
-              className="bg-[#34D399] h-full rounded-l-sm transition-all duration-500"
-              style={{ width: `${annualProgressStats.progressPct}%` }}
+              className="bg-[#34D399] h-full rounded-l-sm"
+              style={{
+                width: `${annualProgressStats.progressPct}%`,
+                transition: "width 750ms cubic-bezier(0.16, 1, 0.3, 1)"
+              }}
             />
             <div
               className="absolute -top-1 bottom-[-8px] w-[2px] bg-slate-300 pointer-events-none"
-              style={{ left: `${annualProgressStats.todayPct}%` }}
+              style={{
+                left: `${annualProgressStats.todayPct}%`,
+                transition: "left 750ms cubic-bezier(0.16, 1, 0.3, 1)"
+              }}
             >
               <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-slate-300 whitespace-nowrap">
                 HOJE
@@ -799,6 +811,8 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
   const [receivableStatusFilter, setReceivableStatusFilter] = useState<"all" | "pending" | "partial" | "paid">("all");
   const [receivableSortCol, setReceivableSortCol] = useState<"date" | "debtor" | "description" | "amount" | "status">("date");
   const [receivableSortDir, setReceivableSortDir] = useState<"asc" | "desc">("desc");
+  // SPRINT 52: Accordion Row Expansion em Valores a Receber
+  const [expandedReceivables, setExpandedReceivables] = useState<Record<string, boolean>>({});
 
   // SPRINT 38: Estados da Central Analítica de Bioimpedância (Passo 3)
   const [bioPeriodFilter, setBioPeriodFilter] = useState<"1M" | "3M" | "6M" | "1A" | "Tudo">("6M");
@@ -2430,172 +2444,226 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                     const isPaid = item.status === "Pago" || item.remaining <= 0;
                     const isPartial = !isPaid && item.effectivePaid > 0 && item.remaining > 0;
                     const paidPct = Math.min(100, Math.round((item.effectivePaid / Math.max(1, item.amount)) * 100));
+                    const isExpanded = Boolean(expandedReceivables[item.id]);
 
                     return (
-                      <tr key={item.id} className="hover:bg-white/[0.03] transition-colors">
-                        <td className="py-1.5 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap min-w-[100px]">
-                          {formatDateBR(item.date)}
-                        </td>
-                        <td className="py-1.5 px-3 font-semibold text-white max-w-[240px]">
-                          <span className="truncate block">{item.description}</span>
-                          {item.cardUsed && (
-                            <span className="block text-[10px] text-indigo-400 truncate">
-                              {item.paymentMethod} • {item.cardUsed}
-                            </span>
-                          )}
-                          {item.bankAccount && !item.cardUsed && (
-                            <span className="block text-[10px] text-sky-400 truncate">
-                              {item.paymentMethod} • {item.bankAccount}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-1.5 px-3">
-                          <DebtorInputCell txId={item.id} initialValue={item.debtorName} onCommit={handleAssignDebtor} />
-                        </td>
-                        <td className="py-1.5 px-3">
-                          {isPaid ? (
-                            <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1.5">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> 100% Quitado
-                            </span>
-                          ) : (
-                            <div className="flex flex-col gap-1 min-w-[200px] max-w-[220px]">
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="R$..."
-                                  value={pInput}
-                                  onChange={(e) =>
-                                    setPartialInputs((prev) => ({ ...prev, [item.id]: e.target.value }))
-                                  }
-                                  className="w-16 h-7 px-2 py-0.5 rounded-md bg-slate-950 border border-white/10 text-xs text-white outline-none focus:border-indigo-500 font-mono tabular-nums"
+                      <React.Fragment key={item.id}>
+                        <tr className="hover:bg-white/[0.03] transition-colors">
+                          <td className="py-1.5 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap min-w-[100px]">
+                            {formatDateBR(item.date)}
+                          </td>
+                          <td className="py-1.5 px-3 font-semibold text-white max-w-[240px]">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedReceivables((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
+                                }
+                                className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-amber-400 transition cursor-pointer shrink-0"
+                                title={isExpanded ? "Recolher detalhes contábeis" : "Expandir árvore contábil"}
+                              >
+                                <ChevronRight
+                                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                    isExpanded ? "rotate-90 text-amber-400" : ""
+                                  }`}
                                 />
-                                <select
-                                  value={partialBank[item.id] || banks[0]?.name || ""}
-                                  onChange={(e) =>
-                                    setPartialBank((prev) => ({ ...prev, [item.id]: e.target.value }))
-                                  }
-                                  className="flex-1 h-7 px-1.5 py-0.5 rounded-md bg-slate-950 border border-white/10 text-[10px] text-white outline-none focus:border-indigo-500 truncate"
-                                  title="Banco / Conta de destino para o valor recebido"
-                                >
-                                  {banks.map((b) => (
-                                    <option key={b.id} value={b.name}>
-                                      {b.name}
-                                    </option>
-                                  ))}
-                                </select>
+                              </button>
+                              <div className="min-w-0 flex-1">
+                                <span className="truncate block">{item.description}</span>
+                                {item.cardUsed && (
+                                  <span className="block text-[10px] text-indigo-400 truncate">
+                                    {item.paymentMethod} • {item.cardUsed}
+                                  </span>
+                                )}
+                                {item.bankAccount && !item.cardUsed && (
+                                  <span className="block text-[10px] text-sky-400 truncate">
+                                    {item.paymentMethod} • {item.bankAccount}
+                                  </span>
+                                )}
                               </div>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const val = parseFloat(pInput);
-                                    if (val > 0) {
-                                      const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
-                                      handlePartialPaymentReceivable(item, val, dest);
-                                      setPartialInputs((prev) => ({ ...prev, [item.id]: "" }));
+                            </div>
+                          </td>
+                          <td className="py-1.5 px-3">
+                            <DebtorInputCell txId={item.id} initialValue={item.debtorName} onCommit={handleAssignDebtor} />
+                          </td>
+                          <td className="py-1.5 px-3">
+                            {isPaid ? (
+                              <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> 100% Quitado
+                              </span>
+                            ) : (
+                              <div className="flex flex-col gap-1 min-w-[200px] max-w-[220px]">
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="R$..."
+                                    value={pInput}
+                                    onChange={(e) =>
+                                      setPartialInputs((prev) => ({ ...prev, [item.id]: e.target.value }))
                                     }
-                                  }}
-                                  className="flex-1 h-7 py-0.5 px-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shadow transition flex items-center justify-center cursor-pointer"
-                                >
-                                  + Abater
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (item.remaining > 0) {
-                                      const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
-                                      handlePartialPaymentReceivable(item, item.remaining, dest);
+                                    className="w-16 h-7 px-2 py-0.5 rounded-md bg-slate-950 border border-white/10 text-xs text-white outline-none focus:border-indigo-500 font-mono tabular-nums"
+                                  />
+                                  <select
+                                    value={partialBank[item.id] || banks[0]?.name || ""}
+                                    onChange={(e) =>
+                                      setPartialBank((prev) => ({ ...prev, [item.id]: e.target.value }))
                                     }
-                                  }}
-                                  className="h-7 py-0.5 px-2 rounded-md bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold transition flex items-center justify-center cursor-pointer"
-                                  title="Quitar 100% do saldo restante e creditar receita"
-                                >
-                                  Quitar 100%
-                                </button>
+                                    className="flex-1 h-7 px-1.5 py-0.5 rounded-md bg-slate-950 border border-white/10 text-[10px] text-white outline-none focus:border-indigo-500 truncate"
+                                    title="Banco / Conta de destino para o valor recebido"
+                                  >
+                                    {banks.map((b) => (
+                                      <option key={b.id} value={b.name}>
+                                        {b.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      const val = parseFloat(pInput);
+                                      if (val > 0) {
+                                        triggerAuraBurst(e.currentTarget, "emerald");
+                                        const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
+                                        handlePartialPaymentReceivable(item, val, dest);
+                                        setPartialInputs((prev) => ({ ...prev, [item.id]: "" }));
+                                      }
+                                    }}
+                                    className="flex-1 h-7 py-0.5 px-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shadow transition flex items-center justify-center cursor-pointer apple-press"
+                                  >
+                                    + Abater
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      if (item.remaining > 0) {
+                                        triggerAuraBurst(e.currentTarget, "emerald");
+                                        const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
+                                        handlePartialPaymentReceivable(item, item.remaining, dest);
+                                      }
+                                    }}
+                                    className="h-7 py-0.5 px-2 rounded-md bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold transition flex items-center justify-center cursor-pointer apple-press"
+                                    title="Quitar 100% do saldo restante e creditar receita"
+                                  >
+                                    Quitar 100%
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-1.5 px-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!isPaid && item.remaining > 0) {
-                                const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
-                                handlePartialPaymentReceivable(item, item.remaining, dest);
-                              } else {
-                                handleToggleStatus(item);
-                              }
-                            }}
-                            className={`whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium leading-none transition ${
-                              isPaid
-                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                                : "bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
-                            }`}
-                            title={isPaid ? "Reabrir lançamento" : "Quitar lançamento integralmente"}
-                          >
-                            {isPaid ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                            {isPaid ? "Pago" : "Pendente"}
-                          </button>
-                        </td>
-                        <td className={`py-1.5 px-3 text-right ${moneyBlur}`}>
-                          {isPaid ? (
-                            <div className="flex flex-col items-end">
-                              <span className="font-extrabold text-emerald-400 font-mono tabular-nums text-sm">
-                                {formatBRL(item.amount)}
-                              </span>
-                              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400/90 font-medium">
-                                <CheckCircle2 className="w-2.5 h-2.5" /> 100% Quitado
-                              </span>
-                            </div>
-                          ) : isPartial ? (
-                            <div className="flex flex-col items-end">
-                              <span className="font-bold text-amber-400 font-mono tabular-nums text-sm">
-                                {formatBRL(item.remaining)}
-                              </span>
-                              <div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
-                                <div
-                                  className="h-full bg-emerald-400 rounded-full"
-                                  style={{ width: `${paidPct}%` }}
-                                />
-                              </div>
-                              <span className="text-[10px] text-emerald-400 font-mono tabular-nums mt-0.5">
-                                Pago: {formatBRL(item.effectivePaid)} de {formatBRL(item.amount)}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-end">
-                              <span className="font-bold text-amber-400 font-mono tabular-nums text-sm">
-                                {formatBRL(item.amount)}
-                              </span>
-                              <span className="text-[10px] text-slate-500 font-mono tabular-nums">
-                                Total em aberto
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-1.5 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                            )}
+                          </td>
+                          <td className="py-1.5 px-3">
                             <button
                               type="button"
-                              onClick={() => handleStartEditTransaction(item)}
-                              className="p-1 rounded-lg bg-white/10 text-slate-300 hover:text-white hover:bg-indigo-600 transition cursor-pointer"
-                              title="Editar lançamento"
+                              onClick={() => {
+                                if (!isPaid && item.remaining > 0) {
+                                  const dest = partialBank[item.id] || banks[0]?.name || "Nubank";
+                                  handlePartialPaymentReceivable(item, item.remaining, dest);
+                                } else {
+                                  handleToggleStatus(item);
+                                }
+                              }}
+                              className={`whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium leading-none transition ${
+                                isPaid
+                                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 status-stamp-pop"
+                                  : "bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
+                              }`}
+                              title={isPaid ? "Reabrir lançamento" : "Quitar lançamento integralmente"}
                             >
-                              <Pencil className="w-3.5 h-3.5" />
+                              {isPaid ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                              {isPaid ? "Pago" : "Pendente"}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTransaction(item.id)}
-                              className="p-1 rounded-lg bg-rose-500/15 text-rose-400 hover:bg-rose-500/30 hover:text-rose-300 border border-rose-500/25 transition cursor-pointer"
-                              title="Excluir lançamento de devedor"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className={`py-1.5 px-3 text-right ${moneyBlur}`}>
+                            {isPaid ? (
+                              <div className="flex flex-col items-end">
+                                <span className="font-extrabold text-emerald-400 font-mono tabular-nums text-sm">
+                                  {formatBRL(item.amount)}
+                                </span>
+                                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400/90 font-medium">
+                                  <CheckCircle2 className="w-2.5 h-2.5" /> 100% Quitado
+                                </span>
+                              </div>
+                            ) : isPartial ? (
+                              <div className="flex flex-col items-end">
+                                <span className="font-bold text-amber-400 font-mono tabular-nums text-sm">
+                                  {formatBRL(item.remaining)}
+                                </span>
+                                <div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                                  <div
+                                    className="h-full bg-emerald-400 rounded-full"
+                                    style={{ width: `${paidPct}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] text-emerald-400 font-mono tabular-nums mt-0.5">
+                                  Pago: {formatBRL(item.effectivePaid)} de {formatBRL(item.amount)}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-end">
+                                <span className="font-bold text-amber-400 font-mono tabular-nums text-sm">
+                                  {formatBRL(item.amount)}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono tabular-nums">
+                                  Total em aberto
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-1.5 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditTransaction(item)}
+                                className="p-1 rounded-lg bg-white/10 text-slate-300 hover:text-white hover:bg-indigo-600 transition cursor-pointer living-edit"
+                                title="Editar lançamento"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTransaction(item.id)}
+                                className="p-1 rounded-lg bg-rose-500/15 text-rose-400 hover:bg-rose-500/30 hover:text-rose-300 border border-rose-500/25 transition cursor-pointer living-trash"
+                                title="Excluir lançamento de devedor"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* SPRINT 52: Accordion Sub-gaveta da Árvore Contábil */}
+                        <tr className="border-b border-white/5 bg-slate-950/40">
+                          <td colSpan={7} className="p-0">
+                            <div className="accordion-grid-wrapper" data-open={isExpanded}>
+                              <div className="accordion-grid-inner px-5 py-3 bg-black/25 text-xs font-mono space-y-1.5 border-l-2 border-amber-400/60 ml-3 my-1 rounded-r-xl">
+                                <div className="flex items-center gap-2 text-slate-300">
+                                  <span className="text-slate-500 font-bold">├─ Valor Total Original:</span>
+                                  <strong className="text-white tabular-nums">{formatBRL(item.amount)}</strong>
+                                  <span className="text-slate-500 text-[10px]">({formatDateBR(item.date)})</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-emerald-400">
+                                  <span className="text-slate-500 font-bold">├─ Pagamentos / Abatimentos:</span>
+                                  <strong className="tabular-nums">{formatBRL(item.effectivePaid)}</strong>
+                                  <span className="text-slate-400 text-[10px]">
+                                    ({paidPct}% amortizado {item.paymentMethod ? `via ${item.paymentMethod}` : ""})
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 text-amber-400">
+                                  <span className="text-slate-500 font-bold">└─ Saldo Restante em Aberto:</span>
+                                  <strong className="tabular-nums">{formatBRL(item.remaining)}</strong>
+                                  {item.remaining <= 0 && (
+                                    <span className="text-emerald-400 text-[10px] font-sans font-bold ml-1">
+                                      ✓ 100% Quitado
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </React.Fragment>
                     );
                   })
                 )}

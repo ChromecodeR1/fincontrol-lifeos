@@ -399,10 +399,36 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.39.1";
-export const PREVIOUS_VERSION = "0.39.0";
+export const APP_VERSION = "0.40.0";
+export const PREVIOUS_VERSION = "0.39.1";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.40.0",
+    date: "Nov/2026",
+    title: "Sprint 52: Suite Completa de 18 Micro-Animações 144Hz GPU-Accelerated (Apple Spring, 3D Gyro Tilt, Acordeão Contábil, Laser Sync e Aura Burst)",
+    highlights: [
+      "Motor Central de Micro-Física (app/components/MotionEngine144.tsx): Utilitários acelerados por GPU em 144Hz com zero re-renders do React, integrando requestAnimationFrame coalescido e mutações diretas de propriedades CSS.",
+      "Animação #1 (3D Gyroscope Card Tilt & Glare): Inclinação giroscópica 3D (±6deg) proporcional ao cursor nos cartões de crédito físicos de BanksTab e widget Apple Wallet, com camada holográfica (.holographic-foil-glare) e retorno elástico.",
+      "Animação #2 (Apple Wallet Fan-Out): Expansão vertical suave entre os cartões empilhados no widget wallet_limits ao passar o cursor sobre a pilha (-mt-12 para -mt-7) com elevação individual do cartão sob foco.",
+      "Animação #3 (Proximity Border Glow): Hook useProximityBorderGlow iluminando sutilmente a borda fina (1px) mais próxima do cursor nos Bento Cards (ChartCard).",
+      "Animação #4 (Odometry Digit Roll): Efeito de rolagem vertical cilíndrica mecânica nos números em destaque com flash cromático sutil (verde/coral) mantendo alinhamento tabular.",
+      "Animação #5 (Live Market Heartbeat Pulse & Sonar Dot): Ponto de radar pulsante (sonar-dot) com anel duplo animate-ping em verde/vermelho na extremidade dos gráficos de mercado e flash de batimento cardíaco ao atualizar cotação.",
+      "Animação #6 (Liquid Unblur Wave no Modo Privacidade): Transição suave com filtro blur(8px) para blur(0px) e opacidade via curva cúbica Apple (340ms cubic-bezier(0.22, 1, 0.36, 1)).",
+      "Animação #7 (Elastic Donut Slice Pull-Out): Destaque elástico na fatia ativa do Donut com outerRadius expandido e exibição dinâmica instantânea no centro do Donut (Nome, Valor R$ e % daquela fatia).",
+      "Animação #8 (Synchronized Crosshair Laser Scrubbing): Scrubbing sincronizado simultâneo em todos os gráficos de mercado (syncId='coindex_market_sync') e Strava (syncId='coindex_strava_sync') com agulha laser vertical azul/laranja.",
+      "Animação #9 & #10 (Apple Fitness Ring Draw & Agulha HOJE): Animação do anel circular de progresso semanal com strokeDashoffset (900ms) e ponto luminoso no topo; barra de ritmo anual com transição suave da barra verde-menta e agulha HOJE (750ms).",
+      "Animação #11 (Magnetic Dock Sidebar): Transição magnética nos ícones da Sidebar esquerda com elevação tátil e indicador luminoso lateral deslizante.",
+      "Animação #12 (Smooth Accordion Row Expansion): Sub-gaveta acordeão suave na tabela de Lançamentos e Valores a Receber para itens divididos, empréstimos ou abatimentos, revelando a árvore contábil completa (Original, Abatimentos e Saldo).",
+      "Animação #13 (Living SVG Micro-Icons): Micro-animações táteis no hover dos botões de exclusão (Trash2 inclinado), edição (Pencil inclinado) e sino de notificações (bellSwing).",
+      "Animação #14 (Inércia Física no Drag-and-Drop): Card inclinado com rotação sutil e sombra profunda durante o arraste com retorno elástico ao soltar.",
+      "Animação #15 (Emerald Aura Burst & Confetti): Disparo de 22 micro-partículas vetoriais luminosas e anel expansivo ao clicar em 'Quitar 100%', '+ Abater', 'Pagar Fatura' ou guardar em desejos.",
+      "Animação #16 (Elastic Status Stamp): Carimbo elástico tátil (.status-stamp-pop) com halo verde expansivo ao alternar status para Pago.",
+      "Animação #17 (Superfície Líquida nas Barras de Progresso): Shimmer contínuo especular (.liquid-progress-shimmer) com ponto luminoso frontal (.liquid-progress-head) no termômetro pessoal e limites bancários.",
+      "Animação #18 (Morphing Card-to-Modal nos 4 Slim KPIs): Abertura do Raio-X Contábil com expansão elástica iOS (scale 0.92 -> 1) e terminação estrita em transform: none para proteção absoluta de portais.",
+      "Respeito Arquitetural ao Toggle 'Reduzir Animações': Exposição contínua do atributo data-animations='on' | 'off' no <html> com desativação total de durações quando desligado."
+    ]
+  },
   {
     version: "0.39.1",
     date: "Nov/2026",

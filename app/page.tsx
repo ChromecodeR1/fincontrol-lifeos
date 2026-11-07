@@ -241,6 +241,7 @@ import KpiAuditModal from "./components/KpiAuditModal";
 import { AmbientBackgroundFX, AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
 import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
 import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
+import { TiltCard3D, triggerAuraBurst } from "./components/MotionEngine144";
 import {
   calculateVehicleConsumption,
   calculateVehicleTco,
@@ -850,6 +851,16 @@ export default function CoindexApp() {
       console.error("Erro ao salvar coindex_bg_fx_mode", err);
     }
   }, []);
+
+  // SPRINT 52: Respeito Arquitetural ao Toggle "Reduzir Animações" (data-animations on/off)
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-animations", bgFxMode !== "none" ? "on" : "off");
+    }
+  }, [bgFxMode]);
+
+  // SPRINT 52: Estado da Fatia Ativa no Donut Chart (Elastic Slice Pull-Out)
+  const [donutHoverIndex, setDonutHoverIndex] = useState<number | null>(null);
 
   const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -6463,7 +6474,8 @@ export default function CoindexApp() {
     notify("Perfil Atualizado", "As informações do seu perfil foram salvas com sucesso.", "info");
   };
 
-  const moneyBlur = privacyMode ? "blur-md select-none" : "";
+  // SPRINT 52: Animação #6 Liquid Unblur Wave no Modo Privacidade
+  const moneyBlur = privacyMode ? "privacy-blur select-none" : "privacy-unblur";
 
   const syncIndicator = useMemo(() => {
     if (isSyncing) {
@@ -6682,7 +6694,7 @@ export default function CoindexApp() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id as ActiveTab)}
-                  className={`w-full min-h-[44px] px-3.5 py-3 rounded-2xl font-medium flex items-center gap-3 transition-all duration-200 cursor-pointer ${
+                  className={`group relative w-full min-h-[44px] px-3.5 py-3 rounded-2xl font-medium flex items-center gap-3 transition-all duration-200 cursor-pointer ${
                     activeTab === tab.id
                       ? tab.id === "spotify"
                         ? "bg-[#1DB954]/20 text-[#1DB954] ring-1 ring-[#1DB954]/40 shadow-sm"
@@ -6691,7 +6703,13 @@ export default function CoindexApp() {
                   }`}
                   title={tab.label}
                 >
-                  {tab.icon}
+                  {/* Indicador Luminoso Lateral */}
+                  {activeTab === tab.id && (
+                    <span className="absolute left-1.5 top-3 bottom-3 w-1 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.85)]" />
+                  )}
+                  <div className="shrink-0 transition-transform duration-200 cubic-bezier(0.22, 1, 0.36, 1) group-hover:scale-125 group-hover:-translate-y-0.5">
+                    {tab.icon}
+                  </div>
                   {sidebarOpen && <span className="truncate">{tab.label}</span>}
                 </button>
               ))}
@@ -6997,7 +7015,7 @@ export default function CoindexApp() {
                   <button
                     type="button"
                     onClick={() => setShowBellDropdown((prev) => !prev)}
-                    className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition flex items-center justify-center cursor-pointer"
+                    className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 relative transition flex items-center justify-center cursor-pointer living-bell"
                     title="Notificações"
                   >
                     <Bell className="w-4 h-4" />
@@ -7571,16 +7589,18 @@ export default function CoindexApp() {
                               </div>
                             </div>
 
-                            {/* Barra de Progresso do Teto Pessoal */}
-                            <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-white/10">
+                            {/* Barra de Progresso do Teto Pessoal com Superfície Líquida 144Hz */}
+                            <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-white/10 relative">
                               <div
-                                className={`h-full rounded-full transition-all duration-700 ${
+                                className={`h-full rounded-full transition-all duration-700 relative liquid-progress-shimmer ${
                                   personalPct >= 100
                                     ? "bg-gradient-to-r from-amber-500 to-rose-600"
                                     : "bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500"
                                 }`}
                                 style={{ width: `${personalPct}%` }}
-                              />
+                              >
+                                <span className="liquid-progress-head" />
+                              </div>
                             </div>
 
                             {/* Barra Segmentada da Alocação Real 50/30/20 */}
@@ -8153,22 +8173,58 @@ export default function CoindexApp() {
                                     stroke="none"
                                   >
                                     {categoryChartData.map((entry, idx) => (
-                                      <Cell key={`cell-${idx}`} fill={entry.color} />
+                                      <Cell
+                                        key={`cell-${idx}`}
+                                        fill={entry.color}
+                                        stroke={donutHoverIndex === idx ? "#FFFFFF" : "none"}
+                                        strokeWidth={donutHoverIndex === idx ? 2.5 : 0}
+                                        style={{
+                                          filter: donutHoverIndex === idx ? `drop-shadow(0 0 8px ${entry.color})` : "none",
+                                          transform: donutHoverIndex === idx ? "scale(1.05)" : "none",
+                                          transformOrigin: "center center",
+                                          transition: "all 200ms cubic-bezier(0.16, 1, 0.3, 1)",
+                                          cursor: "pointer"
+                                        }}
+                                        onMouseEnter={() => setDonutHoverIndex(idx)}
+                                        onMouseLeave={() => setDonutHoverIndex(null)}
+                                      />
                                     ))}
                                   </Pie>
                                   <Tooltip content={<CustomCyberTooltip isCurrency={true} moneyBlur={moneyBlur} />} cursor={false} />
                                 </PieChart>
                               </ResponsiveContainer>
 
-                              {/* Rótulo Central do Donut */}
-                              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center select-none">
-                                <span className="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">
-                                  Total Gasto
-                                </span>
-                                <span className={`text-sm sm:text-base font-extrabold text-white font-mono tabular-nums ${moneyBlur}`}>
-                                  <AnimatedBRL value={totalExpenses} />
-                                </span>
-                              </div>
+                              {/* Rótulo Central Dinâmico do Donut (Animação #7 Elastic Pull-Out) */}
+                              {donutHoverIndex !== null && categoryChartData[donutHoverIndex] ? (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center select-none animate-cupertino-in">
+                                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-300 truncate max-w-[110px]">
+                                    {categoryChartData[donutHoverIndex].name}
+                                  </span>
+                                  <span className={`text-xs sm:text-sm font-extrabold font-mono tabular-nums text-white ${moneyBlur}`}>
+                                    {formatBRL(categoryChartData[donutHoverIndex].value)}
+                                  </span>
+                                  <span
+                                    className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full mt-0.5"
+                                    style={{
+                                      backgroundColor: `${categoryChartData[donutHoverIndex].color}25`,
+                                      color: categoryChartData[donutHoverIndex].color
+                                    }}
+                                  >
+                                    {totalExpenses > 0
+                                      ? `${((categoryChartData[donutHoverIndex].value / totalExpenses) * 100).toFixed(1)}%`
+                                      : "0%"}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center select-none">
+                                  <span className="text-[10px] uppercase tracking-widest font-extrabold text-slate-400">
+                                    Total Gasto
+                                  </span>
+                                  <span className={`text-sm sm:text-base font-extrabold text-white font-mono tabular-nums ${moneyBlur}`}>
+                                    <AnimatedBRL value={totalExpenses} />
+                                  </span>
+                                </div>
+                              )}
                             </div>
 
                             {/* LADO DIREITO: GRID 2 COLUNAS DE CATEGORIAS OU DRILL-DOWN - col-span-12 lg:col-span-7 */}
@@ -8232,13 +8288,20 @@ export default function CoindexApp() {
                                 </div>
                               ) : (
                                 <div className={`grid ${widgetSize === "full" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"} gap-2 max-h-[280px] overflow-y-auto pr-1 text-xs`}>
-                                  {categoryChartData.map((cat) => {
+                                  {categoryChartData.map((cat, catIdx) => {
                                     const pct = Math.round((cat.value / totalExpenses) * 100);
+                                    const isHovered = donutHoverIndex === catIdx;
                                     return (
                                       <div
                                         key={cat.name}
                                         onClick={() => setSelectedCategoryDrillDown(cat.name)}
-                                        className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 space-y-1.5 cursor-pointer hover:bg-slate-900/90 hover:border-white/15 transition group cupertino-card-hover"
+                                        onMouseEnter={() => setDonutHoverIndex(catIdx)}
+                                        onMouseLeave={() => setDonutHoverIndex(null)}
+                                        className={`p-2.5 rounded-xl bg-slate-950/60 border space-y-1.5 cursor-pointer transition group cupertino-card-hover ${
+                                          isHovered
+                                            ? "bg-slate-900 border-[#0A84FF]/60 shadow-[0_0_12px_rgba(10,132,255,0.2)] -translate-y-0.5"
+                                            : "border-white/5 hover:bg-slate-900/90 hover:border-white/15"
+                                        }`}
                                         title={`Clique para ver detalhamento de ${cat.name}`}
                                       >
                                         {/* Linha 1: Ícone + Nome Completo + Pílula com % */}
@@ -8263,11 +8326,13 @@ export default function CoindexApp() {
                                               {formatBRL(cat.value)}
                                             </span>
                                           </div>
-                                          <div className="w-full h-1.5 bg-slate-900/80 rounded-full overflow-hidden">
+                                          <div className="w-full h-1.5 bg-slate-900/80 rounded-full overflow-hidden relative">
                                             <div
-                                              className="h-full rounded-full transition-all duration-300 progress-bar-apple"
+                                              className="h-full rounded-full transition-all duration-300 progress-bar-apple relative liquid-progress-shimmer"
                                               style={{ width: `${pct}%`, backgroundColor: cat.color }}
-                                            />
+                                            >
+                                              <span className="liquid-progress-head" />
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
@@ -8544,7 +8609,7 @@ export default function CoindexApp() {
                                   </button>
                                 </div>
                               ) : (
-                                <div className="relative pt-1 pb-2">
+                                <div className="relative pt-1 pb-2 group/wallet">
                                   {cards.map((card, idx) => {
                                     const isSelected = selectedWalletCardId ? selectedWalletCardId === card.id : idx === 0;
                                     const exposure = calculateCardExposure(card, transactions, selectedMonth);
@@ -8556,14 +8621,18 @@ export default function CoindexApp() {
                                         key={card.id}
                                         onClick={() => setSelectedWalletCardId(card.id)}
                                         style={{ zIndex: isSelected ? 25 : idx + 1 }}
-                                        className={`wallet-physical-card relative rounded-2xl p-3.5 shadow-xl border border-white/15 transition-all duration-300 cursor-pointer ${
-                                          !isFirst ? "-mt-12" : ""
+                                        className={`relative transition-all duration-300 ease-out cursor-pointer ${
+                                          !isFirst ? "-mt-12 group-hover/wallet:-mt-7" : ""
                                         } ${
                                           isSelected
-                                            ? "scale-[1.02] ring-2 ring-[#0A84FF]/60 shadow-[0_10px_25px_rgba(10,132,255,0.25)] -translate-y-1"
-                                            : "hover:-translate-y-1.5 opacity-90 hover:opacity-100"
-                                        } bg-gradient-to-br ${cardGradient}`}
+                                            ? "scale-[1.02] ring-2 ring-[#0A84FF]/60 shadow-[0_10px_25px_rgba(10,132,255,0.25)] -translate-y-1 hover:!-translate-y-2"
+                                            : "hover:!-translate-y-2 opacity-90 hover:opacity-100 hover:z-30"
+                                        }`}
                                       >
+                                        <TiltCard3D maxTilt={6}>
+                                          <div
+                                            className={`wallet-physical-card relative rounded-2xl p-3.5 shadow-xl border border-white/15 bg-gradient-to-br ${cardGradient}`}
+                                          >
                                         {/* Cabeçalho do Cartão */}
                                         <div className="flex items-center justify-between text-white mb-2">
                                           <div className="flex items-center gap-2 min-w-0">
@@ -8607,16 +8676,19 @@ export default function CoindexApp() {
                                               type="button"
                                               onClick={(e) => {
                                                 e.stopPropagation();
+                                                triggerAuraBurst(e.currentTarget, "emerald");
                                                 handlePayCardInvoice(card.name, card.bankName || undefined);
                                               }}
-                                              className="px-2 py-0.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-semibold text-[10px] transition cursor-pointer"
+                                              className="px-2 py-0.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-semibold text-[10px] transition cursor-pointer apple-press"
                                             >
                                               Pagar Fatura
                                             </button>
                                           )}
                                         </div>
                                       </div>
-                                    );
+                                    </TiltCard3D>
+                                  </div>
+                                );
                                   })}
                                 </div>
                               )}
@@ -8670,11 +8742,13 @@ export default function CoindexApp() {
                                           <strong className="text-white">{formatBRL(b.usado)}</strong> / {formatBRL(b.totalLimit)} ({usedPct}%)
                                         </span>
                                       </div>
-                                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden relative">
                                         <div
-                                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                          className={`h-full rounded-full transition-all duration-500 relative liquid-progress-shimmer ${barColor}`}
                                           style={{ width: `${usedPct}%` }}
-                                        />
+                                        >
+                                          <span className="liquid-progress-head" />
+                                        </div>
                                       </div>
                                     </div>
                                   );

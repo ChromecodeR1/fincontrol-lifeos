@@ -327,12 +327,12 @@ export default function KpiAuditModal({
       role="dialog"
       aria-modal="true"
       aria-label={cardConfig.title}
-      className="fixed inset-0 z-[10000] flex items-center justify-center p-2.5 sm:p-5 bg-black/80 backdrop-blur-md overflow-hidden animate-cupertino-in"
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-2.5 sm:p-5 bg-black/80 backdrop-blur-md overflow-hidden"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl bg-slate-900/95 border border-white/10 shadow-2xl backdrop-blur-2xl overflow-hidden">
+      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl bg-slate-900/95 border border-white/10 shadow-2xl backdrop-blur-2xl overflow-hidden kpi-modal-expand">
         {/* CABEÇALHO EXECUTIVO */}
         <div className="p-4 sm:p-5 border-b border-white/10 shrink-0 bg-gradient-to-r from-white/[0.03] to-transparent">
           <div className="flex items-start justify-between gap-4">

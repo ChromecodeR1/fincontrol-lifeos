@@ -525,3 +525,241 @@ html[data-theme="light"] .cupertino-shimmer {
   );
   background-size: 200% 100%;
 }
+
+/* ============================================================================
+   SPRINT 52: SUITE COMPLETA DE 18 MICRO-ANIMAÇÕES 144HZ GPU-ACCELERATED
+   ============================================================================ */
+
+/* Respeito Global ao Toggle "Reduzir Animações: Não" */
+html[data-animations="off"] *,
+html[data-animations="off"] *::before,
+html[data-animations="off"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* Animação #3: Iluminação de Borda por Proximidade nos Bento Cards */
+.proximity-border-glow {
+  position: relative;
+}
+.proximity-border-glow::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(
+    280px circle at var(--mouse-x, -999px) var(--mouse-y, -999px),
+    rgba(10, 132, 255, 0.35),
+    transparent 80%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.85;
+  transition: opacity 0.3s ease;
+  z-index: 2;
+}
+
+/* Animação #4: Odometry Digit Roll & Flash Cromático */
+@keyframes odometerRollUp {
+  0% {
+    transform: translate3d(0, 14%, 0);
+    color: #30D158;
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes odometerRollDown {
+  0% {
+    transform: translate3d(0, -14%, 0);
+    color: #FF453A;
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.odometer-roll-up {
+  display: inline-block;
+  animation: odometerRollUp 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, color;
+}
+
+.odometer-roll-down {
+  display: inline-block;
+  animation: odometerRollDown 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, color;
+}
+
+/* Animação #5: Live Market Heartbeat Pulse & Sonar Radar Dot */
+@keyframes marketHeartbeatFlash {
+  0% {
+    background-color: rgba(48, 209, 88, 0.28);
+    transform: scale(1.02);
+  }
+  100% {
+    background-color: transparent;
+    transform: none;
+  }
+}
+
+.market-heartbeat-flash {
+  animation: marketHeartbeatFlash 650ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Animação #6: Liquid Unblur Wave no Modo Privacidade */
+.privacy-blur {
+  filter: blur(8px);
+  opacity: 0.72;
+  transition: filter 340ms cubic-bezier(0.22, 1, 0.36, 1), opacity 340ms ease;
+  user-select: none;
+}
+
+.privacy-unblur {
+  filter: blur(0px);
+  opacity: 1;
+  transition: filter 340ms cubic-bezier(0.22, 1, 0.36, 1), opacity 340ms ease;
+}
+
+/* Animação #12: Smooth Accordion Row Expansion no Livro Caixa e Devedores */
+.accordion-grid-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+}
+
+.accordion-grid-wrapper[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.accordion-grid-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Animação #13: Living SVG Micro-Icons (Lixeira, Lápis e Sino de Notificações) */
+.living-trash svg {
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), color 180ms ease;
+}
+.living-trash:hover svg {
+  transform: rotate(-14deg) scale(1.12);
+  color: #FF453A !important;
+}
+
+.living-edit svg {
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), color 180ms ease;
+}
+.living-edit:hover svg {
+  transform: rotate(14deg) translateY(-1.5px) scale(1.1);
+  color: #0A84FF !important;
+}
+
+@keyframes bellSwing {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(16deg);
+  }
+  40% {
+    transform: rotate(-12deg);
+  }
+  60% {
+    transform: rotate(8deg);
+  }
+  80% {
+    transform: rotate(-4deg);
+  }
+}
+
+.living-bell:hover svg {
+  animation: bellSwing 620ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  transform-origin: top center;
+}
+
+/* Animação #16: Elastic Status Stamp Pop com Halo Expansivo */
+@keyframes statusStampPop {
+  0% {
+    transform: scale(0.85);
+    box-shadow: 0 0 0 0 rgba(48, 209, 88, 0.75);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 8px rgba(48, 209, 88, 0);
+  }
+  100% {
+    transform: none;
+    box-shadow: 0 0 0 0 rgba(48, 209, 88, 0);
+  }
+}
+
+.status-stamp-pop {
+  animation: statusStampPop 360ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Animação #17: Superfície Líquida nas Barras de Progresso */
+@keyframes liquidProgressShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.liquid-progress-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-progress-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: liquidProgressShimmer 2.4s infinite linear;
+  pointer-events: none;
+}
+
+.liquid-progress-head {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translate(50%, -50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background-color: #FFFFFF;
+  box-shadow: 0 0 6px 1px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+/* Animação #18: Morphing Card-to-Modal nos 4 Slim KPIs (Golden Rule: 100% transform none) */
+@keyframes kpiModalExpandIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(-14px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.kpi-modal-expand {
+  animation: kpiModalExpandIn 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+

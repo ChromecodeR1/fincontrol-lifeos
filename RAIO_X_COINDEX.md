@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.39.1`  
-> **Última Atualização:** 6 de Novembro de 2026 (Pós-Hotfix Sprint 49.1 — Correção Global do Desalinhamento da Pílula Azul Deslizante em Todos os Controles Segmentados Unidos)  
+> **Versão da Aplicação:** `0.40.0`  
+> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 52 — Implementação da Suite Completa de 18 Micro-Animações 144Hz GPU-Accelerated)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -868,6 +868,34 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - **Loader 2 (Painel Strava Progress):** Barra superior indeterminada em `#FC4C02` + overlay `.cupertino-shimmer` durante `isSyncingStrava`.
       - **Loader 3 (Taxa CDI BCB):** Micro-dot pulsante (`animate-ping`) verde na badge `115% CDI • BCB Ao Vivo`.
       - **Loader 4 (Importação CSV/OFX e Modais):** Barra de progresso deslizante durante o processamento de arquivo e transição com check icon na confirmação da importação.
+
+  - **Sprint 52 (Novembro de 2026 — Implementação da Suite Completa de 18 Micro-Animações 144Hz GPU-Accelerated: 3D Gyroscope Card Tilt & Glare, Apple Wallet Fan-Out, Proximity Border Glow, Odometry Digit Roll, Laser Sync e Aura Burst):**
+    - **Regra de Ouro Arquitetural (144Hz & Proteção de Modais):**
+      - Respeito global ao toggle `"Reduzir Animações"` (`Sim` = interações ativas; `Não` = desativadas, expondo `data-animations="on" | "off"` no `<html>`).
+      - Proibição estrita de `transform` residual em containers estruturais (`100% { opacity: 1; transform: none; }`), protegendo o posicionamento em viewport de todos os modais em `createPortal`.
+      - Todas as animações interativas de ponteiro utilizam `requestAnimationFrame` coalescido e mutação direta de variáveis CSS via `useRef`, com ZERO chamadas a `useState` por frame.
+    - **Passo 1 — Motor Central de Micro-Física e Partículas (`app/components/MotionEngine144.tsx`):**
+      - **Animação #15 (Emerald Aura Burst & Confetti):** Função `triggerAuraBurst(originEl, color)` disparando 22 micro-partículas vetoriais luminosas e onda de choque circular expansiva de 700ms em canvas dinâmico z-99999 auto-removível ao clicar em `"Quitar 100%"`, `"+ Abater"`, `"💳 Pagar Fatura"` ou guardar em desejos.
+      - **Animação #1 (3D Gyroscope Tilt & Holographic Foil Glare):** Componente `TiltCard3D` calculando em rAF rotações suaves `rotateX` (±6deg) e `rotateY` (±6deg) proporcionais ao cursor com camada de brilho reflexivo holográfico (`.holographic-foil-glare`) em `BanksTab.tsx` e `page.tsx` (`wallet_limits`).
+      - **Animação #3 (Iluminação de Borda por Proximidade):** Hook `useProximityBorderGlow` em `ChartCard.tsx` atualizando `--mouse-x` e `--mouse-y` para acender suavemente a borda fina (1px) mais próxima do cursor nos Bento Cards.
+    - **Passo 2 — Tipografia Cinética, Pulso de Mercado e Onda de Privacidade:**
+      - **Animação #4 (Odometry Digit Roll):** Transição vertical cilíndrica (`odometer-roll-up` / `odometer-roll-down`) em `AnimatedNumber144.tsx` com flash cromático sutil (verde se subiu, coral se desceu) sem deslocar `tabular-nums`.
+      - **Animação #5 (Live Market Heartbeat Pulse & Sonar Dot):** Radar pulsante (`sonar-dot` com duplo anel `animate-ping`) verde `#30D158` / vermelho `#FF453A` na extremidade dos gráficos de mercado ao vivo em `InvestmentsTab.tsx` e flash de batimento cardíaco (`market-heartbeat-flash`).
+      - **Animação #6 (Liquid Unblur Wave no Modo Privacidade):** Alternância do `privacyMode` com transição fluida `filter: blur(8px)` -> `blur(0px)` (`.privacy-blur` / `.privacy-unblur`) em 340ms cubic-bezier.
+    - **Passo 3 — Gráficos Interativos: Donut Elástico, Agulha Laser Sincronizada e Anéis Apple Fitness:**
+      - **Animação #7 (Liquid Morphing Donut / Elastic Slice Pull-Out):** Estado `donutHoverIndex` no gráfico `"Para Onde Vai o Meu Dinheiro"` (`app/page.tsx`); ao passar o cursor sobre uma fatia ou item da lista, destaca a fatia com escala/sombra e projeta dinamicamente no centro do Donut o nome, valor em R$ e % daquela categoria específica.
+      - **Animação #8 (Synchronized Crosshair Laser Scrubbing):** Eixo de scrubbing simultâneo com `syncId="coindex_market_sync"` nos múltiplos gráficos de mercado e `syncId="coindex_strava_sync"` no Strava, com agulha laser vertical tracejada (`strokeWidth={1.5}`).
+      - **Animação #9 & #10 (Apple Fitness Ring Draw & Agulha HOJE):** Anel circular semanal do Strava com transição de `strokeDashoffset` (900ms) e ponto luminoso no topo do arco; barra anual de ritmo com animação suave da barra verde-menta e agulha `HOJE` (750ms).
+    - **Passo 4 — Dock Magnético, Gaveta Acordeão, Ícones Vivos e Inércia no DND:**
+      - **Animação #2 (Apple Wallet Fan-Out):** Expansão vertical de espaçamento dos cartões empilhados em `wallet_limits` ao passar o mouse (`-mt-12` -> `group-hover/wallet:-mt-7`) com elevação individual sob o cursor (`hover:!-translate-y-2`).
+      - **Animação #11 (Magnetic Dock Sidebar):** Transição magnética nos ícones de navegação da Sidebar esquerda (`group-hover:scale-125 group-hover:-translate-y-0.5`) com indicador luminoso lateral deslizante.
+      - **Animação #12 (Smooth Accordion Row Expansion):** Sub-gaveta acordeão suave (`grid-template-rows: 0fr -> 1fr`) nas linhas do Livro Caixa (`TransactionsTableAdvanced.tsx`) e Valores a Receber (`SecondaryTabs.tsx`) com árvore contábil completa (`├─ Valor Original`, `├─ Pagamentos Recebidos`, `└─ Saldo Aberto`).
+      - **Animação #13 (Living SVG Micro-Icons):** Micro-animações no hover de botões de exclusão (`.living-trash`), edição (`.living-edit`) e sino de notificações (`.living-bell` com `bellSwing`).
+      - **Animação #14 (Inércia Física no Drag-and-Drop):** Card arrastado em `ChartCard.tsx` inclinado com `scale-[1.015] rotate-[1deg] ring-2 ring-[#0A84FF]` e retorno elástico ao soltar.
+    - **Passo 5 — Carimbo Elástico, Superfície Líquida e Card-to-Modal Morph:**
+      - **Animação #16 (Elastic Status Stamp):** Carimbo elástico `.status-stamp-pop` com halo verde expansivo ao alternar status para Pago.
+      - **Animação #17 (Superfície Líquida nas Barras de Progresso):** Shimmer especular contínuo `.liquid-progress-shimmer` e ponto luminoso frontal `.liquid-progress-head` no termômetro pessoal e limites de cartões.
+      - **Animação #18 (Morphing Card-to-Modal nos 4 Slim KPIs):** Abertura do modal Raio-X Contábil com curva elástica iOS (`@keyframes kpiModalExpandIn` de `scale(0.92) translateY(-14px)` para `transform: none` em 280ms).
 
   - **Hotfix Sprint 49.1 (Novembro de 2026 — Correção Global do Desalinhamento Vertical e Horizontal da Pílula Azul Deslizante em Todos os Controles Segmentados Unidos):**
     - **Diagnóstico da Causa-Raiz Geométrica:**

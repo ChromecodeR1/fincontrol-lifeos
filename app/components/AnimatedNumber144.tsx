@@ -10,6 +10,7 @@ export interface AnimatedNumber144Props {
   suffix?: string;
   className?: string;
   duration?: number; // default 320ms
+  odometer?: boolean; // SPRINT 52: Odometry Digit Roll
 }
 
 const brlFormatter = new Intl.NumberFormat("pt-BR", {
@@ -55,7 +56,8 @@ export const AnimatedNumber144: React.FC<AnimatedNumber144Props> = ({
   prefix = "",
   suffix = "",
   className = "",
-  duration = 320
+  duration = 320,
+  odometer = true
 }) => {
   const spanRef = useRef<HTMLSpanElement>(null);
   const prevValueRef = useRef<number>(value);
@@ -69,7 +71,8 @@ export const AnimatedNumber144: React.FC<AnimatedNumber144Props> = ({
     if (
       !Number.isFinite(value) ||
       (typeof window !== "undefined" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+        (document.documentElement.getAttribute("data-animations") === "off" ||
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches))
     ) {
       el.textContent = formatNumberDirect(value, type, decimals, prefix, suffix);
       prevValueRef.current = value;
@@ -84,6 +87,13 @@ export const AnimatedNumber144: React.FC<AnimatedNumber144Props> = ({
       el.textContent = formatNumberDirect(value, type, decimals, prefix, suffix);
       prevValueRef.current = value;
       return;
+    }
+
+    // Animação #4: Odometry Digit Roll
+    if (odometer) {
+      el.classList.remove("odometer-roll-up", "odometer-roll-down");
+      void el.offsetWidth; // trigger reflow
+      el.classList.add(diff > 0 ? "odometer-roll-up" : "odometer-roll-down");
     }
 
     const startTime = performance.now();
@@ -103,6 +113,7 @@ export const AnimatedNumber144: React.FC<AnimatedNumber144Props> = ({
       } else {
         el.textContent = formatNumberDirect(value, type, decimals, prefix, suffix);
         prevValueRef.current = value;
+        el.classList.remove("odometer-roll-up", "odometer-roll-down");
         rafRef.current = null;
       }
     };
@@ -116,8 +127,9 @@ export const AnimatedNumber144: React.FC<AnimatedNumber144Props> = ({
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
       }
+      el.classList.remove("odometer-roll-up", "odometer-roll-down");
     };
-  }, [value, type, decimals, prefix, suffix, duration]);
+  }, [value, type, decimals, prefix, suffix, duration, odometer]);
 
   return (
     <span

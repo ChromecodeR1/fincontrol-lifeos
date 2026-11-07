@@ -770,11 +770,23 @@ export function InvestmentsTab({
                 return (
                   <div
                     key={key}
-                    className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.08] relative group flex flex-col justify-between"
+                    className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.08] relative group flex flex-col justify-between market-heartbeat-flash cupertino-card-hover"
                   >
                     <div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
+                          <div className="relative flex items-center justify-center w-2.5 h-2.5 shrink-0" title="Cotação Ao Vivo">
+                            <span
+                              className={`absolute w-full h-full rounded-full animate-ping opacity-75 ${
+                                isPositive ? "bg-[#30D158]" : "bg-[#FF453A]"
+                              }`}
+                            />
+                            <span
+                              className={`relative w-2 h-2 rounded-full ${
+                                isPositive ? "bg-[#30D158]" : "bg-[#FF453A]"
+                              } shadow-[0_0_8px_currentColor]`}
+                            />
+                          </div>
                           <strong className="text-sm font-bold text-white">{ticker.name}</strong>
                           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-slate-300">
                             {ticker.symbol}
@@ -783,7 +795,7 @@ export function InvestmentsTab({
                         <button
                           type="button"
                           onClick={() => toggleChartVisibility(key)}
-                          className="w-6 h-6 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition"
+                          className="w-6 h-6 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
                           title="Remover gráfico do painel"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -805,10 +817,10 @@ export function InvestmentsTab({
                       </div>
                     </div>
 
-                    {/* Gráfico Recharts AreaChart */}
-                    <div className="h-28 w-full mt-3">
+                    {/* Gráfico Recharts AreaChart com Scrubbing Sincronizado Crosshair Laser */}
+                    <div className="h-28 w-full mt-3 relative select-none">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={ticker.history}>
+                        <AreaChart data={ticker.history} syncId="coindex_market_sync">
                           <defs>
                             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor={strokeColor} stopOpacity={0.25} />
@@ -818,6 +830,7 @@ export function InvestmentsTab({
                           <XAxis dataKey="time" hide />
                           <YAxis domain={["dataMin", "dataMax"]} hide />
                           <Tooltip
+                            cursor={{ stroke: "#0A84FF", strokeWidth: 1.5, strokeDasharray: "4 3" }}
                             content={({ active, payload }) => {
                               if (!active || !payload || !payload.length) return null;
                               const val = Number(payload[0].value);
@@ -837,7 +850,7 @@ export function InvestmentsTab({
                             stroke={strokeColor}
                             strokeWidth={2}
                             fill={`url(#${gradientId})`}
-                            isAnimationActive={true}
+                            isAnimationActive={false}
                           />
                         </AreaChart>
                       </ResponsiveContainer>

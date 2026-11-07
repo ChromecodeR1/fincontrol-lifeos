@@ -14,6 +14,7 @@ import {
   calculateBankBalance,
   FlowType
 } from "@/app/lifeos-data";
+import { TiltCard3D, triggerAuraBurst } from "./MotionEngine144";
 
 export interface BanksTabProps {
   banks: BankItem[];
@@ -189,194 +190,199 @@ export const BanksTab: React.FC<BanksTabProps> = ({
     const cardGradient = getCardGradient(card.name, cardBank?.name, globalIdx);
 
     return (
-      <div
-        className={`wallet-physical-card relative overflow-hidden rounded-2xl border border-white/12 p-4 sm:p-5 shadow-xl transition-all duration-200 hover:-translate-y-0.5 bg-gradient-to-br ${cardGradient}`}
-      >
-        {/* Brilho reflexivo diagonal em overlay */}
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.10),transparent_60%)]" />
+      <TiltCard3D maxTilt={6} className="h-full">
+        <div
+          className={`wallet-physical-card relative overflow-hidden rounded-2xl border border-white/12 p-4 sm:p-5 shadow-xl transition-all duration-200 bg-gradient-to-br ${cardGradient}`}
+        >
+          {/* Brilho reflexivo diagonal em overlay */}
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.10),transparent_60%)]" />
 
-        {/* Cabeçalho do Cartão */}
-        <div className="relative z-10 flex items-start justify-between gap-3 mb-4">
-          {/* Lado Esquerdo */}
-          <div className="flex items-center gap-3 min-w-0">
-            {card.logoUrl ? (
-              <img
-                src={card.logoUrl}
-                alt={card.name}
-                className="w-10 h-10 rounded-2xl object-cover ring-1 ring-white/15 shadow-md shrink-0"
-              />
-            ) : cardBank?.logoUrl ? (
-              <img
-                src={cardBank.logoUrl}
-                alt={card.name}
-                className="w-10 h-10 rounded-2xl object-cover ring-1 ring-white/15 shadow-md shrink-0"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-2xl ring-1 ring-white/15 shadow-md flex items-center justify-center font-bold text-white shrink-0 bg-white/10 backdrop-blur-md">
-                <CreditCard className="w-5 h-5 text-white/90" />
+          {/* Cabeçalho do Cartão */}
+          <div className="relative z-10 flex items-start justify-between gap-3 mb-4">
+            {/* Lado Esquerdo */}
+            <div className="flex items-center gap-3 min-w-0">
+              {card.logoUrl ? (
+                <img
+                  src={card.logoUrl}
+                  alt={card.name}
+                  className="w-10 h-10 rounded-2xl object-cover ring-1 ring-white/15 shadow-md shrink-0"
+                />
+              ) : cardBank?.logoUrl ? (
+                <img
+                  src={cardBank.logoUrl}
+                  alt={card.name}
+                  className="w-10 h-10 rounded-2xl object-cover ring-1 ring-white/15 shadow-md shrink-0"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-2xl ring-1 ring-white/15 shadow-md flex items-center justify-center font-bold text-white shrink-0 bg-white/10 backdrop-blur-md">
+                  <CreditCard className="w-5 h-5 text-white/90" />
+                </div>
+              )}
+              <div className="min-w-0">
+                {/* Linha 1: Micro-badge da bandeira em caixa alta */}
+                {renderBrandBadge(card.brand)}
+                {/* Linha 2: Nome do cartão */}
+                <h3 className="text-lg font-bold tracking-[-0.02em] text-white truncate max-w-[180px] sm:max-w-[240px] leading-tight mt-0.5">
+                  {card.name}
+                </h3>
               </div>
-            )}
-            <div className="min-w-0">
-              {/* Linha 1: Micro-badge da bandeira em caixa alta */}
-              {renderBrandBadge(card.brand)}
-              {/* Linha 2: Nome do cartão */}
-              <h3 className="text-lg font-bold tracking-[-0.02em] text-white truncate max-w-[180px] sm:max-w-[240px] leading-tight mt-0.5">
-                {card.name}
-              </h3>
             </div>
-          </div>
 
-          {/* Lado Direito */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {usedLimit > 0 && (
+            {/* Lado Direito */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {usedLimit > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    triggerAuraBurst(e.currentTarget, "emerald");
+                    const defaultBank =
+                      card.bankName ||
+                      (card.bankId ? banks.find((b) => b.id === card.bankId)?.name : "") ||
+                      banks[0]?.name ||
+                      "";
+                    setPaymentOriginBank(defaultBank);
+                    setPayingInvoiceCard({ card, usedLimit });
+                  }}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-all shadow-sm cursor-pointer apple-press"
+                >
+                  <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                  <span>Pagar Fatura</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
-                  const defaultBank =
-                    card.bankName ||
-                    (card.bankId ? banks.find((b) => b.id === card.bankId)?.name : "") ||
-                    banks[0]?.name ||
-                    "";
-                  setPaymentOriginBank(defaultBank);
-                  setPayingInvoiceCard({ card, usedLimit });
+                  setEditingCardId(card.id);
+                  setNewCard({
+                    name: card.name,
+                    brand: card.brand,
+                    limit: String(card.limit),
+                    closingDay: String(card.closingDay),
+                    dueDay: String(card.dueDay),
+                    logoUrl: card.logoUrl ? card.logoUrl : "",
+                    bankId: card.bankId ? card.bankId : ""
+                  });
                 }}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-all shadow-sm cursor-pointer"
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-white/10 shrink-0 living-edit"
+                title="Editar Cartão"
               >
-                <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                <span>Pagar Fatura</span>
+                <Pencil className="w-3.5 h-3.5" />
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setEditingCardId(card.id);
-                setNewCard({
-                  name: card.name,
-                  brand: card.brand,
-                  limit: String(card.limit),
-                  closingDay: String(card.closingDay),
-                  dueDay: String(card.dueDay),
-                  logoUrl: card.logoUrl ? card.logoUrl : "",
-                  bankId: card.bankId ? card.bankId : ""
-                });
-              }}
-              className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center transition-colors cursor-pointer border border-white/10 shrink-0"
-              title="Editar Cartão"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDeleteCard(card.id)}
-              className="w-8 h-8 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer border border-white/10 shrink-0"
-              title="Excluir Cartão"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteCard(card.id)}
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer border border-white/10 shrink-0 living-trash"
+                title="Excluir Cartão"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Faixa Intermediária Apple Card: Chip EMV + NFC + Datas do Ciclo */}
-        <div className="relative z-10 flex items-center justify-between gap-3 my-3">
-          {/* Chip EMV Fiel em SVG + Aproximação Contactless NFC */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-7 rounded-md bg-gradient-to-br from-[#F6D365] via-[#D4AF37] to-[#AA7C11] p-[1px] shadow-sm relative overflow-hidden flex items-center justify-center border border-amber-300/40 shrink-0">
-              <svg viewBox="0 0 40 28" className="w-full h-full" fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="1">
-                <rect x="3" y="3" width="34" height="22" rx="3" fill="none" stroke="rgba(0,0,0,0.22)" strokeWidth="0.8" />
-                <path d="M 3 14 L 14 14" />
-                <path d="M 26 14 L 37 14" />
-                <path d="M 14 3 L 14 25" />
-                <path d="M 26 3 L 26 25" />
-                <path d="M 14 9 L 26 9" />
-                <path d="M 14 19 L 26 19" />
-                <circle cx="20" cy="14" r="2.5" fill="none" stroke="rgba(0,0,0,0.28)" strokeWidth="0.8" />
+          {/* Faixa Intermediária Apple Card: Chip EMV + NFC + Datas do Ciclo */}
+          <div className="relative z-10 flex items-center justify-between gap-3 my-3">
+            {/* Chip EMV Fiel em SVG + Aproximação Contactless NFC */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-7 rounded-md bg-gradient-to-br from-[#F6D365] via-[#D4AF37] to-[#AA7C11] p-[1px] shadow-sm relative overflow-hidden flex items-center justify-center border border-amber-300/40 shrink-0">
+                <svg viewBox="0 0 40 28" className="w-full h-full" fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="1">
+                  <rect x="3" y="3" width="34" height="22" rx="3" fill="none" stroke="rgba(0,0,0,0.22)" strokeWidth="0.8" />
+                  <path d="M 3 14 L 14 14" />
+                  <path d="M 26 14 L 37 14" />
+                  <path d="M 14 3 L 14 25" />
+                  <path d="M 26 3 L 26 25" />
+                  <path d="M 14 9 L 26 9" />
+                  <path d="M 14 19 L 26 19" />
+                  <circle cx="20" cy="14" r="2.5" fill="none" stroke="rgba(0,0,0,0.28)" strokeWidth="0.8" />
+                </svg>
+              </div>
+              <svg
+                viewBox="0 0 24 24"
+                className="w-4 h-4 text-white/45 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M8.5 16.5a5 5 0 0 1 0-7" />
+                <path d="M12 19a8.5 8.5 0 0 0 0-14" />
+                <path d="M15.5 21.5a12 12 0 0 0 0-19" />
               </svg>
             </div>
-            <svg
-              viewBox="0 0 24 24"
-              className="w-4 h-4 text-white/45 shrink-0"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M8.5 16.5a5 5 0 0 1 0-7" />
-              <path d="M12 19a8.5 8.5 0 0 0 0-14" />
-              <path d="M15.5 21.5a12 12 0 0 0 0-19" />
-            </svg>
+
+            {/* Pílula Translúcida Sofisticada com Datas de Fechamento e Vencimento */}
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-black/25 backdrop-blur-md border border-white/10 text-[11px] font-medium text-white/75 shadow-inner shrink-0">
+              <span>Fecha dia <strong className="text-white font-semibold">{card.closingDay || "—"}</strong></span>
+              <span className="text-white/30">•</span>
+              <span>Vence dia <strong className="text-white font-semibold">{card.dueDay || "—"}</strong></span>
+            </div>
           </div>
 
-          {/* Pílula Translúcida Sofisticada com Datas de Fechamento e Vencimento */}
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-black/25 backdrop-blur-md border border-white/10 text-[11px] font-medium text-white/75 shadow-inner shrink-0">
-            <span>Fecha dia <strong className="text-white font-semibold">{card.closingDay || "—"}</strong></span>
-            <span className="text-white/30">•</span>
-            <span>Vence dia <strong className="text-white font-semibold">{card.dueDay || "—"}</strong></span>
-          </div>
-        </div>
-
-        {/* Micro-linha de Status de Limite */}
-        <div className="relative z-10 flex items-center justify-between text-[11px] mb-1.5 font-medium">
-          <span className="text-white/60">Uso do limite</span>
-          <span
-            className={`font-semibold tabular-nums ${
-              usagePercent > 90
-                ? "text-rose-400"
-                : usagePercent > 70
-                ? "text-amber-400"
-                : "text-emerald-400"
-            }`}
-          >
-            {usagePercent.toFixed(1).replace(".", ",")}% utilizado
-          </span>
-        </div>
-
-        {/* Barra de Progresso */}
-        <div className="relative z-10 h-2 w-full rounded-full bg-black/35 border border-white/5 overflow-hidden p-[1px]">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ease-out min-w-[6px] ${
-              usagePercent >= 90
-                ? "bg-gradient-to-r from-amber-500 to-rose-500"
-                : usagePercent >= 70
-                ? "bg-gradient-to-r from-amber-400 to-amber-500"
-                : "bg-gradient-to-r from-indigo-400 to-emerald-400"
-            }`}
-            style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
-          />
-        </div>
-
-        {/* Dock Métrico em 3 Colunas (Apple SF Pro Typography) */}
-        <div className={`relative z-10 mt-3.5 pt-3 border-t border-white/10 grid grid-cols-3 gap-2 items-end ${moneyBlur}`}>
-          <div>
-            <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block">
-              Limite Total
-            </span>
-            <strong className="text-sm sm:text-base font-sans font-bold tracking-[-0.03em] tabular-nums text-white block">
-              {formatBRL(card.limit)}
-            </strong>
-          </div>
-          <div>
-            <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block">
-              Fatura Aberta
-            </span>
-            <strong
-              className={`text-sm sm:text-base font-sans font-bold tracking-[-0.03em] tabular-nums block ${
-                usedLimit > 0 ? "text-[#FF9F0A]" : "text-slate-300"
+          {/* Micro-linha de Status de Limite */}
+          <div className="relative z-10 flex items-center justify-between text-[11px] mb-1.5 font-medium">
+            <span className="text-white/60">Uso do limite</span>
+            <span
+              className={`font-semibold tabular-nums ${
+                usagePercent > 90
+                  ? "text-rose-400"
+                  : usagePercent > 70
+                  ? "text-amber-400"
+                  : "text-emerald-400"
               }`}
             >
-              {formatBRL(usedLimit)}
-            </strong>
-          </div>
-          <div className="text-right">
-            <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block text-right">
-              Disponível
+              {usagePercent.toFixed(1).replace(".", ",")}% utilizado
             </span>
-            <strong className="text-sm sm:text-base font-sans font-bold tracking-[-0.03em] tabular-nums text-[#30D158] block text-right">
-              {formatBRL(availableLimit)}
-            </strong>
+          </div>
+
+          {/* Barra de Progresso com Superfície Líquida 144Hz */}
+          <div className="relative z-10 h-2 w-full rounded-full bg-black/35 border border-white/5 overflow-hidden p-[1px]">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ease-out min-w-[6px] relative liquid-progress-shimmer ${
+                usagePercent >= 90
+                  ? "bg-gradient-to-r from-amber-500 to-rose-500"
+                  : usagePercent >= 70
+                  ? "bg-gradient-to-r from-amber-400 to-amber-500"
+                  : "bg-gradient-to-r from-indigo-400 to-emerald-400"
+              }`}
+              style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
+            >
+              <span className="liquid-progress-head" />
+            </div>
+          </div>
+
+          {/* Dock Métrico em 3 Colunas (Apple SF Pro Typography) */}
+          <div className={`relative z-10 mt-3.5 pt-3 border-t border-white/10 grid grid-cols-3 gap-2 items-end ${moneyBlur}`}>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block">
+                Limite Total
+              </span>
+              <strong className="text-sm sm:text-base font-sans font-bold tracking-[-0.03em] tabular-nums text-white block">
+                {formatBRL(card.limit)}
+              </strong>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block">
+                Fatura Aberta
+              </span>
+              <strong
+                className={`text-sm sm:text-base font-sans font-bold tracking-[-0.03em] tabular-nums block ${
+                  usedLimit > 0 ? "text-[#FF9F0A]" : "text-slate-300"
+                }`}
+              >
+                {formatBRL(usedLimit)}
+              </strong>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block text-right">
+                Disponível
+              </span>
+              <strong className="text-sm sm:text-base font-sans font-bold tracking-[-0.03em] tabular-nums text-[#30D158] block text-right">
+                {formatBRL(availableLimit)}
+              </strong>
+            </div>
           </div>
         </div>
-      </div>
+      </TiltCard3D>
     );
   };
 
@@ -440,7 +446,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
                             limitType: bank.limitType || "Cartão de Crédito"
                           });
                         }}
-                        className="p-1.5 rounded-lg bg-white/10 text-slate-200 hover:bg-white/20 transition"
+                        className="p-1.5 rounded-lg bg-white/10 text-slate-200 hover:bg-white/20 transition living-edit"
                         title="Editar banco e limites"
                       >
                         <Pencil className="w-3 h-3" />
@@ -448,7 +454,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDeleteBank(bank.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition living-trash"
                         title="Excluir banco"
                       >
                         <Trash2 className="w-3 h-3" />
@@ -798,14 +804,14 @@ export const BanksTab: React.FC<BanksTabProps> = ({
                             priority: w.priority
                           });
                         }}
-                        className="p-1 text-indigo-300 hover:text-white"
+                        className="p-1 text-indigo-300 hover:text-white living-edit"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteWish(w.id)}
-                        className="p-1 text-slate-400 hover:text-rose-400"
+                        className="p-1 text-slate-400 hover:text-rose-400 living-trash"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -819,11 +825,13 @@ export const BanksTab: React.FC<BanksTabProps> = ({
                       Meta: <strong className="text-white font-mono tabular-nums">{formatBRL(w.targetAmount)}</strong>
                     </span>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden">
+                  <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden relative">
                     <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500"
+                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full relative liquid-progress-shimmer transition-all duration-500"
                       style={{ width: `${pct}%` }}
-                    />
+                    >
+                      <span className="liquid-progress-head" />
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 pt-1">
                     <span className={`font-mono tabular-nums ${moneyBlur}`}>
@@ -832,15 +840,21 @@ export const BanksTab: React.FC<BanksTabProps> = ({
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => handleIncrementWish(w, 50)}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 font-bold transition"
+                        onClick={(e) => {
+                          triggerAuraBurst(e.currentTarget, "gold");
+                          handleIncrementWish(w, 50);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 font-bold transition apple-press cursor-pointer"
                       >
                         + R$ 50
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleIncrementWish(w, 100)}
-                        className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-bold transition"
+                        onClick={(e) => {
+                          triggerAuraBurst(e.currentTarget, "gold");
+                          handleIncrementWish(w, 100);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-bold transition apple-press cursor-pointer"
                       >
                         + R$ 100
                       </button>
@@ -857,14 +871,15 @@ export const BanksTab: React.FC<BanksTabProps> = ({
                     />
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
                         const val = parseFloat(customVal);
                         if (val > 0) {
+                          triggerAuraBurst(e.currentTarget, "gold");
                           handleIncrementWish(w, val);
                           setCustomWishAmounts((prev) => ({ ...prev, [w.id]: "" }));
                         }
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition apple-press cursor-pointer"
                     >
                       Guardar
                     </button>
