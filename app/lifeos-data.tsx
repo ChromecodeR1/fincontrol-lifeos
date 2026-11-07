@@ -286,11 +286,22 @@ export interface StravaActivity {
   name: string;
   type: string;
   date: string;
+  isoDate?: string;
+  startTime?: string;
   distanceKm: number;
+  movingTimeSec?: number;
+  elapsedTimeSec?: number;
+  durationMin?: number;
   movingTimeMin: number;
+  paceSecondsPerKm?: number;
   pace: string;
+  avgSpeedKmh?: number;
   elevationGain: number;
+  averageHeartrate?: number;
+  maxHeartrate?: number;
   calories: number;
+  splitsMetric?: any[];
+  isSyntheticSummary?: boolean;
 }
 
 export type BrainNotePriority = "Essencial" | "Planejado" | "Desejo";
@@ -388,10 +399,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.38.0";
-export const PREVIOUS_VERSION = "0.37.0";
+export const APP_VERSION = "0.39.0";
+export const PREVIOUS_VERSION = "0.38.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.39.0",
+    date: "Nov/2026",
+    title: "Sprint 51: Correção da Renderização do Gráfico Strava Progress, Ingestão Paginada de Corridas Individuais na API, Modo 'Cada Corrida' e Histórico Linha por Linha",
+    highlights: [
+      "Correção Definitiva da Linha do Gráfico Strava: Alinhamento estrito de chaveamento entre o XAxis (dataKey='xLabel') e os pontos temporais com ReferenceLine reativa, garantindo renderização contínua sem quebras de SVG e dot rendering seguro com Number.isFinite.",
+      "Ingestão Paginada Completa na Rota /api/strava: Busca automática com per_page=200 em 2 páginas consecutivas no endpoint /athlete/activities, resgatando até 400 atividades individuais com datas e horários fidedignos em fuso local sem deslocamento de UTC.",
+      "Modo 'Cada Corrida' (📍 Cada Corrida): Alternância flexível entre a visão corrida por corrida e agrupamento semanal ('📅 Por Semana'), com prévia de telemetria dinâmica de 4 colunas (Distância, Pace Médio, Tempo e Elevação).",
+      "Histórico Detalhado Linha por Linha: Tabela rica sempre visível logo abaixo do gráfico com filtros de busca textual, distância mínima (>3km, >5km, >10km, >21km), filtro por mês e mini-barras proporcionais de distância.",
+      "Interatividade Bidirecional Tabela x Gráfico: O foco, clique ou hover em qualquer linha da tabela destaca imediatamente o ponto correspondente na linha do tempo do gráfico Strava e posiciona a linha de referência do cursor.",
+      "Registro Manual de Treinos: Modal integrado para inserção de corridas com cálculo automático em tempo real de pace médio, velocidade e calorias estimadas.",
+      "Detecção e Alerta de Escopo Restrito: Banner intuitivo com link de autorização OAuth2 com 1 clique para liberar permissão de leitura de atividades completas (read,activity:read,activity:read_all,profile:read_all)."
+    ]
+  },
   {
     version: "0.38.0",
     date: "Nov/2026",

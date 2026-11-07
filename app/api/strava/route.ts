@@ -36,20 +36,27 @@ interface StravaStatsResponse {
   ytd_ride_totals?: StravaTotals;
 }
 
-interface RawStravaActivity {
-  id: number | string;
+export interface StravaActivityItem {
+  id: string;
   name: string;
-  distance: number;
-  moving_time: number;
-  elapsed_time?: number;
-  total_elevation_gain?: number;
-  type?: string;
-  sport_type?: string;
-  start_date: string;
-  start_date_local?: string;
-  calories?: number;
-  average_speed?: number;
-  max_speed?: number;
+  type: string;
+  date: string;              // DD-MM-YYYY
+  isoDate: string;           // YYYY-MM-DD
+  startTime: string;         // HH:mm
+  distanceKm: number;
+  movingTimeSec: number;
+  elapsedTimeSec: number;
+  durationMin: number;
+  movingTimeMin: number;
+  paceSecondsPerKm: number;
+  pace: string;              // M:SS /km
+  avgSpeedKmh: number;
+  elevationGain: number;
+  averageHeartrate?: number;
+  maxHeartrate?: number;
+  calories: number;
+  splitsMetric?: any[];
+  isSyntheticSummary?: boolean;
 }
 
 function formatPace(movingTimeSec: number, distanceM: number): string {
@@ -57,26 +64,34 @@ function formatPace(movingTimeSec: number, distanceM: number): string {
   const secPerKm = movingTimeSec / (distanceM / 1000);
   let minutes = Math.floor(secPerKm / 60);
   let seconds = Math.round(secPerKm % 60);
-  if (seconds === 60) {
+  if (seconds >= 60) {
     minutes += 1;
     seconds = 0;
   }
-  if (minutes > 30 || minutes < 2) return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}/km`;
-  return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}/km`;
+  return `${minutes}:${seconds < 10 ? "0" : ""}${seconds} /km`;
 }
 
-function formatDateToBR(isoString: string): string {
-  if (!isoString) return "";
-  try {
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return isoString.slice(0, 10);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    return `${day}-${month}-${year}`;
-  } catch {
-    return isoString.slice(0, 10);
+function parseStravaIsoDate(isoString?: string | null): { dateBR: string; isoDate: string; startTime: string } {
+  if (!isoString) return { dateBR: "", isoDate: "", startTime: "00:00" };
+  const raw = isoString.trim();
+  const dateMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateMatch) {
+    const y = dateMatch[1];
+    const m = dateMatch[2];
+    const d = dateMatch[3];
+    const isoDate = `${y}-${m}-${d}`;
+    const dateBR = `${d}-${m}-${y}`;
+    let startTime = "00:00";
+    const timeMatch = raw.match(/T(\d{2}:\d{2})/);
+    if (timeMatch) {
+      startTime = timeMatch[1];
+    } else {
+      const spaceTime = raw.match(/\s(\d{2}:\d{2})/);
+      if (spaceTime) startTime = spaceTime[1];
+    }
+    return { dateBR, isoDate, startTime };
   }
+  return { dateBR: "", isoDate: "", startTime: "00:00" };
 }
 
 export async function POST(request: Request) {
@@ -141,7 +156,7 @@ export async function POST(request: Request) {
 
     const headers = { Authorization: `Bearer ${accessToken}` };
 
-    // 2. Busca paralela: Perfil (/athlete) e Atividades (/athlete/activities)
+    // 2. Busca paralela de perfil e estatísticas do atleta
     const athletePromise = fetch("https://www.strava.com/api/v3/athlete", {
       headers,
       signal: AbortSignal.timeout(8000)
@@ -149,12 +164,6 @@ export async function POST(request: Request) {
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null);
 
-    const activitiesPromise = fetch("https://www.strava.com/api/v3/athlete/activities?per_page=30", {
-      headers,
-      signal: AbortSignal.timeout(8000)
-    }).catch(() => null);
-
-    // Se resolvedAthleteId já for conhecido, busca stats em paralelo
     const statsPromise = resolvedAthleteId
       ? fetch(`https://www.strava.com/api/v3/athletes/${resolvedAthleteId}/stats`, {
           headers,
@@ -164,13 +173,55 @@ export async function POST(request: Request) {
           .catch(() => null)
       : null;
 
-    const [athleteData, activitiesRes, initialStatsData] = await Promise.all([
-      athletePromise,
-      activitiesPromise,
-      statsPromise
-    ]);
+    // 3. Ingestão Paginada de Corridas Individuais (Sprint 51: per_page=200 page=1 e page=2)
+    let rawActivities: any[] = [];
+    let isScopeRestricted = false;
 
-    // Se não tínhamos o athleteId antes, resolvemos agora a partir do perfil
+    try {
+      const page1Res = await fetch(
+        "https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1",
+        {
+          headers,
+          signal: AbortSignal.timeout(9000)
+        }
+      );
+
+      if (!page1Res.ok) {
+        if (page1Res.status === 401 || page1Res.status === 403) {
+          isScopeRestricted = true;
+        }
+      } else {
+        const page1Data = await page1Res.json().catch(() => []);
+        if (Array.isArray(page1Data)) {
+          rawActivities = page1Data;
+          // Se página 1 trouxe 200 itens, busca também a página 2 para cobrir todo o ano
+          if (page1Data.length === 200) {
+            try {
+              const page2Res = await fetch(
+                "https://www.strava.com/api/v3/athlete/activities?per_page=200&page=2",
+                {
+                  headers,
+                  signal: AbortSignal.timeout(9000)
+                }
+              );
+              if (page2Res.ok) {
+                const page2Data = await page2Res.json().catch(() => []);
+                if (Array.isArray(page2Data) && page2Data.length > 0) {
+                  rawActivities = [...page1Data, ...page2Data];
+                }
+              }
+            } catch (errPage2) {
+              console.warn("Strava page 2 fetch timeout/warning, mantendo page 1:", errPage2);
+            }
+          }
+        }
+      }
+    } catch (actErr) {
+      console.warn("Erro ao buscar athlete/activities no Strava:", actErr);
+    }
+
+    const [athleteData, initialStatsData] = await Promise.all([athletePromise, statsPromise]);
+
     let statsData: StravaStatsResponse | null = initialStatsData;
     if (!resolvedAthleteId && athleteData?.id) {
       resolvedAthleteId = String(athleteData.id);
@@ -182,7 +233,7 @@ export async function POST(request: Request) {
         .catch(() => null);
     }
 
-    // 3. Monta resumo de estatísticas oficiais
+    // 4. Monta resumo de estatísticas oficiais
     const stats = {
       ytdKm: statsData?.ytd_run_totals?.distance ? +(statsData.ytd_run_totals.distance / 1000).toFixed(1) : 0,
       ytdRuns: statsData?.ytd_run_totals?.count ?? 0,
@@ -191,91 +242,99 @@ export async function POST(request: Request) {
       lastSync: new Date().toISOString()
     };
 
-    // 4. Mapeamento Inteligente de Atividades (Compatível com escopo read e activity:read_all)
-    let activities: any[] = [];
+    // 5. Mapeamento Rico de Cada Corrida Individual (Sprint 51)
+    let activities: StravaActivityItem[] = [];
     let scopeMode: "detailed" | "read_only" = "detailed";
+    let scopeStatus: "full_access" | "needs_activity_scope" = "full_access";
 
-    if (activitiesRes && activitiesRes.ok) {
-      const rawActivities: RawStravaActivity[] = await activitiesRes.json().catch(() => []);
-      if (Array.isArray(rawActivities) && rawActivities.length > 0) {
-        activities = rawActivities.map((act) => {
-          const distMeters = act.distance || 0;
-          const distKm = +(distMeters / 1000).toFixed(2);
-          const movingTimeMin = Math.round((act.moving_time || 0) / 60);
-          const elevationGain = Math.round(act.total_elevation_gain || 0);
-          const pace = formatPace(act.moving_time || 0, distMeters);
-          const calories = act.calories ? Math.round(act.calories) : Math.round(distKm * 65);
-          return {
-            id: String(act.id),
-            name: act.name || "Corrida Strava",
-            type: act.type || act.sport_type || "Run",
-            date: formatDateToBR(act.start_date_local || act.start_date),
-            distanceKm: distKm,
-            movingTimeMin,
-            pace,
-            elevationGain,
-            calories
-          };
-        });
-      } else {
-        activities = [];
-      }
+    if (rawActivities.length > 0) {
+      scopeMode = "detailed";
+      scopeStatus = "full_access";
+
+      activities = rawActivities.map((act) => {
+        const distMeters = Number(act.distance || 0);
+        const distKm = +(distMeters / 1000).toFixed(2);
+        const movingTimeSec = Math.round(Number(act.moving_time || act.elapsed_time || 0));
+        const elapsedTimeSec = Math.round(Number(act.elapsed_time || act.moving_time || 0));
+        const durationMin = +(movingTimeSec / 60).toFixed(1);
+        const movingTimeMin = Math.round(movingTimeSec / 60);
+        const paceSecondsPerKm = distKm > 0 ? Math.round(movingTimeSec / distKm) : 0;
+        const pace = formatPace(movingTimeSec, distMeters);
+        const avgSpeedKmh = movingTimeSec > 0 ? +((distKm / (movingTimeSec / 3600))).toFixed(1) : 0;
+        const elevationGain = Math.round(Number(act.total_elevation_gain || 0));
+        const averageHeartrate = act.average_heartrate ? Math.round(Number(act.average_heartrate)) : undefined;
+        const maxHeartrate = act.max_heartrate ? Math.round(Number(act.max_heartrate)) : undefined;
+        const calories = Math.round(Number(act.calories || (act.kilojoules ? act.kilojoules * 1.05 : distKm * 65)));
+        const splitsMetric = Array.isArray(act.splits_metric) ? act.splits_metric : undefined;
+
+        const { dateBR, isoDate, startTime } = parseStravaIsoDate(act.start_date_local || act.start_date);
+
+        return {
+          id: String(act.id),
+          name: act.name || "Corrida",
+          type: act.sport_type || act.type || "Run",
+          date: dateBR,
+          isoDate,
+          startTime,
+          distanceKm: distKm,
+          movingTimeSec,
+          elapsedTimeSec,
+          durationMin,
+          movingTimeMin,
+          paceSecondsPerKm,
+          pace,
+          avgSpeedKmh,
+          elevationGain,
+          averageHeartrate,
+          maxHeartrate,
+          calories,
+          splitsMetric,
+          isSyntheticSummary: false
+        };
+      });
     } else {
-      // Se activitiesRes for 401 ou 403 (ou falhar por escopo "read"), não lança erro!
-      // Constrói cards consolidados a partir de statsData reais:
+      // Escopo restrito detectado (token não possui activity:read ou activity:read_all)
       scopeMode = "read_only";
-      const currentYear = new Date().getFullYear();
+      scopeStatus = "needs_activity_scope";
+      const now = new Date();
 
+      // Distribuição semanal sintética de alta fidelidade para não quebrar gráficos
       if (statsData?.recent_run_totals && statsData.recent_run_totals.count > 0) {
         const r = statsData.recent_run_totals;
-        const distKm = +(r.distance / 1000).toFixed(2);
-        activities.push({
-          id: "recent-runs",
-          name: `Corridas Recentes (${r.count} treinos nas últimas 4 semanas)`,
-          type: "Run",
-          date: "Últimas 4 Semanas",
-          distanceKm: distKm,
-          movingTimeMin: Math.round(r.moving_time / 60),
-          pace: formatPace(r.moving_time, r.distance),
-          elevationGain: Math.round(r.elevation_gain || 0),
-          calories: Math.round(distKm * 65)
-        });
-      }
+        const totalDist = r.distance / 1000;
+        const weeks = Math.min(4, Math.max(1, r.count));
+        const distPerWeek = +(totalDist / weeks).toFixed(2);
+        const timePerWeekSec = Math.round(r.moving_time / weeks);
 
-      if (statsData?.ytd_run_totals && statsData.ytd_run_totals.count > 0) {
-        const y = statsData.ytd_run_totals;
-        const distKm = +(y.distance / 1000).toFixed(2);
-        activities.push({
-          id: "ytd-runs",
-          name: `Acumulado no Ano (${y.count} corridas em ${currentYear})`,
-          type: "Run",
-          date: `Ano ${currentYear}`,
-          distanceKm: distKm,
-          movingTimeMin: Math.round(y.moving_time / 60),
-          pace: formatPace(y.moving_time, y.distance),
-          elevationGain: Math.round(y.elevation_gain || 0),
-          calories: Math.round(distKm * 65)
-        });
-      }
-
-      if (statsData?.all_run_totals && statsData.all_run_totals.count > 0) {
-        const a = statsData.all_run_totals;
-        const distKm = +(a.distance / 1000).toFixed(2);
-        activities.push({
-          id: "all-runs",
-          name: `Histórico Total no Strava (${a.count} corridas)`,
-          type: "Run",
-          date: "Histórico Total",
-          distanceKm: distKm,
-          movingTimeMin: Math.round(a.moving_time / 60),
-          pace: formatPace(a.moving_time, a.distance),
-          elevationGain: Math.round(a.elevation_gain || 0),
-          calories: Math.round(distKm * 65)
-        });
+        for (let i = 0; i < weeks; i++) {
+          const d = new Date(now.getTime() - i * 7 * 86400000);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          activities.push({
+            id: `synth-week-${i}`,
+            name: `Semana Recente #${weeks - i} (Resumo)`,
+            type: "Run",
+            date: `${day}-${m}-${y}`,
+            isoDate: `${y}-${m}-${day}`,
+            startTime: "08:00",
+            distanceKm: distPerWeek,
+            movingTimeSec: timePerWeekSec,
+            elapsedTimeSec: timePerWeekSec,
+            durationMin: +(timePerWeekSec / 60).toFixed(1),
+            movingTimeMin: Math.round(timePerWeekSec / 60),
+            paceSecondsPerKm: distPerWeek > 0 ? Math.round(timePerWeekSec / distPerWeek) : 0,
+            pace: formatPace(timePerWeekSec, distPerWeek * 1000),
+            avgSpeedKmh: timePerWeekSec > 0 ? +((distPerWeek / (timePerWeekSec / 3600))).toFixed(1) : 0,
+            elevationGain: Math.round((r.elevation_gain || 0) / weeks),
+            calories: Math.round(distPerWeek * 65),
+            isSyntheticSummary: true
+          });
+        }
       }
     }
 
-    // 5. Monta URL de Autorização OAuth2 com escopo completo "activity:read_all"
+    // 6. Monta URL de Autorização OAuth2 com escopo completo estrito
     const hostHeader = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:3000";
     const protoHeader = request.headers.get("x-forwarded-proto") || (hostHeader.includes("localhost") ? "http" : "https");
     const origin = `${protoHeader}://${hostHeader}`;
@@ -287,9 +346,10 @@ export async function POST(request: Request) {
       athleteId: resolvedAthleteId
     });
     const stateEncoded = Buffer.from(statePayload, "utf-8").toString("base64");
+    const fullScope = "read,activity:read,activity:read_all,profile:read_all";
     const oauthUrl = `https://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(
       callbackUrl
-    )}&approval_prompt=force&scope=read,activity:read_all&state=${encodeURIComponent(stateEncoded)}`;
+    )}&approval_prompt=force&scope=${encodeURIComponent(fullScope)}&state=${encodeURIComponent(stateEncoded)}`;
 
     return NextResponse.json(
       {
@@ -297,9 +357,12 @@ export async function POST(request: Request) {
         athlete: athleteData || null,
         stats,
         activities,
+        totalActivities: activities.length,
         newRefreshToken,
         scopeMode,
+        scopeStatus,
         oauthUrl,
+        oauthUpgradeUrl: oauthUrl,
         syncedAt: new Date().toISOString()
       },
       { status: 200 }
@@ -324,10 +387,10 @@ export async function GET() {
     {
       ok: true,
       service: "Coindex Strava API Proxy",
-      version: "1.0.0",
+      version: "2.0.0",
       endpoints: {
-        post: "/api/strava (recebe credenciais e sincroniza dados com o Strava)",
-        callback: "/api/strava/callback (callback do fluxo OAuth2 com escopo activity:read_all)"
+        post: "/api/strava (recebe credenciais e sincroniza até 400 corridas individuais paginadas)",
+        callback: "/api/strava/callback (callback do fluxo OAuth2 com escopos completos)"
       }
     },
     { status: 200 }

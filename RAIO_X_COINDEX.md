@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.38.0`  
-> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 50 — Unificação Contábil do Livro Caixa como SSOT, Sincronização Bidirecional Estrita e Saneamento dos Recebimentos Fantasmas do Devedor Dio)  
+> **Versão da Aplicação:** `0.39.0`  
+> **Última Atualização:** 6 de Novembro de 2026 (Pós-Sprint 51 — Correção Definitiva da Renderização do Gráfico Strava Progress, Ingestão Paginada de Corridas Individuais na API, Modo 'Cada Corrida' e Histórico Detalhado Linha por Linha)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -868,6 +868,28 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - **Loader 2 (Painel Strava Progress):** Barra superior indeterminada em `#FC4C02` + overlay `.cupertino-shimmer` durante `isSyncingStrava`.
       - **Loader 3 (Taxa CDI BCB):** Micro-dot pulsante (`animate-ping`) verde na badge `115% CDI • BCB Ao Vivo`.
       - **Loader 4 (Importação CSV/OFX e Modais):** Barra de progresso deslizante durante o processamento de arquivo e transição com check icon na confirmação da importação.
+
+  - **Sprint 51 (Novembro de 2026 — Correção Definitiva da Renderização do Gráfico Strava Progress, Ingestão Paginada de Corridas Individuais na API, Modo 'Cada Corrida' e Histórico Detalhado Linha por Linha):**
+    - **Passo 1 — Correção da Renderização do Gráfico em Linha Strava Progress (`AreaChart`):**
+      - Resolução da causa-raiz: o `AreaChart` declarava `<XAxis dataKey="xLabel" />`, porém os objetos de ponto gerados no hook de agregação temporal não possuíam o atributo `xLabel`, quebrando os ticks e a continuidade visual do gráfico.
+      - Alinhamento determinístico das chaves: tanto o eixo X quanto a linha de cursor do ponto selecionado (`<ReferenceLine x={activeStravaPoint.xLabel} />`) utilizam a chave `xLabel` preenchida em todos os modos (`per_run` e `weekly`).
+      - Renderização contínua com curva suave `type="monotone"`, aceleração nativa via SVG com `isAnimationActive={false}` (elimina flash ou travamento de layout inicial) e renderização segura dos marcadores com `dot={(props) => Number.isFinite(cx) && Number.isFinite(cy)}`.
+    - **Passo 2 — Ingestão Paginada de Atividades Individuais na Rota `/api/strava`:**
+      - Fim do resumo restrito a 3 blocos sintéticos: a API agora efetua requisições paginadas (`per_page=200&page=1` e, se houver 200 itens, consulta imediata de `page=2`), resgatando até 400 atividades individuais por sincronização.
+      - Parsing estrito e imutável de datas em fuso horário local (`parseStravaIsoDate`), extraindo strings diretas para `dateBR` (`DD-MM-YYYY`), `isoDate` (`YYYY-MM-DD`) e `startTime` (`HH:mm`), blindando contra desvios de timezone UTC.
+      - Schema de telemetria atlética completa: inclusão de `durationMin`, `movingTimeSec`, `avgSpeedKmh`, `paceSecondsPerKm`, `averageHeartrate`, `maxHeartrate`, `elevationGain`, `calories` e `splitsMetric`.
+      - Detecção de restrição de escopo (`needs_activity_scope`): geração automática de `oauthUpgradeUrl` com todos os escopos requeridos (`read,activity:read,activity:read_all,profile:read_all`) e fallback sintético semanal inteligente.
+    - **Passo 3 — Modo "Cada Corrida" (📍 Cada Corrida) e Cabeçalho de Telemetria Dinâmica:**
+      - Adição do seletor de granularidade `[📍 Cada Corrida | 📅 Por Semana]` com transição suave e foco instantâneo.
+      - No modo `per_run`, cada corrida é plotada individualmente na ordem cronológica (da mais antiga à mais recente), permitindo inspeção ponto a ponto.
+      - Cabeçalho dinâmico de 4 colunas acima do gráfico: `Distância`, `Pace Médio`, `Tempo Mov.` e `Ganho Elev.`, com badge de velocidade média `⚡ XX,X km/h`.
+    - **Passo 4 — Histórico Detalhado Linha por Linha com Interatividade Bidirecional:**
+      - Tabela `"🏃 Histórico Detalhado — Cada Corrida Linha por Linha"` posicionada estrategicamente logo abaixo do gráfico, sempre visível.
+      - Barra de ferramentas atlética: busca textual por nome/data, filtros de distância mínima (`Todas`, `>3km`, `>5km`, `>10km`, `>21km`) e filtro por mês.
+      - Interatividade bidirecional: focar ou passar o cursor em qualquer linha da tabela destaca imediatamente a corrida correspondente no gráfico de linha, sincronizando o dot e a linha de referência do cursor vertical.
+      - Modal de Registro Manual de Corridas: formulário completo com cálculo automático em tempo real de pace, velocidade e calorias estimadas, salvando no estado e persistindo síncrono.
+    - **Passo 5 — Banner de Upgrade de Escopo OAuth2:**
+      - Alerta visual proativo avisando quando o token do usuário permite apenas a leitura estatística (3 blocos), com botão de 1 clique para autorização completa via popup OAuth2.
 
   - **Sprint 50 (Novembro de 2026 — Unificação Contábil do Livro Caixa como Fonte Única da Verdade, Sincronização Bidirecional Estrita e Saneamento dos Recebimentos Fantasmas do Devedor Dio):**
     - **Passo 1 — Criação do Motor Contábil Puro `app/lib/domain/cashbook-sync.ts`:**

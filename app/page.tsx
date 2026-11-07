@@ -2589,7 +2589,12 @@ export default function CoindexApp() {
       if (data.scopeMode) {
         setStravaScopeMode(data.scopeMode);
       }
-      if (data.oauthUrl) {
+      if (data.scopeStatus === "needs_activity_scope") {
+        setStravaScopeMode("read_only");
+      }
+      if (data.oauthUpgradeUrl) {
+        setStravaOauthUrl(data.oauthUpgradeUrl);
+      } else if (data.oauthUrl) {
         setStravaOauthUrl(data.oauthUrl);
       }
 
@@ -8959,6 +8964,7 @@ export default function CoindexApp() {
               updateChartThemeColor={updateChartThemeColor}
               stravaStats={stravaStats}
               stravaActivities={stravaActivities}
+              setStravaActivities={setStravaActivities}
               stravaScopeMode={stravaScopeMode}
               stravaOauthUrl={stravaOauthUrl}
               isSyncingStrava={isSyncingStrava}
