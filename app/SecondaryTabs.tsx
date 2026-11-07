@@ -18,7 +18,7 @@ import {
 import {
   ActiveTab, Transaction, CreditCardItem, BankItem, BankInstitution, StaticStatusItem, WishlistItem,
   BioLog, StravaStats, StravaActivity, BrainNote, PersonalOKR, CustomAlertRule, ChartThemeColors,
-  CategoryCatalogItem, SystemLogEntry, ThemeMode, FlowType, APP_VERSION,
+  CategoryCatalogItem, SystemLogEntry, ThemeMode, FlowType, TxStatus, APP_VERSION,
   formatBRL, sanitizeText, compressImageFileToBase64, renderCategorySemanticIcon,
   CustomCyberTooltip, ThemeSegmentedControl, buildWhatsAppChargeText,
   formatDateBR, todayBR, toSortableISO, getYearMonthKey, compareDatesBR, AutoInmetroConfig, DEFAULT_AUTO_INMETRO_CONFIG, DashboardWidgetConfig,
@@ -178,6 +178,10 @@ export interface SecondaryTabsProps {
   handleToggleStatus: (tx: Transaction) => void;
   handleStartEditTransaction: (tx: Transaction) => void;
   handleDeleteTransaction: (id: string) => void;
+  onUpdateSingleTransaction?: (id: string, updates: Partial<Transaction>) => void;
+  onBatchUpdateStatus?: (txIds: string[], newStatus: TxStatus) => void;
+  onBatchChangeCategory?: (txIds: string[], newCategory: string) => void;
+  onBatchDeleteTransactions?: (txIds: string[]) => void;
   receivableItems: (Transaction & { debtorName: string; effectivePaid: number; remaining: number })[];
   receivablesAnalytics: {
     totalOpen: number;
@@ -760,6 +764,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     searchQuery, setSearchQuery, handleExportCSV, handleOpenNewTxModal, onAddTransaction, onSaveInvestmentTx, onBatchImportTransactions, dailyQuotaInfo, cdiAnnualRate, getFlowType,
     banks, editingBankId, setEditingBankId, newBank, setNewBank, handleSaveBank, handleDeleteBank,
     cards, categoryColors, handleToggleStatus, handleStartEditTransaction, handleDeleteTransaction,
+    onUpdateSingleTransaction, onBatchUpdateStatus, onBatchChangeCategory, onBatchDeleteTransactions,
     receivableItems, receivablesAnalytics, handleAssignDebtor, handlePartialPaymentReceivable,
     notify, editingCardId, setEditingCardId, newCard, setNewCard, handleSaveCard, handleDeleteCard,
     handlePayCardInvoice, wishlist, editingWishId, setEditingWishId, newWish, setNewWish,
@@ -1759,6 +1764,93 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     return Array.from(set).sort().reverse();
   }, [allDisplayRuns]);
 
+  // SPRINT 55: A-04 — Recordes Pessoais (PRs) e Distribuição em Zonas de Pace
+  interface StravaAthleticsTelemetry {
+    pacePR: { paceStr: string; paceSec: number; act: StravaActivity } | null;
+    longestRun: StravaActivity | null;
+    best5k: { paceStr: string; timeMin: number; act: StravaActivity } | null;
+    maxElevation: StravaActivity | null;
+    zones: {
+      z1: { km: number; pct: number; label: string; color: string };
+      z2: { km: number; pct: number; label: string; color: string };
+      z3: { km: number; pct: number; label: string; color: string };
+      z4: { km: number; pct: number; label: string; color: string };
+      totalKm: number;
+    };
+  }
+
+  const stravaAthleticsTelemetry = useMemo<StravaAthleticsTelemetry>(() => {
+    let pacePR: { paceStr: string; paceSec: number; act: StravaActivity } | null = null;
+    let longestRun: StravaActivity | null = null;
+    let best5k: { paceStr: string; timeMin: number; act: StravaActivity } | null = null;
+    let maxElevation: StravaActivity | null = null;
+
+    let z1Km = 0;
+    let z2Km = 0;
+    let z3Km = 0;
+    let z4Km = 0;
+
+    allDisplayRuns.forEach((act) => {
+      const dist = Number(act.distanceKm) || 0;
+      const timeMin = Number(act.movingTimeMin) || Math.round((Number(act.movingTimeSec) || 0) / 60) || 0;
+      if (dist <= 0 || timeMin <= 0) return;
+
+      const paceSec = Math.round((timeMin * 60) / dist);
+      const paceStr = act.pace || secondsToPaceString(paceSec);
+
+      if (dist >= 2 && paceSec >= 180) {
+        if (!pacePR || paceSec < pacePR.paceSec) {
+          pacePR = { paceStr, paceSec, act };
+        }
+      }
+
+      if (!longestRun || dist > (Number(longestRun.distanceKm) || 0)) {
+        longestRun = act;
+      }
+
+      if (dist >= 4.9 && dist <= 6.5) {
+        if (!best5k || timeMin < best5k.timeMin) {
+          best5k = { paceStr, timeMin, act };
+        }
+      }
+
+      const elev = Number(act.elevationGain) || 0;
+      if (!maxElevation || elev > (Number(maxElevation.elevationGain) || 0)) {
+        maxElevation = act;
+      }
+
+      if (paceSec > 390) {
+        z1Km += dist;
+      } else if (paceSec >= 330) {
+        z2Km += dist;
+      } else if (paceSec >= 285) {
+        z3Km += dist;
+      } else {
+        z4Km += dist;
+      }
+    });
+
+    const totalZonedKm = z1Km + z2Km + z3Km + z4Km || 1;
+    const z1Pct = Math.round((z1Km / totalZonedKm) * 100);
+    const z2Pct = Math.round((z2Km / totalZonedKm) * 100);
+    const z3Pct = Math.round((z3Km / totalZonedKm) * 100);
+    const z4Pct = Math.max(0, 100 - (z1Pct + z2Pct + z3Pct));
+
+    return {
+      pacePR,
+      longestRun,
+      best5k,
+      maxElevation,
+      zones: {
+        z1: { km: Math.round(z1Km * 10) / 10, pct: z1Pct, label: "Z1 — Leve / Regenerativo (> 6'30\")", color: "#38BDF8" },
+        z2: { km: Math.round(z2Km * 10) / 10, pct: z2Pct, label: "Z2 — Aeróbico Base (5'30\" - 6'30\")", color: "#10B981" },
+        z3: { km: Math.round(z3Km * 10) / 10, pct: z3Pct, label: "Z3 — Limiar / Ritmo (4'45\" - 5'30\")", color: "#F59E0B" },
+        z4: { km: Math.round(z4Km * 10) / 10, pct: z4Pct, label: "Z4 — VO2max / Tiro (< 4'45\")", color: "#EF4444" },
+        totalKm: Math.round(totalZonedKm * 10) / 10
+      }
+    };
+  }, [allDisplayRuns]);
+
   const handleSaveManualRun = (e: React.FormEvent) => {
     e.preventDefault();
     const dist = parseFloat(manualRunDistance.replace(",", ".")) || 0;
@@ -2154,6 +2246,10 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         handleToggleStatus={handleToggleStatus}
         handleStartEditTransaction={handleStartEditTransaction}
         handleDeleteTransaction={handleDeleteTransaction}
+        onUpdateSingleTransaction={onUpdateSingleTransaction}
+        onBatchUpdateStatus={onBatchUpdateStatus}
+        onBatchChangeCategory={onBatchChangeCategory}
+        onBatchDeleteTransactions={onBatchDeleteTransactions}
         getFlowType={getFlowType}
       />
     );
@@ -3230,6 +3326,154 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   stravaYTicks={stravaYTicks}
                   stravaYTop={stravaYTop}
                 />
+              </div>
+
+              {/* SPRINT 55: A-04 — RECORDES PESSOAIS (PRs) & ZONAS DE PACE */}
+              <div className="pt-5 border-t border-[var(--cupertino-border)] space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-300">
+                      <Award className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                        🏅 Recordes Pessoais (PRs) & Distribuição de Zonas de Pace
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Telemetria atlética avançada e categorização fisiológica de intensidade por velocidade.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4 Cards de PRs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  {/* PR 1: Menor Pace */}
+                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-amber-500/30 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-base">⚡</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Pace PR
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-white block mt-1">Ritmo Mais Veloz</span>
+                      <strong className="text-xl font-extrabold font-mono text-amber-400 block">
+                        {stravaAthleticsTelemetry.pacePR?.paceStr || "—"}
+                      </strong>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {stravaAthleticsTelemetry.pacePR ? `${stravaAthleticsTelemetry.pacePR.act.name} (${stravaAthleticsTelemetry.pacePR.act.date})` : "Sem registros"}
+                    </p>
+                  </div>
+
+                  {/* PR 2: Maior Distância (Longão) */}
+                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-orange-500/30 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-base">🏃</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                          Maior Distância
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-white block mt-1">Longão Máximo</span>
+                      <strong className="text-xl font-extrabold font-mono text-orange-400 block">
+                        {stravaAthleticsTelemetry.longestRun ? `${Number(stravaAthleticsTelemetry.longestRun.distanceKm).toFixed(1)} km` : "—"}
+                      </strong>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {stravaAthleticsTelemetry.longestRun ? `${stravaAthleticsTelemetry.longestRun.name} (${stravaAthleticsTelemetry.longestRun.date})` : "Sem registros"}
+                    </p>
+                  </div>
+
+                  {/* PR 3: Melhor 5K */}
+                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/30 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-base">🏆</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          Melhor 5K
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-white block mt-1">5 km Mais Rápido</span>
+                      <strong className="text-xl font-extrabold font-mono text-emerald-400 block">
+                        {stravaAthleticsTelemetry.best5k ? `${Math.round(stravaAthleticsTelemetry.best5k.timeMin)} min (${stravaAthleticsTelemetry.best5k.paceStr})` : "—"}
+                      </strong>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {stravaAthleticsTelemetry.best5k ? `${stravaAthleticsTelemetry.best5k.act.name} (${stravaAthleticsTelemetry.best5k.act.date})` : "Sem registros de 5k"}
+                    </p>
+                  </div>
+
+                  {/* PR 4: Maior Ganho de Altimetria */}
+                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-indigo-500/30 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-base">⛰️</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                          Altimetria Máx.
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-white block mt-1">Maior Ganho Vertical</span>
+                      <strong className="text-xl font-extrabold font-mono text-indigo-400 block">
+                        {stravaAthleticsTelemetry.maxElevation ? `+${Math.round(Number(stravaAthleticsTelemetry.maxElevation.elevationGain) || 0)} m` : "—"}
+                      </strong>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {stravaAthleticsTelemetry.maxElevation ? `${stravaAthleticsTelemetry.maxElevation.name} (${stravaAthleticsTelemetry.maxElevation.date})` : "Sem registros"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Barra de Distribuição em 4 Zonas de Intensidade de Pace */}
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">Distribuição em 4 Zonas de Esforço Fisiológico</span>
+                    <span className="text-xs font-mono font-bold text-slate-300">
+                      Total: {stravaAthleticsTelemetry.zones.totalKm} km analisados
+                    </span>
+                  </div>
+
+                  {/* Barra horizontal segmentada */}
+                  <div className="w-full h-3 rounded-full bg-slate-800 overflow-hidden flex">
+                    <div style={{ width: `${stravaAthleticsTelemetry.zones.z1.pct}%` }} className="h-full bg-[#38BDF8] transition-all duration-500" title={`Z1: ${stravaAthleticsTelemetry.zones.z1.pct}%`} />
+                    <div style={{ width: `${stravaAthleticsTelemetry.zones.z2.pct}%` }} className="h-full bg-[#10B981] transition-all duration-500" title={`Z2: ${stravaAthleticsTelemetry.zones.z2.pct}%`} />
+                    <div style={{ width: `${stravaAthleticsTelemetry.zones.z3.pct}%` }} className="h-full bg-[#F59E0B] transition-all duration-500" title={`Z3: ${stravaAthleticsTelemetry.zones.z3.pct}%`} />
+                    <div style={{ width: `${stravaAthleticsTelemetry.zones.z4.pct}%` }} className="h-full bg-[#EF4444] transition-all duration-500" title={`Z4: ${stravaAthleticsTelemetry.zones.z4.pct}%`} />
+                  </div>
+
+                  {/* Legenda das 4 zonas */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs font-mono pt-1 border-t border-white/5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8] shrink-0" />
+                      <div className="truncate">
+                        <span className="text-slate-400 block text-[10px]">Z1 Regenerativo (&gt;6&apos;30&quot;)</span>
+                        <strong className="text-white">{stravaAthleticsTelemetry.zones.z1.km} km ({stravaAthleticsTelemetry.zones.z1.pct}%)</strong>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] shrink-0" />
+                      <div className="truncate">
+                        <span className="text-slate-400 block text-[10px]">Z2 Aeróbico (5&apos;30&quot; - 6&apos;30&quot;)</span>
+                        <strong className="text-white">{stravaAthleticsTelemetry.zones.z2.km} km ({stravaAthleticsTelemetry.zones.z2.pct}%)</strong>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] shrink-0" />
+                      <div className="truncate">
+                        <span className="text-slate-400 block text-[10px]">Z3 Limiar (4&apos;45&quot; - 5&apos;30&quot;)</span>
+                        <strong className="text-white">{stravaAthleticsTelemetry.zones.z3.km} km ({stravaAthleticsTelemetry.zones.z3.pct}%)</strong>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shrink-0" />
+                      <div className="truncate">
+                        <span className="text-slate-400 block text-[10px]">Z4 VO2max (&lt;4&apos;45&quot;)</span>
+                        <strong className="text-white">{stravaAthleticsTelemetry.zones.z4.km} km ({stravaAthleticsTelemetry.zones.z4.pct}%)</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* SPRINT 51: HISTÓRICO DETALHADO — CADA CORRIDA LINHA POR LINHA LOGO ABAIXO DO GRÁFICO */}

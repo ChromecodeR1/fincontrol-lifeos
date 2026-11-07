@@ -59,7 +59,11 @@ import {
   CheckCheck,
   ArrowRightLeft,
   ShieldCheck,
-  Table2
+  Table2,
+  Building2,
+  Award,
+  Menu,
+  Trophy
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -145,6 +149,7 @@ import {
   ThemeSegmentedControl,
   renderCategorySemanticIcon,
   formatDateBR,
+  parseDateParts,
   formatMonthShortLabelBR,
   todayBR,
   todayISO,
@@ -247,6 +252,7 @@ import { TiltCard3D, triggerAuraBurst } from "./components/MotionEngine144";
 import {
   calculateVehicleConsumption,
   calculateVehicleTco,
+  calculateVehicleMaintenancePlan,
   isFuelTransaction
 } from "./lib/domain/vehicle-math";
 import { reconcileReceivablesAndCashbook } from "./lib/domain/cashbook-sync";
@@ -887,7 +893,10 @@ export default function CoindexApp() {
   const [walletCarouselIndex, setWalletCarouselIndex] = useState<number>(0);
   const [showReorderCardsModal, setShowReorderCardsModal] = useState<boolean>(false);
   const lastWalletWheelTime = useRef<number>(0);
-  const [cashflowActiveTab, setCashflowActiveTab] = useState<"fluxo" | "recentes">("fluxo");
+  const [cashflowActiveTab, setCashflowActiveTab] = useState<"fluxo" | "recentes" | "calendario">("fluxo");
+  const [calendarSelectedDay, setCalendarSelectedDay] = useState<number | null>(null);
+  const [showWrappedModal, setShowWrappedModal] = useState<boolean>(false);
+  const [showMobileMoreSheet, setShowMobileMoreSheet] = useState<boolean>(false);
   const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
@@ -899,6 +908,7 @@ export default function CoindexApp() {
     year: 2026,
     month: 11,
     day: 3,
+    dayOfWeek: 2,
     yearMonth: "2026-11"
   });
 
@@ -907,10 +917,12 @@ export default function CoindexApp() {
     const y = d.getFullYear();
     const m = d.getMonth() + 1;
     const day = d.getDate();
+    const dayOfWeek = d.getDay();
     setCurrentCalendarDate({
       year: y,
       month: m,
       day,
+      dayOfWeek,
       yearMonth: `${y}-${String(m).padStart(2, "0")}`
     });
   }, []);
@@ -1707,6 +1719,102 @@ export default function CoindexApp() {
     },
     [currentUser]
   );
+
+  // SPRINT 55 (M-03): Lançamento Rápido em Linguagem Natural no Ctrl + K
+  const detectedQuickTx = useMemo(() => {
+    const q = commandQuery.trim().toLowerCase();
+    if (!q || q.length < 5) return null;
+
+    // Procura por valor numérico: Ex: 35,90 ou 35.90 ou 500
+    const amountMatch = q.match(/(\d+(?:[.,]\d{1,2})?)/);
+    if (!amountMatch) return null;
+
+    const rawNum = amountMatch[1].replace(",", ".");
+    const amount = parseFloat(rawNum);
+    if (!amount || isNaN(amount) || amount <= 0) return null;
+
+    let flowType: FlowType = "EXPENSE";
+    let defaultCategory = "Outros";
+    let defaultMethod = "Pix";
+
+    if (q.includes("recebi") || q.includes("salario") || q.includes("ganhei") || q.includes("renda")) {
+      flowType = "INCOME";
+      defaultCategory = "Salário / Proventos";
+    } else if (q.includes("aporte") || q.includes("investi") || q.includes("btc") || q.includes("fii") || q.includes("cdi")) {
+      flowType = "INVESTMENT";
+      defaultCategory = "Investimentos";
+    } else {
+      flowType = "EXPENSE";
+      if (q.includes("uber") || q.includes("99") || q.includes("gasolina") || q.includes("estacionamento")) {
+        defaultCategory = "Transporte";
+      } else if (q.includes("mercado") || q.includes("ifood") || q.includes("almoco") || q.includes("jantar") || q.includes("lanche")) {
+        defaultCategory = "Alimentação";
+      } else if (q.includes("farmacia") || q.includes("remedio")) {
+        defaultCategory = "Saúde";
+      }
+    }
+
+    if (q.includes("cartao") || q.includes("credito") || q.includes("crédito")) {
+      defaultMethod = "Cartão de Crédito";
+    } else if (q.includes("dinheiro")) {
+      defaultMethod = "Dinheiro";
+    } else if (q.includes("debito") || q.includes("débito")) {
+      defaultMethod = "Débito";
+    }
+
+    // Extrai descrição limpa removendo termos comuns
+    let desc = commandQuery
+      .replace(amountMatch[0], "")
+      .replace(/\b(gastei|comprei|recebi|paguei|aporte|investi|no|na|com|de|via|pix|cartao|credito|debito|dinheiro)\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!desc) {
+      desc = flowType === "INCOME" ? "Receita Rápida" : flowType === "INVESTMENT" ? "Aporte Rápido" : "Despesa Rápida";
+    } else {
+      desc = desc.charAt(0).toUpperCase() + desc.slice(1);
+    }
+
+    return {
+      description: desc,
+      amount,
+      category: defaultCategory,
+      paymentMethod: defaultMethod,
+      flowType
+    };
+  }, [commandQuery]);
+
+  const handleExecuteQuickTx = useCallback(() => {
+    if (!detectedQuickTx) return;
+    const newTx: Transaction = {
+      id: `tx-quick-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      date: todayBR(),
+      description: detectedQuickTx.description,
+      amount: detectedQuickTx.amount,
+      category: detectedQuickTx.category,
+      paymentMethod: detectedQuickTx.paymentMethod,
+      flowType: detectedQuickTx.flowType,
+      costType: "Variável",
+      status: "Pago",
+      bankAccount: banks[0]?.name || "Conta Corrente",
+      cardUsed: detectedQuickTx.paymentMethod === "Cartão de Crédito" ? cards[0]?.name : undefined,
+      isSplit: false,
+      isTransfer: false,
+      investmentBucket: detectedQuickTx.flowType === "INVESTMENT" ? "CDI" : undefined,
+      updatedAt: new Date().toISOString()
+    };
+
+    setTransactions((prev) => {
+      const next = [newTx, ...prev];
+      setUserItem("lifeos_txs_v8", JSON.stringify(next), currentUserId);
+      localStorage.setItem("lifeos_txs_v8", JSON.stringify(next));
+      return next;
+    });
+    void upsertTransactionsInDb([newTx], debtorMap);
+    setShowCommandModal(false);
+    setCommandQuery("");
+    notify("Lançamento Rápido Realizado!", `${newTx.description} (${formatBRL(newTx.amount)}) adicionado ao Caixa.`, "success", "FINANCE");
+  }, [detectedQuickTx, banks, cards, currentUserId, debtorMap, notify]);
 
   // Atalho de Teclado Global: Ctrl + K / Cmd + K com e.preventDefault() estrito
   useEffect(() => {
@@ -2755,10 +2863,13 @@ export default function CoindexApp() {
 
       if (selectedMonth === "LAST_30_DAYS") {
         const txDateISO = toSortableISO(t.date);
-        const now = new Date();
-        const past30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        const past30ISO = `${past30.getFullYear()}-${String(past30.getMonth() + 1).padStart(2, "0")}-${String(past30.getDate()).padStart(2, "0")}`;
-        const today = todayISO();
+        const refYear = currentCalendarDate.year;
+        const refMonth = currentCalendarDate.month;
+        const refDay = currentCalendarDate.day;
+        const past30Month = refMonth === 1 ? 12 : refMonth - 1;
+        const past30Year = refMonth === 1 ? refYear - 1 : refYear;
+        const past30ISO = `${past30Year}-${String(past30Month).padStart(2, "0")}-${String(refDay).padStart(2, "0")}`;
+        const today = `${refYear}-${String(refMonth).padStart(2, "0")}-${String(refDay).padStart(2, "0")}`;
         return txDateISO >= past30ISO && txDateISO <= today;
       }
 
@@ -3973,6 +4084,89 @@ export default function CoindexApp() {
       .slice(0, 5);
   }, [transactions]);
 
+  // SPRINT 55: A-03 (Parte 2) - Dados do Calendário Financeiro Heatmap
+  const calendarHeatmapData = useMemo(() => {
+    const today = { year: currentCalendarDate.year, month: currentCalendarDate.month, day: currentCalendarDate.day };
+    let refYear = currentCalendarDate.year;
+    let refMonth = currentCalendarDate.month;
+
+    if (selectedMonth && selectedMonth !== "ALL") {
+      const parts = selectedMonth.split(/[-/]/);
+      if (parts.length === 2) {
+        if (parts[0].length === 4) {
+          refYear = parseInt(parts[0], 10);
+          refMonth = parseInt(parts[1], 10);
+        } else {
+          refMonth = parseInt(parts[0], 10);
+          refYear = parseInt(parts[1], 10);
+        }
+      }
+    }
+
+    const totalDays = daysInMonth(refYear, refMonth);
+    const firstDayOfWeek = new Date(refYear, refMonth - 1, 1).getDay();
+
+    const monthKey = `${String(refMonth).padStart(2, "0")}-${refYear}`;
+    const monthKeyAlt = `${String(refMonth).padStart(2, "0")}/${refYear}`;
+
+    const txsInMonth = transactions.filter((t) => {
+      if (t.isSplitChild || isNeutralFlow(t)) return false;
+      const d = t.date || "";
+      return d.endsWith(monthKey) || d.endsWith(monthKeyAlt) || d.includes(`-${refMonth}-${refYear}`);
+    });
+
+    const daysMap: Record<number, { txs: Transaction[]; incomeTotal: number; expenseTotal: number; investTotal: number }> = {};
+    for (let i = 1; i <= totalDays; i++) {
+      daysMap[i] = { txs: [], incomeTotal: 0, expenseTotal: 0, investTotal: 0 };
+    }
+
+    txsInMonth.forEach((tx) => {
+      const p = parseDateParts(tx.date);
+      if (!p) return;
+      if (p.day >= 1 && p.day <= totalDays) {
+        const flow = tx.flowType || getFlowType(tx.category);
+        const isPos = isPositiveInflowDisplay(tx);
+        const val = tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount;
+        daysMap[p.day].txs.push(tx);
+        if (isPos || flow === "INCOME") {
+          daysMap[p.day].incomeTotal = safeAdd(daysMap[p.day].incomeTotal, val);
+        } else if (flow === "INVESTMENT") {
+          daysMap[p.day].investTotal = safeAdd(daysMap[p.day].investTotal, val);
+        } else {
+          daysMap[p.day].expenseTotal = safeAdd(daysMap[p.day].expenseTotal, val);
+        }
+      }
+    });
+
+    const maxDayToCheck = refYear === today.year && refMonth === today.month ? today.day : totalDays;
+    let currentStreak = 0;
+    for (let d = maxDayToCheck; d >= 1; d--) {
+      if (daysMap[d].expenseTotal === 0) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
+
+    let totalNoSpendDays = 0;
+    for (let d = 1; d <= maxDayToCheck; d++) {
+      if (daysMap[d].expenseTotal === 0) {
+        totalNoSpendDays++;
+      }
+    }
+
+    return {
+      refYear,
+      refMonth,
+      totalDays,
+      firstDayOfWeek,
+      daysMap,
+      currentStreak,
+      totalNoSpendDays,
+      todayDay: refYear === today.year && refMonth === today.month ? today.day : null
+    };
+  }, [currentCalendarDate, selectedMonth, transactions, getFlowType]);
+
   // SPRINT 32: Normalização e auto-cura completa do layout do Dashboard (Grid único 100% ordenável)
   const effectiveDashboardLayout = useMemo(() => {
     return normalizeDashboardLayout(dashboardLayout);
@@ -4011,6 +4205,70 @@ export default function CoindexApp() {
       consumptionPoints: consumption.consumptionPoints
     };
   }, [transactions, categoriesCatalog, autoInmetroConfig]);
+
+  // SPRINT 55 (Helena Costa): Ritual de Fechamento do Mês (Coindex Wrapped)
+  const wrappedStats = useMemo(() => {
+    const income = monthSummary.income;
+    const expense = monthSummary.expense;
+    const invested = monthSummary.invested || 0;
+    const balance = monthSummary.balance;
+    const savingsRate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
+    const investRate = income > 0 ? Math.round((invested / income) * 100) : 0;
+
+    let classification = "Mês Equilibrado ⚖️";
+    let classificationDetail = "Receitas e despesas sob controle estável.";
+    let classificationColor = "text-sky-400";
+    if (savingsRate >= 25 || investRate >= 20) {
+      classification = "Mês Frugal & Investidor Épico 🏆";
+      classificationDetail = `Você poupou ${savingsRate}% e aportou ${formatBRL(invested)} do seu fluxo!`;
+      classificationColor = "text-emerald-400";
+    } else if (savingsRate < 0) {
+      classification = "Atenção ao Orçamento ⚠️";
+      classificationDetail = `Despesas superaram os rendimentos em ${formatBRL(Math.abs(balance))}.`;
+      classificationColor = "text-rose-400";
+    }
+
+    const top3Expenses = filteredTransactions
+      .filter((t) => !isNeutralFlow(t) && !t.isSplitChild && (t.flowType || getFlowType(t.category)) === "EXPENSE")
+      .sort((a, b) => {
+        const valA = a.isSplit && a.personalAmount != null ? a.personalAmount : a.amount;
+        const valB = b.isSplit && b.personalAmount != null ? b.personalAmount : b.amount;
+        return valB - valA;
+      })
+      .slice(0, 3);
+
+    // Strava km no período selecionado
+    const stravaRunsInPeriod = (stravaActivities || []).filter((a) => {
+      const dStr = a.isoDate || a.date;
+      if (!dStr) return false;
+      const d = dStr.slice(0, 7);
+      if (selectedMonth && selectedMonth !== "ALL") {
+        const p = selectedMonth.split(/[-/]/);
+        if (p.length === 2) {
+          const y = p[0].length === 4 ? p[0] : p[1];
+          const m = p[0].length === 4 ? p[1] : p[0];
+          return d === `${y}-${m.padStart(2, "0")}`;
+        }
+      }
+      return true;
+    });
+    const stravaKmPeriod = Math.round(stravaRunsInPeriod.reduce((acc, r) => acc + (r.distanceKm || 0), 0) * 10) / 10;
+
+    return {
+      income,
+      expense,
+      invested,
+      balance,
+      savingsRate,
+      investRate,
+      classification,
+      classificationDetail,
+      classificationColor,
+      top3Expenses,
+      stravaKmPeriod,
+      vehicleKmPeriod: autoMetrics.distanceDriven || 0
+    };
+  }, [monthSummary, filteredTransactions, stravaActivities, selectedMonth, getFlowType, autoMetrics.distanceDriven]);
 
   const receivableItems = useMemo(() => {
     return transactions
@@ -4062,7 +4320,7 @@ export default function CoindexApp() {
   }, [receivableItems]);
 
   const activeNotifications = useMemo(() => {
-    const list: { id: string; title: string; detail: string; severity: "warning" | "info" }[] = [];
+    const list: { id: string; title: string; detail: string; severity: "warning" | "info"; targetTab?: ActiveTab }[] = [];
 
     if (monthSummary.personalSpent >= effectivePersonalBudgetLimit * 0.8) {
       list.push({
@@ -4089,19 +4347,86 @@ export default function CoindexApp() {
               diff <= 0
                 ? `Odômetro atual (${autoMetrics.maxKm} km) atingiu a meta de ${rule.targetValue} km.`
                 : `Restam ${diff} km para ${rule.title} (${rule.targetValue} km).`,
-            severity: diff <= 0 ? "warning" : "info"
+            severity: diff <= 0 ? "warning" : "info",
+            targetTab: "auto"
           });
         }
       }
     });
 
+    // 1. Faturas de Cartões a vencer em até 5 dias
+    const todayDay = currentCalendarDate.day;
+    cards.forEach((card) => {
+      const dueDay = card.dueDay || 10;
+      let daysToDue = dueDay - todayDay;
+      if (daysToDue < 0) daysToDue += 30;
+      if (daysToDue <= 5) {
+        const exp = calculateCardExposure(card, transactions, selectedMonth);
+        if (exp.used > 0) {
+          list.push({
+            id: `notif-card-due-${card.id}-${daysToDue}`,
+            title: `Fatura ${card.name} vence ${daysToDue === 0 ? "HOJE" : `em ${daysToDue} dia(s)`}`,
+            detail: `Fatura atual: ${formatBRL(exp.used)} (vencimento dia ${dueDay}).`,
+            severity: daysToDue <= 2 ? "warning" : "info",
+            targetTab: "cards"
+          });
+        }
+      }
+    });
+
+    // 2. Valores a Receber Pendentes
     if (receivablesAnalytics.totalOpen > 0) {
       list.push({
         id: `notif-receivables-${Math.round(receivablesAnalytics.totalOpen)}`,
         title: "Valores a Receber Pendentes",
         detail: `Há ${formatBRL(receivablesAnalytics.totalOpen)} em aberto para receber de terceiros.`,
-        severity: "info"
+        severity: "info",
+        targetTab: "receivables"
       });
+    }
+
+    // 3. Revisão Preventiva por Odômetro (Veículos)
+    if (autoMetrics.maxKm > 0) {
+      try {
+        const plan = calculateVehicleMaintenancePlan(autoMetrics.maxKm, {});
+        plan.forEach((item) => {
+          const isOverdue = item.remainingKm <= 0 || item.urgency === "danger";
+          if (isOverdue || item.remainingKm <= 500) {
+            list.push({
+              id: `notif-vehicle-maint-${item.id}`,
+              title: isOverdue ? `Revisão Vencida: ${item.name}` : `Revisão Próxima: ${item.name}`,
+              detail: isOverdue
+                ? `Odômetro (${autoMetrics.maxKm} km) ultrapassou o limite em ${Math.abs(item.remainingKm)} km.`
+                : `Restam apenas ${item.remainingKm} km para a revisão de ${item.name}.`,
+              severity: isOverdue ? "warning" : "info",
+              targetTab: "auto"
+            });
+          }
+        });
+      } catch {
+        // Safe fallback
+      }
+    }
+
+    // 4. Déficit semanal Strava (sexta a domingo)
+    const dayOfWeek = currentCalendarDate.dayOfWeek;
+    if (dayOfWeek === 0 || dayOfWeek >= 5) {
+      const weeklyGoalKm = Math.round((annualRunGoalKm || 500) / 52) || 15;
+      const weekRuns = (stravaActivities || []).filter((a) => {
+        const dStr = a.isoDate || a.date;
+        if (!dStr) return false;
+        return dStr.startsWith(currentCalendarDate.yearMonth);
+      });
+      const weekKm = Math.round(weekRuns.reduce((acc, r) => acc + (r.distanceKm || 0), 0) * 10) / 10;
+      if (weekKm < weeklyGoalKm * 0.5) {
+        list.push({
+          id: `notif-strava-weekly-deficit`,
+          title: "Meta Semanal Strava em Risco",
+          detail: `Você correu ${weekKm} km dos ${weeklyGoalKm} km esperados para a semana. Aproveite o fim de semana!`,
+          severity: "info",
+          targetTab: "bio"
+        });
+      }
     }
 
     return list;
@@ -4113,7 +4438,12 @@ export default function CoindexApp() {
     selectedMonth,
     alertRules,
     autoMetrics.maxKm,
-    receivablesAnalytics.totalOpen
+    receivablesAnalytics.totalOpen,
+    cards,
+    transactions,
+    stravaActivities,
+    annualRunGoalKm,
+    currentCalendarDate
   ]);
 
   const unreadNotifications = useMemo(
@@ -5174,6 +5504,118 @@ export default function CoindexApp() {
       }
     });
   };
+
+  // SPRINT 55 (M-03): Edição Inline Direta na Linha (Data, Descrição, Categoria, Valor)
+  const handleUpdateSingleTransaction = useCallback(
+    async (txId: string, patch: Partial<Transaction>) => {
+      const target = transactions.find((t) => t.id === txId);
+      if (!target) return;
+      const updatedItem: Transaction = {
+        ...target,
+        ...patch,
+        updatedAt: new Date().toISOString()
+      };
+      const nextList = transactions.map((t) => (t.id === txId ? updatedItem : t));
+      setTransactions(nextList);
+      setUserItem("lifeos_txs_v8", JSON.stringify(nextList), currentUserId);
+      localStorage.setItem("lifeos_txs_v8", JSON.stringify(nextList));
+      try {
+        await upsertTransactionsInDb([updatedItem], debtorMap);
+        notify("Lançamento Atualizado", `${updatedItem.description} atualizado com sucesso.`, "success", "FINANCE");
+      } catch (err) {
+        console.error("Erro ao atualizar lançamento inline", err);
+      }
+    },
+    [transactions, currentUserId, debtorMap, notify]
+  );
+
+  // SPRINT 55 (M-03): Ações em Lote - Atualização de Status
+  const handleBatchUpdateStatus = useCallback(
+    async (ids: string[], newStatus: TxStatus) => {
+      const idSet = new Set(ids);
+      const updatedItems: Transaction[] = [];
+      const nextList = transactions.map((t) => {
+        if (idSet.has(t.id)) {
+          const item: Transaction = {
+            ...t,
+            status: newStatus,
+            paidAmount: newStatus === "Pago" ? t.amount : 0,
+            updatedAt: new Date().toISOString()
+          };
+          updatedItems.push(item);
+          return item;
+        }
+        return t;
+      });
+      setTransactions(nextList);
+      setUserItem("lifeos_txs_v8", JSON.stringify(nextList), currentUserId);
+      localStorage.setItem("lifeos_txs_v8", JSON.stringify(nextList));
+      try {
+        await upsertTransactionsInDb(updatedItems, debtorMap);
+        notify("Lote Atualizado", `${updatedItems.length} lançamento(s) marcados como ${newStatus}.`, "success", "FINANCE");
+      } catch (err) {
+        console.error("Erro ao atualizar status em lote", err);
+      }
+    },
+    [transactions, currentUserId, debtorMap, notify]
+  );
+
+  // SPRINT 55 (M-03): Ações em Lote - Alteração de Categoria
+  const handleBatchChangeCategory = useCallback(
+    async (ids: string[], newCategory: string) => {
+      const idSet = new Set(ids);
+      const updatedItems: Transaction[] = [];
+      const nextList = transactions.map((t) => {
+        if (idSet.has(t.id)) {
+          const item: Transaction = {
+            ...t,
+            category: newCategory,
+            updatedAt: new Date().toISOString()
+          };
+          updatedItems.push(item);
+          return item;
+        }
+        return t;
+      });
+      setTransactions(nextList);
+      setUserItem("lifeos_txs_v8", JSON.stringify(nextList), currentUserId);
+      localStorage.setItem("lifeos_txs_v8", JSON.stringify(nextList));
+      try {
+        await upsertTransactionsInDb(updatedItems, debtorMap);
+        notify("Categoria em Lote Alterada", `${updatedItems.length} lançamento(s) movidos para "${newCategory}".`, "success", "FINANCE");
+      } catch (err) {
+        console.error("Erro ao alterar categoria em lote", err);
+      }
+    },
+    [transactions, currentUserId, debtorMap, notify]
+  );
+
+  // SPRINT 55 (M-03): Ações em Lote - Exclusão de Múltiplos Lançamentos
+  const handleBatchDeleteTransactions = useCallback(
+    async (ids: string[]) => {
+      askConfirmation({
+        title: "Excluir Lançamentos em Lote?",
+        description: `Deseja realmente excluir os ${ids.length} lançamentos selecionados? Esta ação apagará permanentemente os registros.`,
+        confirmLabel: "Sim, Excluir Todos",
+        danger: true,
+        onConfirm: async () => {
+          const idSet = new Set(ids);
+          const nextList = transactions.filter((t) => !idSet.has(t.id));
+          setTransactions(nextList);
+          setUserItem("lifeos_txs_v8", JSON.stringify(nextList), currentUserId);
+          localStorage.setItem("lifeos_txs_v8", JSON.stringify(nextList));
+          recordTombstones(ids, currentUserId);
+          try {
+            await deleteTransactionsInDb(ids);
+            notify("Exclusão em Lote", `${ids.length} lançamento(s) removidos com sucesso.`, "info", "FINANCE");
+          } catch (err) {
+            console.error("Erro ao excluir transações em lote", err);
+          }
+        }
+      });
+    },
+    [transactions, currentUserId, askConfirmation, notify]
+  );
 
   const handleConfirmDeleteInstallment = async (deleteAll: boolean) => {
     if (!deleteSeriesModal.targetTx || !deleteSeriesModal.seriesData) return;
@@ -6552,7 +6994,7 @@ export default function CoindexApp() {
         label: "Sincronizando...",
         status: "syncing",
         icon: <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />,
-        timestamp: sheetsSyncStatus.timestamp || new Date().toLocaleTimeString("pt-BR")
+        timestamp: sheetsSyncStatus.timestamp || ""
       };
     }
     if (sheetsSyncStatus.state === "error") {
@@ -7132,7 +7574,7 @@ export default function CoindexApp() {
                                 key={n.id}
                                 className="p-3 rounded-xl bg-slate-900/90 border border-white/10 flex items-start justify-between gap-2.5"
                               >
-                                <div className="space-y-0.5">
+                                <div className="space-y-1 min-w-0">
                                   <strong
                                     className={`block font-bold ${
                                       n.severity === "warning" ? "text-amber-400" : "text-indigo-300"
@@ -7141,6 +7583,19 @@ export default function CoindexApp() {
                                     {n.title}
                                   </strong>
                                   <p className="text-[11px] text-slate-300 leading-snug">{n.detail}</p>
+                                  {n.targetTab && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActiveTab(n.targetTab!);
+                                        setShowBellDropdown(false);
+                                        handleMarkNotificationViewed(n.id);
+                                      }}
+                                      className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#0A84FF]/20 hover:bg-[#0A84FF]/35 text-[#0A84FF] border border-[#0A84FF]/40 text-[10px] font-bold transition cursor-pointer"
+                                    >
+                                      Ir para {n.targetTab === "cards" ? "Cartões" : n.targetTab === "receivables" ? "Recebíveis" : n.targetTab === "auto" ? "Veículos" : n.targetTab === "bio" ? "Strava" : n.targetTab} →
+                                    </button>
+                                  )}
                                 </div>
                                 <button
                                   type="button"
@@ -7160,9 +7615,21 @@ export default function CoindexApp() {
                               key={n.id}
                               className="p-3 rounded-xl bg-slate-900/40 border border-white/5 flex items-start justify-between gap-2.5 opacity-70"
                             >
-                              <div>
+                              <div className="space-y-1 min-w-0">
                                 <strong className="block font-bold text-slate-300">{n.title}</strong>
                                 <p className="text-[11px] text-slate-400">{n.detail}</p>
+                                {n.targetTab && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveTab(n.targetTab!);
+                                      setShowBellDropdown(false);
+                                    }}
+                                    className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-[10px] font-bold transition cursor-pointer"
+                                  >
+                                    Ir para {n.targetTab === "cards" ? "Cartões" : n.targetTab === "receivables" ? "Recebíveis" : n.targetTab === "auto" ? "Veículos" : n.targetTab === "bio" ? "Strava" : n.targetTab} →
+                                  </button>
+                                )}
                               </div>
                               <span className="text-[10px] text-emerald-400 font-bold shrink-0">✓ Vista</span>
                             </div>
@@ -7172,6 +7639,17 @@ export default function CoindexApp() {
                     </div>
                   )}
                 </div>
+
+                {/* RITUAL DE FECHAMENTO DO MÊS (COINDEX WRAPPED) */}
+                <button
+                  type="button"
+                  onClick={() => setShowWrappedModal(true)}
+                  className="hidden sm:flex min-h-[44px] px-3 py-2 rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15 hover:from-indigo-500/25 hover:via-purple-500/25 hover:to-pink-500/25 border border-purple-500/30 text-purple-200 text-xs font-bold items-center gap-1.5 transition cursor-pointer shadow-sm"
+                  title="Ritual de Fechamento do Mês (Coindex Wrapped)"
+                >
+                  <Award className="w-4 h-4 text-purple-400 animate-pulse" />
+                  <span>Fechamento</span>
+                </button>
 
                 {/* BOTÃO DE PRIVACIDADE SOMENTE COM O SÍMBOLO DO OLHO */}
                 <button
@@ -8876,10 +9354,11 @@ export default function CoindexApp() {
                               <SlidingSegmentedControl
                                 options={[
                                   { id: "fluxo", label: "Fluxo Mensal (6M)", icon: <TrendingUp className="w-3.5 h-3.5" /> },
-                                  { id: "recentes", label: "Atividades Recentes", icon: <Clock className="w-3.5 h-3.5" /> }
+                                  { id: "recentes", label: "Atividades Recentes", icon: <Clock className="w-3.5 h-3.5" /> },
+                                  { id: "calendario", label: "📅 Calendário", icon: <Calendar className="w-3.5 h-3.5" /> }
                                 ]}
                                 value={cashflowActiveTab}
-                                onChange={(val) => setCashflowActiveTab(val as "fluxo" | "recentes")}
+                                onChange={(val) => setCashflowActiveTab(val as "fluxo" | "recentes" | "calendario")}
                                 size="xs"
                                 activeColor="bg-[#0A84FF]"
                               />
@@ -9001,6 +9480,138 @@ export default function CoindexApp() {
                                       </div>
                                     );
                                   })
+                                )}
+                              </div>
+                            )}
+
+                            {/* SUB-ABA 3: CALENDÁRIO FINANCEIRO HEATMAP (A-03 PARTE 2) */}
+                            {cashflowActiveTab === "calendario" && (
+                              <div key="cashflow-calendario" className="space-y-3 animate-cupertino-in">
+                                {/* Barra Superior de Telemetria: No-Spend Streak */}
+                                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-900/60 border border-white/5 text-[11px]">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30 flex items-center gap-1">
+                                      🔥 Streak: {calendarHeatmapData.currentStreak} {calendarHeatmapData.currentStreak === 1 ? "dia" : "dias"} sem gastos
+                                    </span>
+                                    <span className="text-slate-400">
+                                      🛡️ <strong>{calendarHeatmapData.totalNoSpendDays}</strong> dias sem saídas neste mês
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 font-mono text-[10px] text-slate-400">
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#30D158]" /> Entradas</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#FF453A]" /> Saídas</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#0A84FF]" /> Aportes</span>
+                                  </div>
+                                </div>
+
+                                {/* Grade de 7 Colunas (Domingo a Sábado) */}
+                                <div className="space-y-1">
+                                  <div className="grid grid-cols-7 gap-1 text-center font-mono text-[10px] text-slate-500 font-bold">
+                                    <span>DOM</span>
+                                    <span>SEG</span>
+                                    <span>TER</span>
+                                    <span>QUA</span>
+                                    <span>QUI</span>
+                                    <span>SEX</span>
+                                    <span>SÁB</span>
+                                  </div>
+                                  <div className="grid grid-cols-7 gap-1">
+                                    {/* Células em branco para offset do dia 1 */}
+                                    {Array.from({ length: calendarHeatmapData.firstDayOfWeek }).map((_, i) => (
+                                      <div key={`blank-${i}`} className="h-10 rounded-lg bg-transparent" />
+                                    ))}
+
+                                    {/* Dias do mês */}
+                                    {Array.from({ length: calendarHeatmapData.totalDays }).map((_, i) => {
+                                      const dayNum = i + 1;
+                                      const dayInfo = calendarHeatmapData.daysMap[dayNum] || { txs: [], incomeTotal: 0, expenseTotal: 0, investTotal: 0 };
+                                      const isToday = calendarHeatmapData.todayDay === dayNum;
+                                      const isSelected = calendarSelectedDay === dayNum;
+                                      const hasIncome = dayInfo.incomeTotal > 0;
+                                      const hasExpense = dayInfo.expenseTotal > 0;
+                                      const hasInvest = dayInfo.investTotal > 0;
+
+                                      return (
+                                        <button
+                                          key={`day-${dayNum}`}
+                                          type="button"
+                                          onClick={() => setCalendarSelectedDay(isSelected ? null : dayNum)}
+                                          className={`h-11 rounded-lg p-1 flex flex-col items-center justify-between transition-all cursor-pointer border ${
+                                            isSelected
+                                              ? "bg-[#0A84FF]/25 border-[#0A84FF] shadow-sm"
+                                              : isToday
+                                              ? "bg-white/10 border-white/30"
+                                              : "bg-slate-950/50 hover:bg-slate-900 border-white/5"
+                                          }`}
+                                          title={`Dia ${dayNum}: ${dayInfo.txs.length} lançamento(s)`}
+                                        >
+                                          <span className={`text-[10px] font-mono leading-none ${isToday ? "text-[#0A84FF] font-black" : "text-slate-300"}`}>
+                                            {dayNum}
+                                          </span>
+                                          <div className="flex items-center gap-0.5 justify-center">
+                                            {hasIncome && <span className="w-1.5 h-1.5 rounded-full bg-[#30D158]" />}
+                                            {hasExpense && <span className="w-1.5 h-1.5 rounded-full bg-[#FF453A]" />}
+                                            {hasInvest && <span className="w-1.5 h-1.5 rounded-full bg-[#0A84FF]" />}
+                                            {!hasIncome && !hasExpense && !hasInvest && (
+                                              <span className="w-1 h-1 rounded-full bg-slate-700 opacity-40" />
+                                            )}
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Detalhe dos Lançamentos do Dia Selecionado */}
+                                {calendarSelectedDay != null && (
+                                  <div className="p-3 rounded-xl bg-slate-900/80 border border-[#0A84FF]/30 space-y-2 animate-cupertino-in">
+                                    <div className="flex items-center justify-between border-b border-white/10 pb-1.5 text-xs">
+                                      <strong className="text-white">
+                                        Lançamentos do Dia {calendarSelectedDay}
+                                      </strong>
+                                      <button
+                                        type="button"
+                                        onClick={() => setCalendarSelectedDay(null)}
+                                        className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
+                                      >
+                                        ✕ Fechar
+                                      </button>
+                                    </div>
+
+                                    {(calendarHeatmapData.daysMap[calendarSelectedDay]?.txs || []).length === 0 ? (
+                                      <p className="text-slate-400 text-center py-2 text-xs">
+                                        Nenhum gasto ou lançamento neste dia. Parabéns! 🛡️
+                                      </p>
+                                    ) : (
+                                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs">
+                                        {(calendarHeatmapData.daysMap[calendarSelectedDay]?.txs || []).map((tx) => {
+                                          const flow = tx.flowType || getFlowType(tx.category);
+                                          const isPositive = isPositiveInflowDisplay(tx);
+                                          const isInvest = flow === "INVESTMENT";
+                                          return (
+                                            <div
+                                              key={tx.id}
+                                              className="p-2 rounded-lg bg-slate-950/70 border border-white/5 flex items-center justify-between gap-2"
+                                            >
+                                              <div className="min-w-0">
+                                                <strong className="text-white block truncate">{tx.description}</strong>
+                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                  {tx.category} • {tx.paymentMethod}
+                                                </span>
+                                              </div>
+                                              <span
+                                                className={`font-mono font-bold text-xs tabular-nums shrink-0 ${
+                                                  isPositive ? "text-[#30D158]" : isInvest ? "text-[#0A84FF]" : "text-[#FF453A]"
+                                                } ${moneyBlur}`}
+                                              >
+                                                {isPositive ? "+" : isInvest ? "⚡ " : "- "}{formatBRL(tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount)}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -9237,6 +9848,10 @@ export default function CoindexApp() {
               setSystemLogs={setSystemLogs}
               logFilter={logFilter}
               setLogFilter={setLogFilter}
+              onUpdateSingleTransaction={handleUpdateSingleTransaction}
+              onBatchUpdateStatus={handleBatchUpdateStatus}
+              onBatchChangeCategory={handleBatchChangeCategory}
+              onBatchDeleteTransactions={handleBatchDeleteTransactions}
             />
           </div>
           )}
@@ -9302,6 +9917,23 @@ export default function CoindexApp() {
           <CreditCard className="w-5 h-5" />
           <span className="text-[10px] tracking-tight">Cartões</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setShowMobileMoreSheet(true)}
+          className={`flex flex-col items-center gap-1 transition-colors ${
+            showMobileMoreSheet ||
+            (activeTab !== "dashboard" &&
+              activeTab !== "transactions" &&
+              activeTab !== "auto" &&
+              activeTab !== "cards")
+              ? "text-[#0A84FF] font-semibold"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <Menu className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Mais</span>
+        </button>
       </nav>
 
       {/* COMMAND PALETTE MODAL (CTRL + K) VIA CREATEPORTAL */}
@@ -9313,9 +9945,15 @@ export default function CoindexApp() {
               <input
                 type="text"
                 autoFocus
-                placeholder="Digite um comando ou aba (Ex: novo, csv, spotify, receber, veiculo)..."
+                placeholder="Digite um comando ou texto natural (Ex: gastei 35,90 uber pix, recebi 500 salario)..."
                 value={commandQuery}
                 onChange={(e) => setCommandQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && detectedQuickTx) {
+                    e.preventDefault();
+                    handleExecuteQuickTx();
+                  }
+                }}
                 className="w-full bg-transparent text-white outline-none placeholder-slate-500"
               />
               <button
@@ -9327,6 +9965,31 @@ export default function CoindexApp() {
               </button>
             </div>
             <div className="p-2 flex-1 overflow-y-auto space-y-1 custom-scrollbar">
+              {/* SPRINT 55 (M-03): Card de Lançamento Instantâneo Detectado */}
+              {detectedQuickTx && (
+                <div className="p-3 mb-2 rounded-xl bg-[#0A84FF]/15 border border-[#0A84FF]/40 flex items-center justify-between gap-3 animate-cupertino-in">
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#0A84FF]">
+                      <Zap className="w-3.5 h-3.5 animate-pulse" />
+                      <span>⚡ Lançamento Rápido Detectado</span>
+                    </div>
+                    <p className="text-[11px] text-slate-200 truncate">
+                      <strong className="text-white">{detectedQuickTx.description}</strong> •{" "}
+                      <span className={detectedQuickTx.flowType === "INCOME" ? "text-[#30D158] font-bold" : "text-[#FF453A] font-bold"}>
+                        {detectedQuickTx.flowType === "INCOME" ? "+" : "-"}{formatBRL(detectedQuickTx.amount)}
+                      </span>{" "}
+                      • <span className="text-slate-400">{detectedQuickTx.category} ({detectedQuickTx.paymentMethod})</span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExecuteQuickTx}
+                    className="px-3 py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer shadow-md"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Salvar (Enter)
+                  </button>
+                </div>
+              )}
               {[
                 {
                   label: "Criar Novo Lançamento",
@@ -9804,6 +10467,250 @@ export default function CoindexApp() {
         }}
         getFlowType={getFlowType}
       />
+
+      {/* SPRINT 55 (Helena Costa): Ritual de Fechamento do Mês (Coindex Wrapped) */}
+      {showWrappedModal && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowWrappedModal(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl bg-gradient-to-b from-[#161B26] via-[#10141D] to-[#0A0D14] border border-purple-500/30 p-6 space-y-5 shadow-2xl animate-cupertino-in text-xs max-h-[90vh] overflow-y-auto relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Topbar do Modal */}
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] font-extrabold uppercase tracking-widest inline-flex items-center gap-1">
+                  <Award className="w-3 h-3 text-purple-400" /> Coindex Wrapped
+                </span>
+                <h3 className="text-xl font-black text-white tracking-tight">
+                  Fechamento de {selectedMonthLabel}
+                </h3>
+                <p className="text-slate-400 text-xs">
+                  Raio-X executivo de receitas, despesas, aportes e telemetria de vida.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWrappedModal(false)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Selo de Classificação do Mês */}
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/10 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Classificação do Período</span>
+                <strong className={`text-base font-extrabold ${wrappedStats.classificationColor}`}>
+                  {wrappedStats.classification}
+                </strong>
+                <p className="text-[11px] text-slate-300 mt-0.5">{wrappedStats.classificationDetail}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="text-[10px] text-slate-400 block font-mono">Taxa de Aporte</span>
+                <span className="text-lg font-black font-mono text-[#0A84FF]">
+                  {wrappedStats.investRate}%
+                </span>
+              </div>
+            </div>
+
+            {/* Grid dos 4 KPIs Fundamentais */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-emerald-500/20 space-y-0.5">
+                <span className="text-[10px] text-slate-400 block">Total de Receitas</span>
+                <strong className={`text-base font-bold text-[#30D158] font-mono ${moneyBlur}`}>
+                  {formatBRL(wrappedStats.income)}
+                </strong>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-rose-500/20 space-y-0.5">
+                <span className="text-[10px] text-slate-400 block">Total de Despesas</span>
+                <strong className={`text-base font-bold text-[#FF453A] font-mono ${moneyBlur}`}>
+                  {formatBRL(wrappedStats.expense)}
+                </strong>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-blue-500/20 space-y-0.5">
+                <span className="text-[10px] text-slate-400 block">Aportes / Investidos</span>
+                <strong className={`text-base font-bold text-[#0A84FF] font-mono ${moneyBlur}`}>
+                  {formatBRL(wrappedStats.invested)}
+                </strong>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-purple-500/20 space-y-0.5">
+                <span className="text-[10px] text-slate-400 block">Saldo Líquido</span>
+                <strong
+                  className={`text-base font-bold font-mono ${
+                    wrappedStats.balance >= 0 ? "text-emerald-400" : "text-rose-400"
+                  } ${moneyBlur}`}
+                >
+                  {formatBRL(wrappedStats.balance)}
+                </strong>
+              </div>
+            </div>
+
+            {/* Top 3 Maiores Despesas */}
+            <div className="space-y-2">
+              <strong className="text-slate-300 text-xs flex items-center gap-1.5 font-bold">
+                <TrendingUp className="w-3.5 h-3.5 text-amber-400" /> Top 3 Maiores Gastos do Mês
+              </strong>
+              {wrappedStats.top3Expenses.length === 0 ? (
+                <p className="text-slate-400 text-xs py-2">Nenhuma despesa registrada no período.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {wrappedStats.top3Expenses.map((tx, idx) => (
+                    <div
+                      key={tx.id}
+                      className="p-2.5 rounded-xl bg-slate-950/50 border border-white/5 flex items-center justify-between gap-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <strong className="text-white block truncate text-xs">{tx.description}</strong>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {tx.category} • {formatDateBR(tx.date)}
+                          </span>
+                        </div>
+                      </div>
+                      <span className={`text-xs font-mono font-bold text-[#FF453A] shrink-0 ${moneyBlur}`}>
+                        -{formatBRL(tx.isSplit && tx.personalAmount != null ? tx.personalAmount : tx.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Telemetria de Atividades Físicas & Veículo */}
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-orange-500/15 text-orange-400 flex items-center justify-center shrink-0">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">Strava Corrida</span>
+                  <strong className="text-white text-xs font-mono">{wrappedStats.stravaKmPeriod} km</strong>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-950/40 border border-white/5 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
+                  <Car className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">Veículo Rodado</span>
+                  <strong className="text-white text-xs font-mono">{wrappedStats.vehicleKmPeriod} km</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Ações do Rodapé */}
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  const summaryText = `📊 Coindex Wrapped — ${selectedMonthLabel}\n🏆 ${wrappedStats.classification}\n💰 Receitas: ${formatBRL(wrappedStats.income)}\n💸 Despesas: ${formatBRL(wrappedStats.expense)}\n⚡ Aportes: ${formatBRL(wrappedStats.invested)} (${wrappedStats.investRate}%)\n📈 Saldo: ${formatBRL(wrappedStats.balance)}\n🏃 Strava: ${wrappedStats.stravaKmPeriod} km | 🚗 Veículo: ${wrappedStats.vehicleKmPeriod} km`;
+                  navigator.clipboard.writeText(summaryText);
+                  notify("Resumo Copiado!", "O relatório executivo foi copiado para a área de transferência.", "success");
+                }}
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Copiar Resumo
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowWrappedModal(false)}
+                className="px-4 py-2 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-bold text-xs transition cursor-pointer shadow-md"
+              >
+                ✓ Concluir Ritual
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* SPRINT 55 (Helena Costa): Gaveta Mobile "Mais Módulos" (iOS Bottom Sheet) */}
+      {showMobileMoreSheet && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-md flex items-end justify-center animate-fade-in"
+          onClick={() => setShowMobileMoreSheet(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-t-3xl bg-[var(--cupertino-card-elevated)] border-t border-[var(--cupertino-border)] p-5 space-y-4 shadow-2xl animate-cupertino-in text-xs max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-1.5 rounded-full bg-slate-600 mx-auto -mt-1 opacity-60" />
+            
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <strong className="text-white text-base font-bold flex items-center gap-2">
+                <Menu className="w-5 h-5 text-[#0A84FF]" /> Todos os Módulos
+              </strong>
+              <button
+                type="button"
+                onClick={() => setShowMobileMoreSheet(false)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              {[
+                { id: "dashboard", label: "Dashboard & BI", icon: <LayoutDashboard className="w-4 h-4 text-sky-400" /> },
+                { id: "transactions", label: "Lançamentos (Caixa)", icon: <Table2 className="w-4 h-4 text-emerald-400" /> },
+                { id: "investments", label: "Investimentos & B3", icon: <TrendingUp className="w-4 h-4 text-purple-400" /> },
+                { id: "cards", label: "Cartões & Faturas", icon: <CreditCard className="w-4 h-4 text-indigo-400" /> },
+                { id: "banks", label: "Bancos & Saldos", icon: <Building2 className="w-4 h-4 text-blue-400" /> },
+                { id: "receivables", label: "Valores a Receber", icon: <UserCheck className="w-4 h-4 text-amber-400" /> },
+                { id: "auto", label: "Meus Veículos", icon: <Car className="w-4 h-4 text-orange-400" /> },
+                { id: "bio", label: "Bio & Strava", icon: <Activity className="w-4 h-4 text-rose-400" /> },
+                { id: "brain", label: "Segundo Cérebro", icon: <Brain className="w-4 h-4 text-cyan-400" /> },
+                { id: "wishlist", label: "Desejos de Compra", icon: <Sparkles className="w-4 h-4 text-yellow-400" /> },
+                { id: "spotify", label: "Spotify Família", icon: <SpotifyLogo className="w-4 h-4" /> },
+                { id: "settings", label: "Configurações", icon: <Settings className="w-4 h-4 text-slate-400" /> }
+              ].map((mod) => (
+                <button
+                  key={mod.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(mod.id as ActiveTab);
+                    setShowMobileMoreSheet(false);
+                  }}
+                  className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition cursor-pointer ${
+                    activeTab === mod.id
+                      ? "bg-[#0A84FF]/20 border-[#0A84FF] text-white font-bold"
+                      : "bg-slate-900/60 hover:bg-slate-900 border-white/5 text-slate-300"
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+                    {mod.icon}
+                  </div>
+                  <span className="truncate text-xs">{mod.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMobileMoreSheet(false);
+                  setShowWrappedModal(true);
+                }}
+                className="w-full p-3 rounded-2xl bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-200 font-bold flex items-center justify-center gap-2 transition hover:opacity-90 cursor-pointer"
+              >
+                <Award className="w-4 h-4 text-purple-400 animate-pulse" />
+                <span>Ritual de Fechamento do Mês (Wrapped)</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

@@ -28,6 +28,8 @@ import {
   Transaction,
   CreditCardItem as CreditCardType,
   FlowType,
+  TxStatus,
+  OFFICIAL_CATEGORIES,
   formatBRL,
   formatDateBR,
   compareDatesBR,
@@ -72,6 +74,10 @@ export interface TransactionsTableAdvancedProps {
   handleStartEditTransaction: (tx: Transaction) => void;
   handleDeleteTransaction: (id: string) => void;
   getFlowType: (cat: string) => FlowType;
+  onUpdateSingleTransaction?: (id: string, updates: Partial<Transaction>) => void;
+  onBatchUpdateStatus?: (ids: string[], nextStatus: TxStatus) => void;
+  onBatchChangeCategory?: (ids: string[], nextCategory: string) => void;
+  onBatchDeleteTransactions?: (ids: string[]) => void;
 }
 
 // ==============================================================================
@@ -83,9 +89,12 @@ interface TransactionRowProps {
   displayLogo?: string;
   catColor: string;
   moneyBlur: string;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
   onToggleStatus: (tx: Transaction) => void;
   onEdit: (tx: Transaction) => void;
   onDelete: (id: string) => void;
+  onInlineSave?: (id: string, updates: Partial<Transaction>) => void;
 }
 
 const TransactionRow = React.memo<TransactionRowProps>(({
@@ -94,73 +103,200 @@ const TransactionRow = React.memo<TransactionRowProps>(({
   displayLogo,
   catColor,
   moneyBlur,
+  isSelected,
+  onToggleSelect,
   onToggleStatus,
   onEdit,
-  onDelete
+  onDelete,
+  onInlineSave
 }) => {
   const inst = parseInstallmentInfo(tx);
   const label = tx.installmentInfo || (inst.current && inst.total ? `${inst.current}/${inst.total}` : null);
   const displayName = inst.isInstallment && label ? inst.baseDescription : tx.description;
 
+  const [inlineField, setInlineField] = useState<"date" | "description" | "category" | "amount" | null>(null);
+  const [inlineVal, setInlineVal] = useState<string>("");
+  const [justSaved, setJustSaved] = useState<boolean>(false);
+
+  const handleCommitInline = (field: "date" | "description" | "category" | "amount", val: string) => {
+    setInlineField(null);
+    if (!onInlineSave) return;
+    if (field === "date") {
+      const trimmed = val.trim();
+      if (trimmed && trimmed !== tx.date) {
+        onInlineSave(tx.id, { date: trimmed });
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 900);
+      }
+    } else if (field === "description") {
+      const trimmed = val.trim();
+      if (trimmed && trimmed !== tx.description) {
+        onInlineSave(tx.id, { description: trimmed });
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 900);
+      }
+    } else if (field === "category") {
+      const trimmed = val.trim();
+      if (trimmed && trimmed !== tx.category) {
+        onInlineSave(tx.id, { category: trimmed });
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 900);
+      }
+    } else if (field === "amount") {
+      const parsed = parseFloat(val.replace(/\./g, "").replace(",", "."));
+      if (!isNaN(parsed) && parsed > 0 && parsed !== tx.amount) {
+        onInlineSave(tx.id, { amount: parsed });
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 900);
+      }
+    }
+  };
+
   return (
-    <tr className="hover:bg-white/[0.03] transition-colors">
-      {/* Data Formatada com DD/MM/AAAA */}
-      <td className="py-3.5 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap">
-        {formatDateBR(tx.date)}
+    <tr
+      className={`hover:bg-white/[0.03] transition-colors ${
+        justSaved ? "bg-emerald-500/20" : isSelected ? "bg-[#0A84FF]/10" : ""
+      }`}
+    >
+      {/* Checkbox de Seleção em Lote */}
+      <td className="py-3.5 pl-3 pr-1 w-8 text-center">
+        <input
+          type="checkbox"
+          checked={Boolean(isSelected)}
+          onChange={() => onToggleSelect?.(tx.id)}
+          className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#0A84FF] focus:ring-0 cursor-pointer"
+        />
       </td>
 
-      {/* Descrição & Selo de Parcela */}
-      <td className="py-3.5 px-3 font-semibold text-slate-100">
-        <div className="flex items-center gap-2.5">
-          {displayLogo ? (
-            <img
-              src={displayLogo}
-              alt="Ícone"
-              className="w-7 h-7 rounded-xl object-cover border border-white/15 shrink-0"
-            />
-          ) : (
-            <div
-              className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
-              style={{ backgroundColor: `${catColor}20`, border: `1px solid ${catColor}45` }}
-            >
-              {renderCategorySemanticIcon(tx.category, catColor)}
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center flex-wrap gap-1.5">
-              <span className="truncate">{displayName}</span>
-              {label && (
-                <span
-                  className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-500/20 to-indigo-500/20 text-violet-300 border border-violet-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
-                  title={`Parcela ${label}`}
-                >
-                  <Layers className="w-2.5 h-2.5 text-violet-400 inline" />
-                  <span>{label}</span>
-                </span>
-              )}
-              {tx.isSplit && (
-                <span
-                  className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
-                  title={`Gasto dividido com ${tx.thirdPartyName || "alguém"}. Sua parte: ${formatBRL(tx.personalAmount ?? (tx.amount - (tx.thirdPartyAmount || 0)))}`}
-                >
-                  <span>🤝 Dividido</span>
-                </span>
-              )}
-              {tx.isSplitChild && (
-                <span
-                  className="px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
-                  title="Item a receber gerado automaticamente por divisão de gasto"
-                >
-                  <span>🤝 Divisão a Receber</span>
-                </span>
-              )}
+      {/* Data Formatada com DD/MM/AAAA (Duplo Clique para Editar Inline) */}
+      <td
+        onDoubleClick={() => {
+          setInlineField("date");
+          setInlineVal(formatDateBR(tx.date));
+        }}
+        className="py-3.5 px-3 font-mono tabular-nums text-slate-300 whitespace-nowrap cursor-pointer hover:text-white"
+        title="Duplo clique para editar data"
+      >
+        {inlineField === "date" ? (
+          <input
+            type="text"
+            autoFocus
+            value={inlineVal}
+            onChange={(e) => setInlineVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCommitInline("date", inlineVal);
+              if (e.key === "Escape") setInlineField(null);
+            }}
+            onBlur={() => handleCommitInline("date", inlineVal)}
+            className="w-24 px-1.5 py-0.5 rounded bg-slate-900 border border-[#0A84FF] text-white font-mono text-xs outline-none shadow-sm"
+          />
+        ) : (
+          formatDateBR(tx.date)
+        )}
+      </td>
+
+      {/* Descrição & Selo de Parcela (Duplo Clique para Editar Inline) */}
+      <td
+        onDoubleClick={() => {
+          setInlineField("description");
+          setInlineVal(tx.description);
+        }}
+        className="py-3.5 px-3 font-semibold text-slate-100 cursor-pointer"
+        title="Duplo clique para editar descrição"
+      >
+        {inlineField === "description" ? (
+          <input
+            type="text"
+            autoFocus
+            value={inlineVal}
+            onChange={(e) => setInlineVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCommitInline("description", inlineVal);
+              if (e.key === "Escape") setInlineField(null);
+            }}
+            onBlur={() => handleCommitInline("description", inlineVal)}
+            className="w-full max-w-xs px-2 py-0.5 rounded bg-slate-900 border border-[#0A84FF] text-white text-xs outline-none shadow-sm"
+          />
+        ) : (
+          <div className="flex items-center gap-2.5">
+            {displayLogo ? (
+              <img
+                src={displayLogo}
+                alt="Ícone"
+                className="w-7 h-7 rounded-xl object-cover border border-white/15 shrink-0"
+              />
+            ) : (
+              <div
+                className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
+                style={{ backgroundColor: `${catColor}20`, border: `1px solid ${catColor}45` }}
+              >
+                {renderCategorySemanticIcon(tx.category, catColor)}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center flex-wrap gap-1.5">
+                <span className="truncate">{displayName}</span>
+                {label && (
+                  <span
+                    className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-500/20 to-indigo-500/20 text-violet-300 border border-violet-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
+                    title={`Parcela ${label}`}
+                  >
+                    <Layers className="w-2.5 h-2.5 text-violet-400 inline" />
+                    <span>{label}</span>
+                  </span>
+                )}
+                {tx.isSplit && (
+                  <span
+                    className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
+                    title={`Gasto dividido com ${tx.thirdPartyName || "alguém"}. Sua parte: ${formatBRL(tx.personalAmount ?? (tx.amount - (tx.thirdPartyAmount || 0)))}`}
+                  >
+                    <span>🤝 Dividido</span>
+                  </span>
+                )}
+                {tx.isSplitChild && (
+                  <span
+                    className="px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-mono tabular-nums inline-flex items-center gap-1 shadow-xs"
+                    title="Item a receber gerado automaticamente por divisão de gasto"
+                  >
+                    <span>🤝 Divisão a Receber</span>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </td>
 
-        {/* Categoria */}
-        <td className="py-3.5 px-3">
+      {/* Categoria (Duplo Clique para Alterar Categoria Inline) */}
+      <td
+        onDoubleClick={() => {
+          setInlineField("category");
+          setInlineVal(tx.category);
+        }}
+        className="py-3.5 px-3 cursor-pointer"
+        title="Duplo clique para alterar categoria"
+      >
+        {inlineField === "category" ? (
+          <select
+            autoFocus
+            value={inlineVal}
+            onChange={(e) => {
+              setInlineVal(e.target.value);
+              handleCommitInline("category", e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setInlineField(null);
+            }}
+            onBlur={() => handleCommitInline("category", inlineVal)}
+            className="px-2 py-0.5 rounded bg-slate-900 border border-[#0A84FF] text-white text-xs outline-none shadow-sm"
+          >
+            {OFFICIAL_CATEGORIES.map((cat) => (
+              <option key={cat} value={cat} className="bg-slate-900 text-white">
+                {cat}
+              </option>
+            ))}
+          </select>
+        ) : (
           <span
             className="whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium leading-none"
             style={{
@@ -172,86 +308,106 @@ const TransactionRow = React.memo<TransactionRowProps>(({
             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: catColor }} />
             {tx.category}
           </span>
-        </td>
+        )}
+      </td>
 
-        {/* Custo Fixo / Variável */}
-        <td className="py-3.5 px-3">
-          <span
-            className={`whitespace-nowrap inline-flex items-center justify-center px-2.5 py-0.5 rounded text-xs font-medium leading-none ${
-              tx.costType === "Fixo"
-                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                : "bg-slate-800/80 text-slate-400"
-            }`}
-          >
-            {tx.costType}
-          </span>
-        </td>
-
-        {/* Método de Pagamento & Conta / Cartão */}
-        <td className="py-3.5 px-3">
-          {tx.isTransfer || tx.category === "Transferência entre Contas" ? (
-            <div>
-              <span className="font-semibold text-sky-300 flex items-center gap-1">
-                🔄 {tx.sourceBank || tx.bankAccount} ➔ {tx.destinationBank}
-              </span>
-              <span className="block text-[10px] text-slate-400">Transferência entre Contas</span>
-            </div>
-          ) : (
-            <>
-              <span className="font-medium text-slate-200">{tx.paymentMethod}</span>
-              {tx.cardUsed && <span className="block text-[10px] text-indigo-400">{tx.cardUsed}</span>}
-              {tx.bankAccount && !tx.cardUsed && (
-                <span className="block text-[10px] text-sky-400">{tx.bankAccount}</span>
-              )}
-              {tx.bankAccount && tx.cardUsed && tx.bankAccount !== tx.cardUsed && (
-                <span className="block text-[10px] text-slate-400">Banco: {tx.bankAccount}</span>
-              )}
-            </>
-          )}
-        </td>
-
-        {/* Odômetro */}
-        <td className="py-3.5 px-3 font-mono tabular-nums text-slate-400">
-          {tx.km ? `${tx.km.toLocaleString("pt-BR")} km` : "—"}
-          {tx.liters ? ` (${tx.liters}L)` : ""}
-        </td>
-
-        {/* Situação */}
-        <td className="py-3.5 px-3">
-          <button
-            type="button"
-            onClick={() => onToggleStatus(tx)}
-            className={`whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium leading-none transition ${
-              tx.status === "Pago"
-                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 status-stamp-pop"
-                : tx.status === "Na Fatura"
-                ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25"
-                : "bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
-            }`}
-          >
-            {tx.status === "Pago" ? (
-              <CheckCircle2 className="w-3 h-3" />
-            ) : tx.status === "Na Fatura" ? (
-              <CreditCard className="w-3 h-3" />
-            ) : (
-              <Clock className="w-3 h-3" />
-            )}
-            {tx.status}
-          </button>
-        </td>
-
-        {/* Valor */}
-        <td
-          className={`py-3.5 px-3 text-right font-mono tabular-nums font-extrabold whitespace-nowrap ${moneyBlur} ${
-            tx.isTransfer || tx.category === "Transferência entre Contas"
-              ? "text-sky-400"
-              : isPositiveInflowDisplay(tx)
-              ? "text-[#30D158]"
-              : flow === "INVESTMENT"
-              ? "text-indigo-400"
-              : "text-rose-400"
+      {/* Custo Fixo / Variável */}
+      <td className="py-3.5 px-3">
+        <span
+          className={`whitespace-nowrap inline-flex items-center justify-center px-2.5 py-0.5 rounded text-xs font-medium leading-none ${
+            tx.costType === "Fixo"
+              ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+              : "bg-slate-800/80 text-slate-400"
           }`}
         >
+          {tx.costType}
+        </span>
+      </td>
+
+      {/* Método de Pagamento & Conta / Cartão */}
+      <td className="py-3.5 px-3">
+        {tx.isTransfer || tx.category === "Transferência entre Contas" ? (
+          <div>
+            <span className="font-semibold text-sky-300 flex items-center gap-1">
+              🔄 {tx.sourceBank || tx.bankAccount} ➔ {tx.destinationBank}
+            </span>
+            <span className="block text-[10px] text-slate-400">Transferência entre Contas</span>
+          </div>
+        ) : (
+          <>
+            <span className="font-medium text-slate-200">{tx.paymentMethod}</span>
+            {tx.cardUsed && <span className="block text-[10px] text-indigo-400">{tx.cardUsed}</span>}
+            {tx.bankAccount && !tx.cardUsed && (
+              <span className="block text-[10px] text-sky-400">{tx.bankAccount}</span>
+            )}
+            {tx.bankAccount && tx.cardUsed && tx.bankAccount !== tx.cardUsed && (
+              <span className="block text-[10px] text-slate-400">Banco: {tx.bankAccount}</span>
+            )}
+          </>
+        )}
+      </td>
+
+      {/* Odômetro */}
+      <td className="py-3.5 px-3 font-mono tabular-nums text-slate-400">
+        {tx.km ? `${tx.km.toLocaleString("pt-BR")} km` : "—"}
+        {tx.liters ? ` (${tx.liters}L)` : ""}
+      </td>
+
+      {/* Situação */}
+      <td className="py-3.5 px-3">
+        <button
+          type="button"
+          onClick={() => onToggleStatus(tx)}
+          className={`whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium leading-none transition ${
+            tx.status === "Pago"
+              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 status-stamp-pop"
+              : tx.status === "Na Fatura"
+              ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25"
+              : "bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
+          }`}
+        >
+          {tx.status === "Pago" ? (
+            <CheckCircle2 className="w-3 h-3" />
+          ) : tx.status === "Na Fatura" ? (
+            <CreditCard className="w-3 h-3" />
+          ) : (
+            <Clock className="w-3 h-3" />
+          )}
+          {tx.status}
+        </button>
+      </td>
+
+      {/* Valor (Duplo Clique para Editar Inline) */}
+      <td
+        onDoubleClick={() => {
+          setInlineField("amount");
+          setInlineVal(String(tx.amount));
+        }}
+        className={`py-3.5 px-3 text-right font-mono tabular-nums font-extrabold whitespace-nowrap cursor-pointer ${moneyBlur} ${
+          tx.isTransfer || tx.category === "Transferência entre Contas"
+            ? "text-sky-400"
+            : isPositiveInflowDisplay(tx)
+            ? "text-[#30D158]"
+            : flow === "INVESTMENT"
+            ? "text-indigo-400"
+            : "text-rose-400"
+        }`}
+        title="Duplo clique para editar valor"
+      >
+        {inlineField === "amount" ? (
+          <input
+            type="text"
+            autoFocus
+            value={inlineVal}
+            onChange={(e) => setInlineVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCommitInline("amount", inlineVal);
+              if (e.key === "Escape") setInlineField(null);
+            }}
+            onBlur={() => handleCommitInline("amount", inlineVal)}
+            className="w-24 px-1.5 py-0.5 text-right rounded bg-slate-900 border border-[#0A84FF] text-white font-mono text-xs outline-none shadow-sm"
+          />
+        ) : (
           <div>
             {tx.isTransfer || tx.category === "Transferência entre Contas"
               ? `⇆ ${formatBRL(tx.amount)}`
@@ -262,33 +418,33 @@ const TransactionRow = React.memo<TransactionRowProps>(({
               </span>
             )}
           </div>
-        </td>
+        )}
+      </td>
 
-        {/* Ações */}
-        <td className="py-3.5 px-3 text-center">
-          <div className="flex items-center justify-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => onEdit(tx)}
-              className="min-h-[36px] min-w-[36px] p-2 rounded-xl bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/30 transition flex items-center justify-center living-edit cursor-pointer"
-              title="Editar lançamento"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete(tx.id)}
-              className="min-h-[36px] min-w-[36px] p-2 rounded-xl text-slate-400 hover:bg-rose-500/15 hover:text-rose-400 transition flex items-center justify-center living-trash cursor-pointer"
-              title="Excluir lançamento"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </td>
-      </tr>
-    );
-  }
-);
+      {/* Ações */}
+      <td className="py-3.5 px-3 text-center">
+        <div className="flex items-center justify-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onEdit(tx)}
+            className="min-h-[36px] min-w-[36px] p-2 rounded-xl bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/30 transition flex items-center justify-center living-edit cursor-pointer"
+            title="Editar lançamento"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(tx.id)}
+            className="min-h-[36px] min-w-[36px] p-2 rounded-xl text-slate-400 hover:bg-rose-500/15 hover:text-rose-400 transition flex items-center justify-center living-trash cursor-pointer"
+            title="Excluir lançamento"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
 TransactionRow.displayName = "TransactionRow";
 
 // ==============================================================================
@@ -308,8 +464,15 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
   handleToggleStatus,
   handleStartEditTransaction,
   handleDeleteTransaction,
-  getFlowType
+  getFlowType,
+  onUpdateSingleTransaction,
+  onBatchUpdateStatus,
+  onBatchChangeCategory,
+  onBatchDeleteTransactions
 }) => {
+  // SPRINT 55 (M-03): Seleção em Lote (Multi-Select)
+  const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
+  const [batchCategory, setBatchCategory] = useState<string>("");
   // SPRINT 37: Fluidez 120Hz via useDeferredValue no Input de Busca (Davi Kroner)
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
@@ -490,6 +653,23 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
   const visibleTxs = useMemo(() => {
     return processedTxs.slice(0, visibleCount);
   }, [processedTxs, visibleCount]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedTxIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (selectedTxIds.size === visibleTxs.length) {
+      setSelectedTxIds(new Set());
+    } else {
+      setSelectedTxIds(new Set(visibleTxs.map((t) => t.id)));
+    }
+  }, [selectedTxIds.size, visibleTxs]);
 
   const hasMore = visibleCount < processedTxs.length;
 
@@ -900,6 +1080,17 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
         <table className="w-full text-left border-collapse text-xs">
           <thead className="relative z-30">
             <tr className="border-b border-white/[0.08] bg-slate-950/80 text-slate-400">
+              {/* SPRINT 55: MULTI-SELECT CHECKBOX (M-03) */}
+              <th className="py-3.5 pl-3 pr-1 w-8 text-center">
+                <input
+                  type="checkbox"
+                  aria-label="Selecionar todos os lançamentos visíveis"
+                  className="w-4 h-4 rounded border-white/20 bg-black/40 text-[#0A84FF] accent-[#0A84FF] cursor-pointer"
+                  checked={visibleTxs.length > 0 && selectedTxIds.size === visibleTxs.length}
+                  onChange={handleToggleSelectAll}
+                />
+              </th>
+
               {/* 1. DATA */}
               <th className="py-3.5 px-3">
                 <div className="flex items-center gap-1.5">
@@ -1368,7 +1559,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
           <tbody className="divide-y divide-white/[0.05]">
             {processedTxs.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-10 text-center text-slate-400">
+                <td colSpan={10} className="py-10 text-center text-slate-400">
                   Nenhum lançamento encontrado para os filtros selecionados.
                 </td>
               </tr>
@@ -1386,6 +1577,9 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     displayLogo={displayLogo}
                     catColor={catColor}
                     moneyBlur={moneyBlur}
+                    isSelected={selectedTxIds.has(tx.id)}
+                    onToggleSelect={handleToggleSelect}
+                    onInlineSave={onUpdateSingleTransaction}
                     onToggleStatus={handleToggleStatus}
                     onEdit={handleStartEditTransaction}
                     onDelete={handleDeleteTransaction}
@@ -1397,6 +1591,87 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
         </table>
       </div>
       </div>
+
+      {/* SPRINT 55: BARRA FLUTUANTE DE AÇÕES EM LOTE (M-03) */}
+      {selectedTxIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9990] flex items-center gap-3 px-5 py-3 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black/80 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-2 pr-3 border-r border-white/10 text-xs font-semibold text-white">
+            <span className="w-6 h-6 rounded-full bg-[#0A84FF] text-white flex items-center justify-center text-[11px] font-bold">
+              {selectedTxIds.size}
+            </span>
+            <span>selecionado{selectedTxIds.size > 1 ? "s" : ""}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (onBatchUpdateStatus) {
+                  onBatchUpdateStatus(Array.from(selectedTxIds), "Pago");
+                  setSelectedTxIds(new Set());
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" /> Marcar Pago
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (onBatchUpdateStatus) {
+                  onBatchUpdateStatus(Array.from(selectedTxIds), "Pendente");
+                  setSelectedTxIds(new Set());
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Clock className="w-3.5 h-3.5" /> Marcar Pendente
+            </button>
+
+            {/* Mudar Categoria Dropdown */}
+            <select
+              value=""
+              onChange={(e) => {
+                if (e.target.value && onBatchChangeCategory) {
+                  onBatchChangeCategory(Array.from(selectedTxIds), e.target.value);
+                  setSelectedTxIds(new Set());
+                }
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 text-slate-200 border border-white/15 text-xs font-medium cursor-pointer outline-none focus:border-[#0A84FF]"
+            >
+              <option value="" disabled>Mudar Categoria...</option>
+              {OFFICIAL_CATEGORIES.map(cat => (
+                <option key={cat} value={cat} className="bg-slate-900 text-white">{cat}</option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Excluir permanentemente ${selectedTxIds.size} lançamento(s)?`)) {
+                  if (onBatchDeleteTransactions) {
+                    onBatchDeleteTransactions(Array.from(selectedTxIds));
+                    setSelectedTxIds(new Set());
+                  }
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Excluir
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedTxIds(new Set())}
+              className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
+              title="Cancelar seleção"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Controle de Renderização Progressiva (Virtual Windowing Controls) */}
       {processedTxs.length > visibleCount && (

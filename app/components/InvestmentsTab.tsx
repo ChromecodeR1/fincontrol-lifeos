@@ -26,7 +26,10 @@ import {
   Calendar,
   Wallet,
   Sparkles,
-  Zap
+  Zap,
+  Award,
+  Trophy,
+  Calculator
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -44,7 +47,7 @@ import { todayBR, formatDateBR, toSortableISO, compareDatesBR } from "../lib/dom
 import { calculatePortfolioCdiYield } from "../lib/domain/investment-yield";
 import { AnimatedNumber144, AnimatedBRL, AnimatedMetric } from "./AnimatedNumber144";
 import { SlidingSegmentedControl } from "./SlidingSegmentedControl";
-import { MarketPulseResponse, MarketTickerItem } from "../api/market-pulse/route";
+import { MarketPulseResponse, MarketTickerItem, B3AssetQuote } from "../api/market-pulse/route";
 
 export interface InvestmentsTabProps {
   transactions: Transaction[];
@@ -203,6 +206,30 @@ export function InvestmentsTab({
     }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // SPRINT 55: A-02 — Slider de Aporte Mensal no Simulador de Marcos (144Hz)
+  const [simulatorMonthlyContribution, setSimulatorMonthlyContribution] = useState<number>(500);
+
+  const PATRIMONY_MILESTONES = useMemo(() => [
+    { target: 5000, label: "Reserva de Emergência Inicial", icon: "🌱", desc: "Primeira barreira de liquidez contra imprevistos" },
+    { target: 10000, label: "Primeiros R$ 10.000", icon: "🥉", desc: "A base da estabilidade financeira" },
+    { target: 25000, label: "Fôlego & Segurança", icon: "🥈", desc: "Garante meses de custo de vida pago" },
+    { target: 50000, label: "Meio Caminho aos 100k", icon: "🥇", desc: "O motor dos juros compostos começa a acelerar" },
+    { target: 100000, label: "Os R$ 100.000 (Efeito Bola de Neve)", icon: "🏆", desc: "O patrimônio gera mais renda que pequenos salários" }
+  ], []);
+
+  const calculateMonthsToTarget = (currentVal: number, targetVal: number, monthlyPmt: number, annualRatePct: number) => {
+    if (currentVal >= targetVal) return 0;
+    if (monthlyPmt <= 0) return 999;
+    const r = Math.pow(1 + annualRatePct / 100, 1 / 12) - 1;
+    let balance = currentVal;
+    let months = 0;
+    while (balance < targetVal && months < 600) {
+      months++;
+      balance = balance * (1 + r) + monthlyPmt;
+    }
+    return months;
+  };
 
   // Preço atual do Bitcoin em BRL
   const btcPrice = marketPulse?.tickers.BTC.priceBRL || 435800.0;
@@ -873,6 +900,226 @@ export function InvestmentsTab({
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* SPRINT 55: A-02 — COTAÇÕES DA B3 AO VIVO & DIVIDENDOS PROJETADOS */}
+          <div className="glass-card p-6 sm:p-7 rounded-3xl border border-white/[0.08] space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/5">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-purple-400" />
+                  Ações & Fundos Imobiliários da B3 (Ao Vivo & Dividendos)
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Cotações em tempo real da Bolsa Brasileira com cálculo de dividendo mensal por cota.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-xl bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-bold">
+                B3 Brasil Bolsa Balcão
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+              {marketPulse?.b3Quotes &&
+                Object.values(marketPulse.b3Quotes).map((quote) => {
+                  const isPositive = quote.change24hPct >= 0;
+                  return (
+                    <div
+                      key={quote.ticker}
+                      className="p-4 rounded-2xl bg-slate-950/70 border border-white/[0.06] hover:border-white/[0.12] transition space-y-2 flex flex-col justify-between"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-extrabold text-white text-xs">{quote.ticker}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/10 text-[9px] text-slate-300 font-bold">
+                              {quote.type}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 truncate max-w-[130px]">{quote.name}</p>
+                        </div>
+                        <span
+                          className={`text-[11px] font-bold font-mono tabular-nums flex items-center ${
+                            isPositive ? "text-emerald-400" : "text-rose-400"
+                          }`}
+                        >
+                          {isPositive ? "+" : ""}
+                          {quote.change24hPct.toFixed(2)}%
+                        </span>
+                      </div>
+
+                      <div className="pt-2 border-t border-white/5 flex items-baseline justify-between">
+                        <span className={`text-base font-extrabold font-mono text-white ${moneyBlur}`}>
+                          {formatBRL(quote.price)}
+                        </span>
+                        {quote.dividendYield > 0 && (
+                          <div className="text-right">
+                            <span className="text-[10px] text-emerald-400 font-mono font-bold block">
+                              +{formatBRL(quote.monthlyDividendEstimate)}/mês
+                            </span>
+                            <span className="text-[9px] text-slate-400">DY: {quote.dividendYield.toFixed(1)}% a.a.</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          {/* SPRINT 55: A-02 — LINHA DO TEMPO DE MARCOS PATRIMONIAIS & SIMULADOR DE JUROS COMPOSTOS */}
+          <div className="glass-card p-6 sm:p-7 rounded-3xl border border-white/[0.08] space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-300">
+                  <Trophy className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Linha do Tempo de Marcos Patrimoniais & Efeito Bola de Neve
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Acompanhe sua progressão real e simule o tempo exato para conquistar cada marco com aportes mensais.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="text-xs text-slate-400">Patrimônio Investido:</span>
+                <strong className={`text-sm font-extrabold font-mono text-emerald-400 tabular-nums ${moneyBlur}`}>
+                  {formatBRL(totalCurrentInvested)}
+                </strong>
+              </div>
+            </div>
+
+            {/* Grid dos 5 Marcos Patrimoniais */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+              {PATRIMONY_MILESTONES.map((m) => {
+                const isReached = totalCurrentInvested >= m.target;
+                const progressPct = Math.min(100, Math.max(0, Math.round((totalCurrentInvested / m.target) * 100)));
+                const remaining = Math.max(0, m.target - totalCurrentInvested);
+                const monthsLeft = calculateMonthsToTarget(
+                  totalCurrentInvested,
+                  m.target,
+                  simulatorMonthlyContribution,
+                  cdiAnnualRate
+                );
+
+                return (
+                  <div
+                    key={m.target}
+                    className={`p-4 rounded-2xl border transition flex flex-col justify-between space-y-3 ${
+                      isReached
+                        ? "bg-emerald-950/20 border-emerald-500/40 shadow-lg shadow-emerald-950/30"
+                        : "bg-slate-950/60 border-white/[0.06]"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xl">{m.icon}</span>
+                        {isReached ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold">
+                            Conquistado 🏆
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-bold font-mono text-slate-400 tabular-nums">
+                            {progressPct}%
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs font-bold text-white block mt-2">{m.label}</span>
+                      <strong className={`text-sm font-extrabold font-mono text-amber-300 block ${moneyBlur}`}>
+                        {formatBRL(m.target)}
+                      </strong>
+                      <p className="text-[10px] text-slate-400 mt-1 line-clamp-2 leading-tight">{m.desc}</p>
+                    </div>
+
+                    <div className="space-y-1.5 pt-2 border-t border-white/5">
+                      <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-500 rounded-full ${
+                            isReached ? "bg-emerald-500" : "bg-indigo-500"
+                          }`}
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+                      {!isReached && (
+                        <p className="text-[10px] text-slate-400 font-mono flex items-center justify-between">
+                          <span>Faltam: {formatBRL(remaining)}</span>
+                          <span className="text-indigo-300 font-bold">~{monthsLeft}m</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Slider Interativo de Aporte Mensal (144Hz) */}
+            <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Calculator className="w-4 h-4 text-[#0A84FF]" />
+                  <span className="text-xs font-bold text-white">Simulador de Aporte Mensal (144Hz Zero-Jank)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Aporte mensal projetado:</span>
+                  <span className="px-2.5 py-1 rounded-xl bg-[#0A84FF]/20 text-[#0A84FF] border border-[#0A84FF]/40 text-xs font-bold font-mono">
+                    {formatBRL(simulatorMonthlyContribution)} / mês
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-slate-400">R$ 100</span>
+                <input
+                  type="range"
+                  min="100"
+                  max="5000"
+                  step="50"
+                  value={simulatorMonthlyContribution}
+                  onChange={(e) => setSimulatorMonthlyContribution(Number(e.target.value))}
+                  className="w-full h-2 rounded-lg bg-slate-800 accent-[#0A84FF] cursor-pointer"
+                />
+                <span className="text-[10px] font-mono text-slate-400">R$ 5.000</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1 border-t border-white/5 font-mono">
+                <div className="text-slate-400">
+                  Taxa Selic/CDI Real: <strong className="text-white">{cdiAnnualRate.toFixed(2)}% a.a.</strong>
+                </div>
+                <div className="text-slate-400">
+                  Próximo Marco:{" "}
+                  <strong className="text-emerald-400">
+                    {(() => {
+                      const nextM = PATRIMONY_MILESTONES.find((m) => m.target > totalCurrentInvested);
+                      if (!nextM) return "Todos alcançados!";
+                      const m = calculateMonthsToTarget(
+                        totalCurrentInvested,
+                        nextM.target,
+                        simulatorMonthlyContribution,
+                        cdiAnnualRate
+                      );
+                      return `${m} meses (${(m / 12).toFixed(1)} anos)`;
+                    })()}
+                  </strong>
+                </div>
+                <div className="text-slate-400">
+                  Tempo até R$ 100k:{" "}
+                  <strong className="text-indigo-400">
+                    {(() => {
+                      const m = calculateMonthsToTarget(
+                        totalCurrentInvested,
+                        100000,
+                        simulatorMonthlyContribution,
+                        cdiAnnualRate
+                      );
+                      return `${m} meses (${(m / 12).toFixed(1)} anos)`;
+                    })()}
+                  </strong>
+                </div>
+              </div>
             </div>
           </div>
 

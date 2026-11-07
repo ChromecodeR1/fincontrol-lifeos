@@ -15,6 +15,16 @@ export interface MarketTickerItem {
   history: TickerHistoryPoint[];
 }
 
+export interface B3AssetQuote {
+  ticker: string;
+  name: string;
+  price: number;
+  change24hPct: number;
+  dividendYield: number; // (% a.a.)
+  monthlyDividendEstimate: number; // R$ por cota ao mês
+  type: "Ação" | "FII" | "ETF";
+}
+
 export interface MarketPulseResponse {
   updatedAt: string;
   tickers: {
@@ -27,6 +37,7 @@ export interface MarketPulseResponse {
     CDI: MarketTickerItem;
     IBOV: MarketTickerItem;
   };
+  b3Quotes?: Record<string, B3AssetQuote>;
 }
 
 // Fallback realista caso APIs externas estejam offline ou sob rate-limit
@@ -120,8 +131,84 @@ const FALLBACK_TICKERS: Record<string, MarketTickerItem> = {
   }
 };
 
+const FALLBACK_B3_QUOTES: Record<string, B3AssetQuote> = {
+  PETR4: {
+    ticker: "PETR4",
+    name: "Petrobras PN",
+    price: 38.52,
+    change24hPct: 1.25,
+    dividendYield: 14.2,
+    monthlyDividendEstimate: 0.45,
+    type: "Ação"
+  },
+  VALE3: {
+    ticker: "VALE3",
+    name: "Vale ON",
+    price: 57.80,
+    change24hPct: -0.65,
+    dividendYield: 8.4,
+    monthlyDividendEstimate: 0.40,
+    type: "Ação"
+  },
+  BBAS3: {
+    ticker: "BBAS3",
+    name: "Banco do Brasil ON",
+    price: 26.90,
+    change24hPct: 0.85,
+    dividendYield: 9.8,
+    monthlyDividendEstimate: 0.22,
+    type: "Ação"
+  },
+  ITUB4: {
+    ticker: "ITUB4",
+    name: "Itaú Unibanco PN",
+    price: 34.75,
+    change24hPct: 0.42,
+    dividendYield: 7.5,
+    monthlyDividendEstimate: 0.21,
+    type: "Ação"
+  },
+  WEGE3: {
+    ticker: "WEGE3",
+    name: "WEG ON",
+    price: 52.30,
+    change24hPct: 1.80,
+    dividendYield: 2.1,
+    monthlyDividendEstimate: 0.09,
+    type: "Ação"
+  },
+  MXRF11: {
+    ticker: "MXRF11",
+    name: "Maxi Renda FII",
+    price: 10.18,
+    change24hPct: 0.10,
+    dividendYield: 12.8,
+    monthlyDividendEstimate: 0.10,
+    type: "FII"
+  },
+  HGLG11: {
+    ticker: "HGLG11",
+    name: "CSHG Logística FII",
+    price: 158.90,
+    change24hPct: 0.25,
+    dividendYield: 8.9,
+    monthlyDividendEstimate: 1.10,
+    type: "FII"
+  },
+  IVVB11: {
+    ticker: "IVVB11",
+    name: "S&P 500 ETF B3",
+    price: 342.50,
+    change24hPct: 0.65,
+    dividendYield: 0.0,
+    monthlyDividendEstimate: 0.0,
+    type: "ETF"
+  }
+};
+
 export async function GET(_request: Request) {
   const resultTickers: Record<string, MarketTickerItem> = { ...FALLBACK_TICKERS };
+  const b3Result: Record<string, B3AssetQuote> = { ...FALLBACK_B3_QUOTES };
 
   try {
     const cryptoSymbols = [
@@ -318,7 +405,48 @@ export async function GET(_request: Request) {
       }
     })();
 
-    await Promise.allSettled([...cryptoPromises, fiatPromise, bcbPromise]);
+    const b3Promise = (async () => {
+      try {
+        const tickersList = Object.keys(FALLBACK_B3_QUOTES).join(",");
+        const res = await fetch(`https://brapi.dev/api/quote/${tickersList}`, {
+          signal: AbortSignal.timeout(4500),
+          cache: "no-store",
+          headers: { Accept: "application/json" }
+        });
+        if (res.ok) {
+          const data = (await res.json()) as {
+            results?: Array<{
+              symbol: string;
+              regularMarketPrice?: number;
+              regularMarketChangePercent?: number;
+            }>;
+          };
+          if (Array.isArray(data.results)) {
+            for (const r of data.results) {
+              const sym = r.symbol?.toUpperCase();
+              if (sym && b3Result[sym] && typeof r.regularMarketPrice === "number" && r.regularMarketPrice > 0) {
+                const price = r.regularMarketPrice;
+                const dy = b3Result[sym].dividendYield;
+                const monthlyDiv = Math.round(((price * (dy / 100)) / 12) * 100) / 100;
+                b3Result[sym] = {
+                  ...b3Result[sym],
+                  price,
+                  change24hPct:
+                    typeof r.regularMarketChangePercent === "number"
+                      ? r.regularMarketChangePercent
+                      : b3Result[sym].change24hPct,
+                  monthlyDividendEstimate: monthlyDiv
+                };
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[market-pulse] Falha ao consultar Brapi para B3, mantendo fallback:", err);
+      }
+    })();
+
+    await Promise.allSettled([...cryptoPromises, fiatPromise, bcbPromise, b3Promise]);
   } catch (globalErr) {
     console.warn("[market-pulse] Erro global na agregação, retornando fallbacks:", globalErr);
   }
@@ -334,7 +462,8 @@ export async function GET(_request: Request) {
       EUR: resultTickers.EUR,
       CDI: resultTickers.CDI,
       IBOV: resultTickers.IBOV
-    }
+    },
+    b3Quotes: b3Result
   };
 
   return NextResponse.json(payload, {

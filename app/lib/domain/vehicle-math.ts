@@ -333,3 +333,101 @@ export function calculateVehicleTco(
     tcoItems
   };
 }
+
+// ============================================================================
+// SPRINT 55: A-01 — PLANO DE MANUTENÇÃO PREVENTIVA POR ODÔMETRO
+// ============================================================================
+
+export interface VehicleMaintenanceItem {
+  id: string;
+  name: string;
+  intervalKm: number;
+  lastDoneKm: number;
+  nextDueKm: number;
+  remainingKm: number;
+  wearPercent: number; // 0 a 100%
+  urgency: "ok" | "warning" | "danger";
+  estimatedCost: number;
+  description: string;
+}
+
+export const DEFAULT_MAINTENANCE_SCHEDULE = [
+  {
+    id: "oil_filter",
+    name: "Óleo do Motor & Filtros",
+    intervalKm: 10000,
+    estimatedCost: 350,
+    description: "Troca do óleo lubrificante sintético, filtro de óleo, combustível e ar do motor."
+  },
+  {
+    id: "alignment_tires",
+    name: "Alinhamento & Rodízio de Pneus",
+    intervalKm: 10000,
+    estimatedCost: 180,
+    description: "Alinhamento computadorizado 3D, balanceamento das 4 rodas e rodízio em X."
+  },
+  {
+    id: "brakes_pads",
+    name: "Pastilhas & Fluido de Freio",
+    intervalKm: 25000,
+    estimatedCost: 550,
+    description: "Inspeção e substituição das pastilhas de freio dianteiras e sangria do fluido DOT 4."
+  },
+  {
+    id: "coolant_plugs",
+    name: "Arrefecimento & Velas de Ignição",
+    intervalKm: 30000,
+    estimatedCost: 480,
+    description: "Limpeza do radiador com aditivo orgânico e troca do jogo de velas de ignição."
+  },
+  {
+    id: "timing_belt",
+    name: "Correia Dentada & Tensores",
+    intervalKm: 50000,
+    estimatedCost: 1200,
+    description: "Substituição preventiva do kit de correia sincronizadora, polias e correia de acessórios."
+  }
+];
+
+export function calculateVehicleMaintenancePlan(
+  currentOdometerKm: number,
+  maintenanceHistory: Record<string, number> = {}
+): VehicleMaintenanceItem[] {
+  const currentKm = Math.max(0, currentOdometerKm || 0);
+
+  return DEFAULT_MAINTENANCE_SCHEDULE.map((item) => {
+    let lastDone = maintenanceHistory[item.id];
+    if (typeof lastDone !== "number" || isNaN(lastDone)) {
+      if (currentKm >= item.intervalKm) {
+        lastDone = Math.floor(currentKm / item.intervalKm) * item.intervalKm;
+      } else {
+        lastDone = 0;
+      }
+    }
+
+    const nextDue = lastDone + item.intervalKm;
+    const remainingKm = nextDue - currentKm;
+    const kmSinceLast = Math.max(0, currentKm - lastDone);
+    const wearPercent = Math.min(100, Math.max(0, Math.round((kmSinceLast / item.intervalKm) * 100)));
+
+    let urgency: "ok" | "warning" | "danger" = "ok";
+    if (remainingKm <= 0) {
+      urgency = "danger";
+    } else if (remainingKm <= 1000 || wearPercent >= 90) {
+      urgency = "warning";
+    }
+
+    return {
+      id: item.id,
+      name: item.name,
+      intervalKm: item.intervalKm,
+      lastDoneKm: lastDone,
+      nextDueKm: nextDue,
+      remainingKm,
+      wearPercent,
+      urgency,
+      estimatedCost: item.estimatedCost,
+      description: item.description
+    };
+  });
+}

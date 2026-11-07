@@ -1,7 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
-import { CreditCard, Pencil, Trash2, Image as ImageIcon, X, Check } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import {
+  CreditCard,
+  Pencil,
+  Trash2,
+  Image as ImageIcon,
+  X,
+  Check,
+  Radio,
+  Scale,
+  AlertTriangle,
+  TrendingUp,
+  Sparkles,
+  ChevronDown
+} from "lucide-react";
 import {
   BankItem,
   CreditCardItem,
@@ -14,6 +27,7 @@ import {
   calculateBankBalance,
   FlowType
 } from "@/app/lifeos-data";
+import { safeSub, safeAdd, toCents, fromCents } from "@/app/lib/domain/finance";
 import { TiltCard3D, triggerAuraBurst } from "./MotionEngine144";
 
 export interface BanksTabProps {
@@ -81,6 +95,67 @@ export const BanksTab: React.FC<BanksTabProps> = ({
   const [payingInvoiceCard, setPayingInvoiceCard] = useState<{ card: CreditCardItem; usedLimit: number } | null>(null);
   const [paymentOriginBank, setPaymentOriginBank] = useState<string>("");
   const [customWishAmounts, setCustomWishAmounts] = useState<Record<string, string>>({});
+
+  // SPRINT 55 (M-01 & A-03): Conciliador Rápido de Fatura e Radar de Assinaturas
+  const [reconcileCardId, setReconcileCardId] = useState<string>(cards[0]?.id || "");
+  const [reconcileBankAppVal, setReconcileBankAppVal] = useState<string>("");
+
+  const subscriptionRadar = useMemo(() => {
+    const isSub = (t: Transaction) => {
+      if (t.isSplitChild || t.deletedAt || t.flowType === "INCOME") return false;
+      const cat = (t.category || "").toLowerCase();
+      const desc = (t.description || "").toLowerCase();
+      return (
+        cat.includes("assinatura") ||
+        cat.includes("streaming") ||
+        desc.includes("spotify") ||
+        desc.includes("netflix") ||
+        desc.includes("icloud") ||
+        desc.includes("amazon prime") ||
+        desc.includes("apple") ||
+        desc.includes("youtube") ||
+        desc.includes("chatgpt") ||
+        desc.includes("claude") ||
+        desc.includes("openai") ||
+        desc.includes("academia") ||
+        desc.includes("smartfit") ||
+        desc.includes("gympass") ||
+        desc.includes("deezer") ||
+        desc.includes("hbo") ||
+        desc.includes("max") ||
+        desc.includes("disney")
+      );
+    };
+
+    const subTxs = transactions.filter(isSub);
+    const grouped = new Map<string, { name: string; latestAmt: number; prevAmt?: number; cardUsed?: string }>();
+    const sorted = [...subTxs].sort((a, b) => (b.date > a.date ? 1 : -1));
+
+    sorted.forEach((t) => {
+      const cleanName = t.description.replace(/\s*(mensal|assinatura|plano|família|anual).*/i, "").trim() || t.description;
+      const key = cleanName.toLowerCase();
+      if (!grouped.has(key)) {
+        grouped.set(key, { name: cleanName, latestAmt: t.amount, cardUsed: t.cardUsed || t.bankAccount });
+      } else {
+        const item = grouped.get(key)!;
+        if (!item.prevAmt && item.latestAmt !== t.amount) {
+          item.prevAmt = t.amount;
+        }
+      }
+    });
+
+    const items = Array.from(grouped.values());
+    const monthlyTotal = items.reduce((acc, i) => safeAdd(acc, i.latestAmt), 0);
+    const annualProjected = safeAdd(monthlyTotal * 12);
+    const increasedItems = items.filter((i) => i.prevAmt && i.latestAmt > i.prevAmt);
+
+    return {
+      items,
+      monthlyTotal,
+      annualProjected,
+      increasedItems
+    };
+  }, [transactions]);
 
   // Agrupar cartões por banco
   const banksWithCards = banks.map((bank) => ({
@@ -183,9 +258,14 @@ export const BanksTab: React.FC<BanksTabProps> = ({
 
   const CardVisual = ({ card, globalIdx }: { card: CreditCardItem; globalIdx: number }) => {
     const exposure = calculateCardExposure(card, transactions);
-    const usedLimit = exposure.used;
+    const cardLimit = Number(card.limit || 0);
+    const currentInvoice = exposure.currentInvoice;
+    const futureBlocked = exposure.futureInstallmentsBlocked;
+    const totalCommitted = exposure.totalCommitted;
     const availableLimit = exposure.available;
-    const usagePercent = exposure.usagePercent;
+    const currentPct = cardLimit > 0 ? Math.min(100, Math.round((currentInvoice / cardLimit) * 100)) : 0;
+    const futurePct = cardLimit > 0 ? Math.min(100 - currentPct, Math.round((futureBlocked / cardLimit) * 100)) : 0;
+    const totalPct = cardLimit > 0 ? Math.min(100, Math.round((totalCommitted / cardLimit) * 100)) : 0;
     const cardBank = banks.find((b) => b.id === card.bankId) || (card.bankName ? banks.find((b) => b.name === card.bankName) || { name: card.bankName, logoUrl: undefined } : null);
     const cardGradient = getCardGradient(card.name, cardBank?.name, globalIdx);
 
@@ -230,7 +310,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
 
             {/* Lado Direito */}
             <div className="flex items-center gap-1.5 shrink-0">
-              {usedLimit > 0 && (
+              {currentInvoice > 0 && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -241,7 +321,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
                       banks[0]?.name ||
                       "";
                     setPaymentOriginBank(defaultBank);
-                    setPayingInvoiceCard({ card, usedLimit });
+                    setPayingInvoiceCard({ card, usedLimit: currentInvoice });
                   }}
                   className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-all shadow-sm cursor-pointer apple-press"
                 >
@@ -320,63 +400,73 @@ export const BanksTab: React.FC<BanksTabProps> = ({
 
           {/* Micro-linha de Status de Limite */}
           <div className="relative z-20 flex items-center justify-between text-[11px] mb-1.5 font-medium">
-            <span className="text-white/60">Uso do limite</span>
+            <span className="text-white/60">Comprometimento total</span>
             <span
               className={`font-semibold tabular-nums ${
-                usagePercent > 90
+                totalPct > 90
                   ? "text-rose-400"
-                  : usagePercent > 70
+                  : totalPct > 70
                   ? "text-amber-400"
                   : "text-emerald-400"
               }`}
             >
-              {usagePercent.toFixed(1).replace(".", ",")}% utilizado
+              {totalPct.toFixed(1).replace(".", ",")}% ({formatBRL(totalCommitted)})
             </span>
           </div>
 
-          {/* Barra de Progresso com Superfície Líquida 144Hz */}
-          <div className="relative z-20 h-2 w-full rounded-full bg-black/35 border border-white/5 overflow-hidden p-[1px]">
+          {/* Barra de Progresso Segmentada 2 Cores 144Hz */}
+          <div className="relative z-20 h-2 w-full rounded-full bg-black/40 border border-white/10 overflow-hidden flex">
             <div
-              className={`h-full rounded-full transition-all duration-500 ease-out min-w-[6px] relative liquid-progress-shimmer ${
-                usagePercent >= 90
-                  ? "bg-gradient-to-r from-amber-500 to-rose-500"
-                  : usagePercent >= 70
-                  ? "bg-gradient-to-r from-amber-400 to-amber-500"
-                  : "bg-gradient-to-r from-indigo-400 to-emerald-400"
-              }`}
-              style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }}
-            >
-              <span className="liquid-progress-head" />
-            </div>
+              className="h-full bg-[#0A84FF] transition-all duration-500 ease-out"
+              style={{ width: `${currentPct}%` }}
+              title={`Fatura Atual: ${formatBRL(currentInvoice)} (${currentPct}%)`}
+            />
+            {futureBlocked > 0 && (
+              <div
+                className="h-full bg-amber-400/90 transition-all duration-500 ease-out"
+                style={{ width: `${futurePct}%` }}
+                title={`Parcelas Futuras Retidas: ${formatBRL(futureBlocked)} (${futurePct}%)`}
+              />
+            )}
           </div>
 
-          {/* Dock Métrico em 3 Colunas (Apple SF Pro Typography) */}
-          <div className={`relative z-20 mt-3.5 pt-3 border-t border-white/10 grid grid-cols-3 gap-2 items-end ${moneyBlur}`}>
+          {/* Dock Métrico em 3 ou 4 Colunas (Apple SF Pro Typography) */}
+          <div className={`relative z-20 mt-3.5 pt-3 border-t border-white/10 grid ${futureBlocked > 0 ? "grid-cols-4" : "grid-cols-3"} gap-2 items-end ${moneyBlur}`}>
             <div>
-              <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block">
+              <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block truncate">
                 Limite Total
               </span>
-              <strong className="text-sm sm:text-base font-sans font-bold tracking-[-0.03em] tabular-nums text-white block">
+              <strong className="text-xs sm:text-sm font-sans font-bold tracking-[-0.03em] tabular-nums text-white block truncate">
                 {formatBRL(card.limit)}
               </strong>
             </div>
             <div>
-              <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block">
-                Fatura Aberta
+              <span className="text-[10px] uppercase tracking-wider text-blue-400/80 font-semibold mb-0.5 block truncate">
+                Fatura Atual
               </span>
               <strong
-                className={`text-sm sm:text-base font-sans font-bold tracking-[-0.03em] tabular-nums block ${
-                  usedLimit > 0 ? "text-[#FF9F0A]" : "text-slate-300"
+                className={`text-xs sm:text-sm font-sans font-bold tracking-[-0.03em] tabular-nums block truncate ${
+                  currentInvoice > 0 ? "text-[#0A84FF]" : "text-slate-300"
                 }`}
               >
-                {formatBRL(usedLimit)}
+                {formatBRL(currentInvoice)}
               </strong>
             </div>
+            {futureBlocked > 0 && (
+              <div>
+                <span className="text-[10px] uppercase tracking-wider text-amber-400/80 font-semibold mb-0.5 block truncate">
+                  Parc. Futuras
+                </span>
+                <strong className="text-xs sm:text-sm font-sans font-bold tracking-[-0.03em] tabular-nums text-amber-300 block truncate">
+                  {formatBRL(futureBlocked)}
+                </strong>
+              </div>
+            )}
             <div className="text-right">
-              <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block text-right">
+              <span className="text-[10px] uppercase tracking-wider text-emerald-400/80 font-semibold mb-0.5 block text-right truncate">
                 Disponível
               </span>
-              <strong className="text-sm sm:text-base font-sans font-bold tracking-[-0.03em] tabular-nums text-[#30D158] block text-right">
+              <strong className="text-xs sm:text-sm font-sans font-bold tracking-[-0.03em] tabular-nums text-[#30D158] block text-right truncate">
                 {formatBRL(availableLimit)}
               </strong>
             </div>
@@ -598,6 +688,155 @@ export const BanksTab: React.FC<BanksTabProps> = ({
                 Controle o limite total, a fatura aberta e dê baixa integral na fatura em 1 clique.
               </p>
             </div>
+
+            {/* SPRINT 55 (M-01 & A-03): RADAR DE ASSINATURAS RECORRENTES & CONCILIADOR RÁPIDO DE FATURA */}
+            {cards.length > 0 && (() => {
+              const reconcileCard = cards.find((c) => c.id === reconcileCardId) || cards[0];
+              const reconcileExposure = reconcileCard ? calculateCardExposure(reconcileCard, transactions) : null;
+              const reconcileParsedVal = reconcileBankAppVal ? parseFloat(reconcileBankAppVal.replace(/\./g, "").replace(",", ".")) : null;
+              const reconcileDiff =
+                reconcileExposure && reconcileParsedVal !== null && !isNaN(reconcileParsedVal)
+                  ? safeSub(reconcileParsedVal, reconcileExposure.currentInvoice)
+                  : null;
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-950/60 border border-white/10 shadow-lg">
+                  {/* 1. Radar de Assinaturas Recorrentes */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-purple-500/15 text-purple-400">
+                          <Radio className="w-4 h-4 animate-pulse" />
+                        </div>
+                        <div>
+                          <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                            📡 Radar de Assinaturas
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+                              {subscriptionRadar.items.length} ativas
+                            </span>
+                          </h3>
+                          <p className="text-[10px] text-slate-400">Detecção contínua de streamings e serviços recorrentes</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2 rounded-xl bg-white/5 border border-white/5">
+                        <span className="text-[10px] text-slate-400 block">Custo Mensal Total</span>
+                        <strong className={`text-sm font-bold text-white block mt-0.5 tabular-nums ${moneyBlur}`}>
+                          {formatBRL(subscriptionRadar.monthlyTotal)}
+                        </strong>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white/5 border border-white/5">
+                        <span className="text-[10px] text-purple-300 block">Custo Anual (12x)</span>
+                        <strong className={`text-sm font-bold text-purple-300 block mt-0.5 tabular-nums ${moneyBlur}`}>
+                          {formatBRL(subscriptionRadar.annualProjected)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {subscriptionRadar.increasedItems.length > 0 && (
+                      <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[11px] flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>
+                          Alerta de aumento: <strong>{subscriptionRadar.increasedItems.map((i) => i.name).join(", ")}</strong> teve reajuste de valor!
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto pr-1">
+                      {subscriptionRadar.items.length > 0 ? (
+                        subscriptionRadar.items.map((sub, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-[10px] text-slate-300 font-medium"
+                          >
+                            <span>{sub.name}:</span>
+                            <strong className={`text-white tabular-nums ${moneyBlur}`}>{formatBRL(sub.latestAmt)}</strong>
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-slate-500 italic">Nenhuma assinatura recorrente detectada este mês.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2. Conciliador Rápido de Fatura */}
+                  <div className="space-y-3 md:border-l md:border-white/10 md:pl-4">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-blue-500/15 text-[#0A84FF]">
+                        <Scale className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-bold text-white">⚖️ Conciliador Rápido de Fatura</h3>
+                        <p className="text-[10px] text-slate-400">Compare com a fatura fechada no app do seu banco</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-1">Cartão de Crédito</label>
+                        <select
+                          value={reconcileCardId}
+                          onChange={(e) => setReconcileCardId(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white focus:outline-none focus:border-[#0A84FF]"
+                        >
+                          {cards.map((c) => (
+                            <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-1">Valor no App do Banco (R$)</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 182,90"
+                          value={reconcileBankAppVal}
+                          onChange={(e) => setReconcileBankAppVal(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-[#0A84FF]"
+                        />
+                      </div>
+                    </div>
+
+                    {reconcileExposure && (
+                      <div className="p-2 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between text-xs">
+                        <span className="text-[11px] text-slate-400">Fatura no Coindex:</span>
+                        <strong className={`font-mono font-bold text-white tabular-nums ${moneyBlur}`}>
+                          {formatBRL(reconcileExposure.currentInvoice)}
+                        </strong>
+                      </div>
+                    )}
+
+                    {reconcileDiff !== null && (
+                      <div>
+                        {Math.abs(reconcileDiff) < 0.01 ? (
+                          <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center gap-2">
+                            <Check className="w-4 h-4 text-[#30D158] shrink-0" />
+                            <span className="font-semibold">✓ 100% Conciliado no centavo! Nenhuma divergência.</span>
+                          </div>
+                        ) : reconcileDiff > 0 ? (
+                          <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-[11px] flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                            <span>
+                              Fatura do Banco está <strong>{formatBRL(reconcileDiff)}</strong> maior. Verifique lançamentos que ainda não foram registrados no Coindex.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-200 text-[11px] flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-[#0A84FF] shrink-0 mt-0.5" />
+                            <span>
+                              Fatura do Banco está <strong>{formatBRL(Math.abs(reconcileDiff))}</strong> menor. Verifique se há estornos ou lançamentos duplicados no Coindex.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Cartões agrupados por banco */}
             {banksWithCards.map(

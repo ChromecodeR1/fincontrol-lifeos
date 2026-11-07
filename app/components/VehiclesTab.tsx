@@ -62,7 +62,9 @@ import { SlidingSegmentedControl } from "./SlidingSegmentedControl";
 import {
   calculateVehicleConsumption,
   calculateVehicleTco,
-  isFuelTransaction
+  isFuelTransaction,
+  calculateVehicleMaintenancePlan,
+  VehicleMaintenanceItem
 } from "../lib/domain/vehicle-math";
 
 export interface VehiclesTabProps {
@@ -146,6 +148,49 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
   // Calculadora Rápida Etanol vs Gasolina Flex
   const [calcGasPrice, setCalcGasPrice] = useState<string>("5.99");
   const [calcEthPrice, setCalcEthPrice] = useState<string>("4.19");
+
+  // SPRINT 55: A-01 — Histórico e Plano de Manutenção Preventiva por Odômetro
+  const [maintenanceHistory, setMaintenanceHistory] = useState<Record<string, number>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const saved = localStorage.getItem("lifeos_vehicle_maintenance_v1");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const maintenancePlan = useMemo(() => {
+    return calculateVehicleMaintenancePlan(autoMetrics.maxKm || 0, maintenanceHistory);
+  }, [autoMetrics.maxKm, maintenanceHistory]);
+
+  const handleRegisterMaintenance = async (item: VehicleMaintenanceItem) => {
+    const currentKm = autoMetrics.maxKm || 0;
+    const nextHist = { ...maintenanceHistory, [item.id]: currentKm };
+    setMaintenanceHistory(nextHist);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lifeos_vehicle_maintenance_v1", JSON.stringify(nextHist));
+    }
+
+    if (onAddTransaction) {
+      await onAddTransaction({
+        id: `tx-maint-${Date.now()}`,
+        date: todayBR(),
+        description: `Revisão: ${item.name}`,
+        amount: item.estimatedCost,
+        category: "Manutenção Veículo",
+        costType: "Variável",
+        paymentMethod: "PIX",
+        bankAccount: "Nubank",
+        status: "Pago",
+        km: currentKm,
+        updatedAt: new Date().toISOString()
+      });
+      notify("Revisão Registrada!", `${item.name} atualizada no odômetro (${currentKm.toLocaleString("pt-BR")} km) e lançada no Livro Caixa.`, "success");
+    } else {
+      notify("Revisão Registrada!", `${item.name} atualizada no odômetro (${currentKm.toLocaleString("pt-BR")} km).`, "success");
+    }
+  };
 
   // Estado e Fluxo do Modal de Abastecimento Rápido (Telemetria + Lançamentos)
   const [showQuickFuelModal, setShowQuickFuelModal] = useState(false);
@@ -1334,6 +1379,93 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
               </ChartCard>
             );
           })}
+      </div>
+
+      {/* SPRINT 55: A-01 — PLANO DE MANUTENÇÃO PREVENTIVA POR ODÔMETRO */}
+      <div className="glass-card p-6 rounded-3xl border border-white/[0.08] shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-indigo-500/15 text-indigo-400">
+              <Wrench className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                Plano de Manutenção Preventiva por Odômetro
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0A84FF]/20 text-[#0A84FF] border border-[#0A84FF]/30">
+                  Odômetro Atual: {(autoMetrics.maxKm || 0).toLocaleString("pt-BR")} km
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Acompanhe o desgaste natural dos 5 componentes vitais e antecipe trocas antes de quebras graves.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {maintenancePlan.map((item) => {
+            const isDanger = item.urgency === "danger";
+            const isWarning = item.urgency === "warning";
+            const progressColor = isDanger ? "bg-rose-500" : isWarning ? "bg-amber-500" : "bg-emerald-500";
+            const badgeBg = isDanger
+              ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+              : isWarning
+              ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+              : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+
+            return (
+              <div
+                key={item.id}
+                className="p-4 rounded-2xl bg-slate-950/70 border border-white/[0.06] hover:border-white/[0.12] flex flex-col justify-between space-y-3 transition"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-extrabold text-white text-xs">{item.name}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border tabular-nums ${badgeBg}`}>
+                      {isDanger
+                        ? `Vencido (${Math.abs(item.remainingKm).toLocaleString("pt-BR")} km)`
+                        : `Restam ${item.remainingKm.toLocaleString("pt-BR")} km`}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                    {item.description}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] text-slate-300 font-mono tabular-nums">
+                    <span>Desgaste: <strong>{item.wearPercent}%</strong></span>
+                    <span>Intervalo: {item.intervalKm.toLocaleString("pt-BR")} km</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 rounded-full ${progressColor}`}
+                      style={{ width: `${item.wearPercent}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-400 font-mono tabular-nums pt-1">
+                    <span>Última: {item.lastDoneKm.toLocaleString("pt-BR")} km</span>
+                    <span>Próxima: {item.nextDueKm.toLocaleString("pt-BR")} km</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-slate-400">
+                    Est.: <strong className="text-white">{formatBRL(item.estimatedCost)}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRegisterMaintenance(item)}
+                    className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="Salvar revisão feita no odômetro atual e lançar despesa no Livro Caixa"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Registrar Revisão
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Histórico Automotivo com Datas em DD/MM/AAAA */}

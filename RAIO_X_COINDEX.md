@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.42.0`  
-> **Última Atualização:** 7 de Novembro de 2026 (Pós-Sprint 54 — Carrossel Vertical Apple Wallet de 3 Cartões Nítidos com Scroll no Mouse, Correção Matemática dos Limites de Cartões, Modal de Ordenação com Engrenagem e Polling de 30s no Mercado)  
+> **Versão da Aplicação:** `0.43.0`  
+> **Última Atualização:** 7 de Novembro de 2026 (Pós-Mega-Sprint 55 — Limite Real dos Cartões c/ Parcelas Futuras, Detector de Assinaturas, Edição Inline & Ações em Lote, Manutenção KM em Veículos, B3 Ao Vivo, Calendário Heatmap, PRs Strava e Coindex Wrapped)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1077,6 +1077,33 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Passo 6 — Calibração do Polling de Mercado para 30 Segundos:**
       - Ajuste do intervalo de polling e conexão em `InvestmentsTab.tsx` para 30 segundos (`30000ms`), reduzindo tráfego desnecessário de rede.
       - Remoção da contagem de segundos e horário textual do botão `⚡ AO VIVO`, mantendo apenas o ponto luminoso sonar pulsante e o ícone de raio.
+
+  - **Mega-Sprint 55 (Novembro de 2026 — Limite Real dos Cartões c/ Parcelas Futuras, Detector de Assinaturas, Edição Inline & Ações em Lote, Manutenção KM em Veículos, B3 Ao Vivo, Calendário Heatmap, PRs Strava e Coindex Wrapped):**
+    - **Passo 1 (M-01 & M-02) — Limite Real c/ Parcelas Futuras, Radar de Assinaturas & Conciliador de Fatura:**
+      - Separação matemática contábil na interface `CardExposure`: `currentInvoice` (fatura do mês de competência) vs. `futureInstallmentsBlocked` (soma de todas as parcelas futuras que bloqueiam o limite total do cartão).
+      - Cálculo de disponível real: `availableLimit = Math.max(0, limit - (currentInvoice + futureInstallmentsBlocked))`.
+      - Radar de assinaturas e despesas fixas recorrentes em `BanksTab.tsx` com detecção de padrões periódicos, custo mensal acumulado, projeção anual 12x e alertas visuais de aumento de preço.
+      - Conciliador relâmpago de extrato de fatura bancária em `BanksTab.tsx` com marcação instantânea de lançamentos conferidos.
+    - **Passo 2 (M-03) — Edição Inline por Duplo Clique, Ações em Lote & Lançamento Rápido no Ctrl+K:**
+      - Edição inline direta na tabela de lançamentos (`TransactionsTableAdvanced.tsx`) ao dar duplo clique nas células de Data, Descrição, Categoria ou Valor, com suporte a teclado (Enter para salvar, Esc para cancelar) e micro-feedback tátil.
+      - Seleção múltipla de transações por checkboxes com barra de ações flutuante na base da tela (`Marcar como Pago`, `Marcar como Pendente`, `Mudar Categoria`, `Excluir Selecionados`).
+      - Parser em linguagem natural integrado à Command Palette (Ctrl+K) detectando comandos como `gastei 35,90 uber pix`, `recebi 500 salario santander`, `aporte 250 btc`, exibindo card de pré-visualização instantânea e gravação no Livro Caixa com 1 toque no Enter.
+    - **Passo 3 (A-01) — Manutenção Preventiva por Odômetro em Veículos:**
+      - Painel de 5 manutenções vitais preventivas por quilometragem em `VehiclesTab.tsx` e `app/lib/domain/vehicle-math.ts`: Óleo e Filtro (10.000 km), Alinhamento e Rodízio de Pneus (10.000 km), Pastilhas e Fluido de Freio (25.000 km), Arrefecimento e Velas (30.000 km) e Correia Dentada (50.000 km).
+      - Barras de desgaste percentual dinâmico com níveis de urgência visual (ok, warning, danger) e botão `✓ Registrar Revisão Hoje` que insere automaticamente a despesa de manutenção no Livro Caixa e atualiza o histórico do odômetro.
+    - **Passo 4 (A-02) — Cotações B3 Ao Vivo & Simulador de Marcos Patrimoniais:**
+      - Ingestão contínua de cotações de ações e fundos imobiliários da B3 (`PETR4`, `VALE3`, `BBAS3`, `ITUB4`, `WEGE3`, `MXRF11`, `HGLG11`, `IVVB11`) através do endpoint `/api/market-pulse` com fallback resiliente e exibição de dividendos mensais estimados por cota no módulo de Investimentos.
+      - Linha do tempo interativa com física 144Hz de marcos patrimoniais (R$ 5k, R$ 10k, R$ 25k, R$ 50k, R$ 100k) com slider dinâmico de aportes compostos (R$ 100 a R$ 5.000/mês).
+    - **Passo 5 (A-03 Parte 2) — Calendário Financeiro Heatmap & No-Spend Days:**
+      - Sub-aba `📅 Calendário` no widget `cashflow_recents` do Dashboard executivo, apresentando grade mensal completa de 7 colunas (DOM a SÁB) com pontos semânticos (verde para entradas, vermelho para saídas, azul para aportes).
+      - Telemetria de "No-Spend Days" com streak contínuo de dias sem gastos e detalhamento instantâneo dos lançamentos ao clicar em qualquer dia do mês.
+    - **Passo 6 (A-04) — Recordes Pessoais (PRs) e Zonas de Pace no Strava:**
+      - 4 cards de troféus atléticos na aba Bio & Strava: Pace PR (km mais rápido), Longão (maior distância percorrida), Melhor 5K e Maior Altimetria acumulada.
+      - Barra horizontal segmentada das 4 zonas de intensidade e esforço cardiovascular: Z1 Regenerativo (> 6'30"), Z2 Aeróbico (5'30" - 6'30"), Z3 Limiar (4'45" - 5'30") e Z4 Anaeróbico / VO2 Máx (< 4'45").
+    - **Passo 7 (Helena Costa Produto #1 & #2) — Alertas Proativos Acionáveis, Coindex Wrapped & Gaveta Mobile:**
+      - 4 regras preditivas no sininho de notificações da Topbar (faturas de cartão a vencer em até 5 dias, valores a receber em aberto, manutenções veiculares próximas e déficit semanal de treinos) com botão de navegação direta `Ir para [Aba] →`.
+      - Modal executivo "Ritual de Fechamento do Mês (Coindex Wrapped)" com selo de performance (ex: Mês Frugal & Investidor 🏆), taxa de aporte, 4 KPIs mestres, top 3 maiores despesas, km de corrida/veículo e botão de copiar resumo formatado.
+      - Gaveta inferior estilo iOS Bottom Sheet no mobile (`☰ Mais`) para acesso imediato a todos os 12 módulos e utilitários da plataforma em telas compactas.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

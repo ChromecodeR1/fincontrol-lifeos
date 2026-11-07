@@ -399,10 +399,25 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.42.0";
-export const PREVIOUS_VERSION = "0.41.0";
+export const APP_VERSION = "0.43.0";
+export const PREVIOUS_VERSION = "0.42.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.43.0",
+    date: "Nov/2026",
+    title: "Mega-Sprint 55: Limite Real dos Cartões c/ Parcelas Futuras, Detector de Assinaturas, Edição Inline & Ações em Lote, Manutenção KM em Veículos, B3 Ao Vivo, Calendário Heatmap, PRs Strava e Coindex Wrapped",
+    highlights: [
+      "M-01 & M-02 (Limite Real dos Cartões & Radar de Assinaturas): Separação matemática contábil entre fatura do mês atual vs. parcelas futuras bloqueando o limite em CardExposure; detector automatizado de assinaturas recorrentes com projeção anual 12x e alertas de reajuste; conciliador relâmpago de extrato de fatura.",
+      "M-03 (Edição Inline por Duplo Clique, Ações em Lote & Lançamento Rápido no Ctrl+K): Edição inline direta na tabela de lançamentos ao dar duplo clique em Data, Descrição, Categoria ou Valor; seleção múltipla por checkboxes com barra de ação flutuante (Marcar como Pago, Pendente, Mudar Categoria, Excluir); parser inteligente em linguagem natural no Ctrl+K (ex: 'gastei 35,90 uber pix').",
+      "A-01 (Manutenção Preventiva por Odômetro em Veículos): Painel de 5 manutenções vitais periódicas (Óleo/Filtro, Alinhamento, Freios, Arrefecimento, Correia Dentada) com barras de desgaste, alertas de revisão próxima/vencida e botão de registro 1-clique integrado ao Livro Caixa.",
+      "A-02 (Cotações B3 Ao Vivo & Simulador de Marcos Patrimoniais): Ingestão em tempo real de ações e FIIs da B3 (PETR4, VALE3, BBAS3, ITUB4, WEGE3, MXRF11, HGLG11, IVVB11) com dividendos mensais estimados por cota; linha do tempo interativa de marcos patrimoniais (R$ 5k a R$ 100k) com slider de aportes compostos.",
+      "A-03 (Calendário Financeiro Heatmap & No-Spend Days): Nova sub-aba 📅 Calendário no widget de Fluxo de Caixa exibindo grade mensal de 7 colunas com pontos semânticos (entradas, saídas, investimentos), contador de streak sem gastos e detalhamento de lançamentos por dia.",
+      "A-04 (Recordes Pessoais PRs & Zonas de Pace no Strava): 4 troféus de recordes atléticos (Pace PR, Longão, Melhor 5K, Maior Altimetria) e barra horizontal segmentada das 4 zonas de esforço cardiovascular (Regenerativo, Z2 Aeróbico, Limiar, Anaeróbico/VO2).",
+      "Helena Costa Produto #1 (Central de Alertas Proativos Acionáveis): 4 gatilhos preditivos no sininho da Topbar (faturas a vencer em <= 5 dias, cobrança de devedores, revisões de km e déficit semanal de corridas) com botão de navegação direta 'Ir para [Aba] →'.",
+      "Helena Costa Produto #2 (Ritual de Fechamento do Mês - Coindex Wrapped & Gaveta Mobile 'Mais'): Modal executivo Coindex Wrapped com classificação de performance financeira do mês, taxa de aporte, top 3 maiores gastos e telemetria consolidada; gaveta inferior estilo iOS Bottom Sheet no mobile para navegação instantânea em todos os 12 módulos."
+    ]
+  },
   {
     version: "0.42.0",
     date: "Nov/2026",
@@ -1812,6 +1827,9 @@ export interface CardExposure {
   used: number; // Valor da fatura da competência atual (ou pendente)
   available: number; // Limite real restante descontando todo o comprometimento
   usagePercent: number;
+  currentInvoice: number;
+  futureInstallmentsBlocked: number;
+  totalCommitted: number;
   currentInvoiceAmount?: number;
   totalCommittedLimit?: number;
 }
@@ -1829,31 +1847,47 @@ export function calculateCardExposure(
     (t.cardUsed === card.name || (t.cardId && card.id && t.cardId === card.id)) &&
     (t.paymentMethod === "Cartão de Crédito" || Boolean(t.invoiceMonth));
 
-  // 1. Limite Total Comprometido: TODAS as transações não pagas do cartão (inclusive meses futuros)
-  const unpaidTxs = transactions.filter((t) => isMatchingCard(t) && t.status !== "Pago");
-  const totalCommittedLimit = safeAdd(...unpaidTxs.map((t) => getEffectiveCardLiabilityAmount(t)));
-  const available = Math.max(0, safeSub(cardLimit, totalCommittedLimit));
-  const usagePercent = cardLimit > 0 ? Math.min(100, Math.max(0, Math.round((totalCommittedLimit / cardLimit) * 100))) : 0;
+  const refMonth =
+    selectedMonth && selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)
+      ? selectedMonth
+      : "2026-11";
 
-  // 2. Fatura da competência selecionada
-  const invoiceTxs = transactions.filter((t) => {
-    if (!isMatchingCard(t)) return false;
-    if (selectedMonth && selectedMonth !== "ALL" && /^\d{4}-\d{2}$/.test(selectedMonth)) {
-      const comp = t.invoiceMonth || getCardInvoiceCompetence(t.date, card.closingDay, card.dueDay);
-      return comp === selectedMonth;
+  // Transações não pagas do cartão
+  const unpaidTxs = transactions.filter((t) => isMatchingCard(t) && t.status !== "Pago");
+
+  let currentInvoiceCents = 0;
+  let futureBlockedCents = 0;
+
+  unpaidTxs.forEach((t) => {
+    const comp = t.invoiceMonth || getCardInvoiceCompetence(t.date, card.closingDay, card.dueDay);
+    const liability = getEffectiveCardLiabilityAmount(t);
+    if (comp > refMonth) {
+      futureBlockedCents += toCents(liability);
+    } else {
+      currentInvoiceCents += toCents(liability);
     }
-    return t.status !== "Pago";
   });
-  const currentInvoiceAmount = safeAdd(...invoiceTxs.map((t) => getEffectiveCardLiabilityAmount(t)));
+
+  const currentInvoice = fromCents(currentInvoiceCents);
+  const futureInstallmentsBlocked = fromCents(futureBlockedCents);
+  const totalCommitted = safeAdd(currentInvoice, futureInstallmentsBlocked);
+  const available = Math.max(0, safeSub(cardLimit, totalCommitted));
+  const usagePercent =
+    cardLimit > 0
+      ? Math.min(100, Math.max(0, Math.round((totalCommitted / cardLimit) * 100)))
+      : 0;
 
   return {
     cardName: card.name,
     limit: cardLimit,
-    used: currentInvoiceAmount,
+    used: currentInvoice,
     available,
     usagePercent,
-    currentInvoiceAmount,
-    totalCommittedLimit
+    currentInvoice,
+    futureInstallmentsBlocked,
+    totalCommitted,
+    currentInvoiceAmount: currentInvoice,
+    totalCommittedLimit: totalCommitted
   };
 }
 
