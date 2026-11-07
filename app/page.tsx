@@ -7197,7 +7197,8 @@ export default function CoindexApp() {
                 { id: "auto", label: "Meus Veículos", icon: <Car className="w-4 h-4" /> },
                 { id: "bio", label: "Bio & Strava", icon: <Activity className="w-4 h-4" /> },
                 { id: "brain", label: "Segundo Cérebro", icon: <Brain className="w-4 h-4" /> },
-                { id: "settings", label: "Configurações", icon: <Settings className="w-4 h-4" /> }
+                { id: "settings", label: "Configurações", icon: <Settings className="w-4 h-4" /> },
+                { id: "about", label: "Sobre", icon: <Sparkles className="w-4 h-4" /> }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -10086,6 +10087,14 @@ export default function CoindexApp() {
                     setActiveTab("settings");
                   },
                   icon: <Settings className="w-3.5 h-3.5 text-slate-300" />
+                },
+                {
+                  label: "Sobre o Coindex (Manifesto & Versão)",
+                  action: () => {
+                    setShowCommandModal(false);
+                    setActiveTab("about");
+                  },
+                  icon: <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                 }
               ]
                 .filter((item) => normalizeSearchText(item.label).includes(normalizeSearchText(commandQuery)))
@@ -10671,7 +10680,8 @@ export default function CoindexApp() {
                 { id: "brain", label: "Segundo Cérebro", icon: <Brain className="w-4 h-4 text-cyan-400" /> },
                 { id: "wishlist", label: "Desejos de Compra", icon: <Sparkles className="w-4 h-4 text-yellow-400" /> },
                 { id: "spotify", label: "Spotify Família", icon: <SpotifyLogo className="w-4 h-4" /> },
-                { id: "settings", label: "Configurações", icon: <Settings className="w-4 h-4 text-slate-400" /> }
+                { id: "settings", label: "Configurações", icon: <Settings className="w-4 h-4 text-slate-400" /> },
+                { id: "about", label: "Sobre o Coindex", icon: <Sparkles className="w-4 h-4 text-cyan-400" /> }
               ].map((mod) => (
                 <button
                   key={mod.id}

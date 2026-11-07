@@ -46,6 +46,15 @@ export interface CoindexIconProps {
   className?: string;
   variant?: CoindexLogoVariant;
   enableMotion?: boolean;
+  showcase?: boolean;
+}
+
+export interface CoindexLogoMonumentalProps {
+  className?: string;
+  enableMotion?: boolean;
+  isPulsing?: boolean;
+  highlightSegment?: "all" | "left" | "right" | "weave";
+  onClick?: (e: React.MouseEvent<SVGSVGElement>) => void;
 }
 
 export interface CoindexLogoProps {
@@ -66,8 +75,12 @@ export interface CoindexLogoProps {
  */
 export function CoindexIcon({
   className = "w-10 h-7",
-  enableMotion = true
+  enableMotion = true,
+  showcase = false
 }: CoindexIconProps) {
+  if (showcase) {
+    return <CoindexLogoMonumental className={className} enableMotion={enableMotion} />;
+  }
   return (
     <svg
       viewBox="0 0 120 84"
@@ -194,6 +207,244 @@ export function CoindexIcon({
           fill="none"
         />
       </g>
+    </svg>
+  );
+}
+
+/**
+ * CoindexLogoMonumental — Palco Monumental Interativo 144Hz da Logo "The Equilibrium Link"
+ * Utilizado no módulo "Sobre" e em palcos heróicos do sistema.
+ */
+export function CoindexLogoMonumental({
+  className = "w-60 h-42 md:w-72 md:h-50",
+  enableMotion = true,
+  isPulsing = false,
+  highlightSegment = "all",
+  onClick
+}: CoindexLogoMonumentalProps) {
+  // Configuração de opacidades com base no segmento focado
+  const leftOpacity =
+    highlightSegment === "right" ? 0.2 : highlightSegment === "weave" ? 0.55 : 1;
+  const rightOpacity =
+    highlightSegment === "left" ? 0.2 : highlightSegment === "weave" ? 0.55 : 1;
+  const weaveHighlight = highlightSegment === "weave";
+
+  const pulseDuration = isPulsing ? "1.4s" : "5.5s";
+
+  return (
+    <svg
+      viewBox="0 0 120 84"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      onClick={onClick}
+      className={`select-none transition-all duration-500 ease-out group ${
+        isPulsing ? "scale-105 drop-shadow-[0_0_36px_rgba(10,132,255,0.7)]" : "hover:scale-105 drop-shadow-[0_0_24px_rgba(10,132,255,0.35)]"
+      } ${className}`}
+      aria-label="Coindex Equilibrium Link Monumental"
+    >
+      <defs>
+        {/* Gradiente Oficial Apple Blue Monumental */}
+        <linearGradient id="cxBlueGradMonumental" x1="50" y1="16" x2="102" y2="68" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#38BDF8" />
+          <stop offset="60%" stopColor="#0A84FF" />
+          <stop offset="100%" stopColor="#0066CC" />
+        </linearGradient>
+
+        {/* Gradiente Titânio / Platina Especular */}
+        <linearGradient id="cxTitaniumGradMonumental" x1="18" y1="16" x2="65" y2="68" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFFFFF" />
+          <stop offset="100%" stopColor="#CBD5E1" />
+        </linearGradient>
+
+        {/* Feixe Especular Orbital 144Hz */}
+        <linearGradient id="cxPulseMonumental" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#38BDF8" stopOpacity="0" />
+          <stop offset="50%" stopColor="#FFFFFF" stopOpacity="0.95" />
+          <stop offset="100%" stopColor="#0A84FF" stopOpacity="0" />
+        </linearGradient>
+
+        {/* Glow de Intersecção do Elo */}
+        <radialGradient id="cxWeaveGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#0A84FF" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* ========================================================
+          CAMADA DE FUNDO ARQUITETURAL: RADAR DE PRECISÃO & GEOMETRIA
+          ======================================================== */}
+      <g className="text-slate-500 dark:text-slate-400">
+        {/* Linha técnica do horizonte */}
+        <line
+          x1="6"
+          y1="42"
+          x2="114"
+          y2="42"
+          stroke="currentColor"
+          strokeOpacity="0.12"
+          strokeDasharray="1 5"
+          strokeWidth="0.8"
+        />
+
+        {/* Radar concêntrico do Elo Esquerdo */}
+        <circle
+          cx="44"
+          cy="42"
+          r="41"
+          stroke="currentColor"
+          strokeOpacity="0.08"
+          strokeDasharray="2 4"
+          strokeWidth="0.8"
+          fill="none"
+        />
+        <circle
+          cx="44"
+          cy="42"
+          r="16"
+          stroke="currentColor"
+          strokeOpacity="0.05"
+          strokeDasharray="1 3"
+          strokeWidth="0.8"
+          fill="none"
+        />
+        {/* Cruz de mira no centro do nó esquerdo */}
+        <line x1="44" y1="38" x2="44" y2="46" stroke="currentColor" strokeOpacity="0.18" strokeWidth="0.8" />
+        <line x1="40" y1="42" x2="48" y2="42" stroke="currentColor" strokeOpacity="0.18" strokeWidth="0.8" />
+
+        {/* Radar concêntrico do Elo Direito */}
+        <circle
+          cx="76"
+          cy="42"
+          r="41"
+          stroke="currentColor"
+          strokeOpacity="0.08"
+          strokeDasharray="2 4"
+          strokeWidth="0.8"
+          fill="none"
+        />
+        <circle
+          cx="76"
+          cy="42"
+          r="16"
+          stroke="currentColor"
+          strokeOpacity="0.05"
+          strokeDasharray="1 3"
+          strokeWidth="0.8"
+          fill="none"
+        />
+        {/* Cruz de mira no centro do nó direito */}
+        <line x1="76" y1="38" x2="76" y2="46" stroke="currentColor" strokeOpacity="0.18" strokeWidth="0.8" />
+        <line x1="72" y1="42" x2="80" y2="42" stroke="currentColor" strokeOpacity="0.18" strokeWidth="0.8" />
+      </g>
+
+      {/* ========================================================
+          GRUPO ESQUERDO: ELO "C" EM TITÂNIO (cx=44, cy=42, r=26)
+          ======================================================== */}
+      <g
+        className="transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform,opacity] group-hover:-translate-x-[2px]"
+        style={{ opacity: leftOpacity }}
+      >
+        <path
+          d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
+          stroke="url(#cxTitaniumGradMonumental)"
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={enableMotion ? "coindex-ring-draw" : ""}
+          fill="none"
+        />
+
+        {enableMotion && (
+          <path
+            d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
+            stroke="url(#cxPulseMonumental)"
+            strokeWidth="4"
+            strokeLinecap="round"
+            fill="none"
+            className="coindex-orbital-glow"
+            style={{ animationDuration: pulseDuration }}
+          />
+        )}
+      </g>
+
+      {/* ========================================================
+          INTERSECÇÃO SUPERIOR: ELO DIREITO AZUL PASSA POR CIMA
+          ======================================================== */}
+      <path
+        d="M 76 16 A 26 26 0 0 0 52 32"
+        stroke="var(--cupertino-card, #0B0E14)"
+        strokeWidth="17"
+        strokeLinecap="butt"
+        fill="none"
+        className="transition-colors duration-200"
+      />
+
+      {/* ========================================================
+          GRUPO DIREITO: ANEL COMPLETO APPLE BLUE (cx=76, cy=42, r=26)
+          ======================================================== */}
+      <g
+        className="transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform,opacity] group-hover:translate-x-[2px]"
+        style={{ opacity: rightOpacity }}
+      >
+        <circle
+          cx="76"
+          cy="42"
+          r="26"
+          stroke="url(#cxBlueGradMonumental)"
+          strokeWidth="10"
+          className={enableMotion ? "coindex-ring-draw" : ""}
+          fill="none"
+        />
+
+        {enableMotion && (
+          <path
+            d="M 102 42 A 26 26 0 1 1 50 42 A 26 26 0 1 1 102 42"
+            stroke="url(#cxPulseMonumental)"
+            strokeWidth="4"
+            strokeLinecap="round"
+            fill="none"
+            className="coindex-orbital-glow"
+            style={{ animationDelay: "-2.75s", animationDuration: pulseDuration }}
+          />
+        )}
+      </g>
+
+      {/* ========================================================
+          INTERSECÇÃO INFERIOR: ELO ESQUERDO BRANCO "C" PASSA POR CIMA
+          ======================================================== */}
+      <g
+        className="transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform,opacity] group-hover:-translate-x-[2px]"
+        style={{ opacity: leftOpacity }}
+      >
+        <path
+          d="M 44 68 A 26 26 0 0 0 64.49 58.01"
+          stroke="var(--cupertino-card, #0B0E14)"
+          strokeWidth="17"
+          strokeLinecap="round"
+          fill="none"
+          className="transition-colors duration-200"
+        />
+
+        <path
+          d="M 44 68 A 26 26 0 0 0 64.49 58.01"
+          stroke="url(#cxTitaniumGradMonumental)"
+          strokeWidth="10"
+          strokeLinecap="round"
+          fill="none"
+        />
+      </g>
+
+      {/* ========================================================
+          DESTAQUE DE ENTRELAÇAMENTO (WEAVE FOCUS)
+          ======================================================== */}
+      {weaveHighlight && (
+        <g className="transition-opacity duration-300">
+          <circle cx="60" cy="22.8" r="7" fill="url(#cxWeaveGlow)" className="animate-pulse" />
+          <circle cx="60" cy="61.2" r="7" fill="url(#cxWeaveGlow)" className="animate-pulse" />
+          <circle cx="60" cy="22.8" r="3.5" fill="#38BDF8" />
+          <circle cx="60" cy="61.2" r="3.5" fill="#FFFFFF" />
+        </g>
+      )}
     </svg>
   );
 }

@@ -85,7 +85,8 @@ export type ActiveTab =
   | "bio"
   | "brain"
   | "spotify"
-  | "settings";
+  | "settings"
+  | "about";
 export type DashboardWidgetId =
   | "thermometer"
   | "thermometer_card"
@@ -399,10 +400,26 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.43.0";
-export const PREVIOUS_VERSION = "0.42.0";
+export const APP_VERSION = "0.44.0";
+export const PREVIOUS_VERSION = "0.43.0";
+export const COINDEX_APP_VERSION = "0.44.0";
+export const COINDEX_BUILD_DATE = "Novembro de 2026";
+export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.44.0",
+    date: "Nov/2026",
+    title: "Sprint 56: Módulo 'Sobre' com Palco Monumental Interativo 144Hz da Logo 'The Equilibrium Link', Manifesto da Coindex e Telemetria de Engenharia",
+    highlights: [
+      "Palco Monumental 'The Equilibrium Core' (CoindexLogoMonumental): Geometria vetorial expandida com dupla órbita luminosa síncrona 144Hz, micro-grid arquitetural, anéis concêntricos de radar e física 3D TiltCard3D com reflexo especular.",
+      "Botão '⚡ Pulsar Motor 144Hz': Micro-física tátil com dispersão de 22 partículas azuis em arco quântico (triggerAuraBurst), aceleração da rotação orbital por 1,5s e ciclo demonstrativo dos contadores numéricos.",
+      "A Filosofia do Elo ('Por que The Equilibrium Link?'): Módulo educativo com controle segmentado deslizante (SlidingSegmentedControl) detalhando o Elo Esquerdo em Titânio (Clareza & Controle), o Elo Direito em Apple Blue (Expansão & Futuro) e o Ponto de Entrelaçamento Perpétuo.",
+      "Manifesto Coindex (Missão, Visão e Objetivos Estratégicos): Bento Grid com iluminação de borda por proximidade (useProximityBorderGlow) consolidando os propósitos da plataforma.",
+      "Os 5 Valores Inegociáveis da Coindex: Cards com iluminação spotlight destacando Precisão no Centavo, Fluidez como Respeito, Design que Acalma, Soberania na Nuvem e Patrimônio + Saúde em Harmonia.",
+      "Telemetria de Engenharia & Ficha Técnica: 4 contadores vivos em tempo real (144 Hz, 100% Cloud Supabase, 56 Sprints e 0 ms de bloqueio de thread) e especificação completa da stack oficial."
+    ]
+  },
   {
     version: "0.43.0",
     date: "Nov/2026",

@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.43.0`  
-> **Última Atualização:** 7 de Novembro de 2026 (Pós-Mega-Sprint 55 — Limite Real dos Cartões c/ Parcelas Futuras, Detector de Assinaturas, Edição Inline & Ações em Lote, Manutenção KM em Veículos, B3 Ao Vivo, Calendário Heatmap, PRs Strava e Coindex Wrapped)  
+> **Versão da Aplicação:** `0.44.0`  
+> **Última Atualização:** 7 de Novembro de 2026 (Pós-Sprint 56 — Módulo "Sobre" com Palco Monumental Interativo 144Hz da Logo "The Equilibrium Link", Manifesto Coindex de Missão/Visão/Valores, Telemetria de Engenharia e Versão Oficial v0.44.0)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -61,6 +61,7 @@ fincontrol-lifeos/
 │   │   ├── KpiAuditModal.tsx              # Modal de auditoria analítica "Raio-X Célula a Célula" dos 4 KPIs (Sprint 42)
 │   │   ├── CoindexLogo.tsx                # Componente da logo Fintech Prism (isométrica)
 │   │   ├── ChartCard.tsx                  # Container arrastável (Drag-and-Drop) de cards Recharts
+│   │   ├── AboutTab.tsx                   # Módulo "Sobre" com Manifesto, Versão Oficial e Telemetria 144Hz (Sprint 56)
 │   │   └── SpotifyLogo.tsx                # Ícone vetorial do Spotify
 │   ├── api/
 │   │   ├── auth/route.ts                  # Rota Next.js de autenticação e sessão
@@ -1104,6 +1105,25 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - 4 regras preditivas no sininho de notificações da Topbar (faturas de cartão a vencer em até 5 dias, valores a receber em aberto, manutenções veiculares próximas e déficit semanal de treinos) com botão de navegação direta `Ir para [Aba] →`.
       - Modal executivo "Ritual de Fechamento do Mês (Coindex Wrapped)" com selo de performance (ex: Mês Frugal & Investidor 🏆), taxa de aporte, 4 KPIs mestres, top 3 maiores despesas, km de corrida/veículo e botão de copiar resumo formatado.
       - Gaveta inferior estilo iOS Bottom Sheet no mobile (`☰ Mais`) para acesso imediato a todos os 12 módulos e utilitários da plataforma em telas compactas.
+
+  - **Sprint 56 (Novembro de 2026 — Módulo "Sobre" com Palco Monumental Interativo 144Hz da Logo "The Equilibrium Link", Manifesto Coindex de Missão/Visão/Valores, Telemetria de Engenharia e Versão Oficial v0.44.0):**
+    - **Passo 1 — Constantes Oficiais de Versão e Navegação do Sistema:**
+      - Exportação em `app/lifeos-data.tsx` das constantes oficiais: `COINDEX_APP_VERSION = "0.44.0"`, `COINDEX_BUILD_DATE = "Novembro de 2026"`, `COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS"` e bump de `APP_VERSION = "0.44.0"`.
+      - Adição da aba `"about"` à união tipada `ActiveTab`.
+      - Inclusão do item `Sobre` na Sidebar Esquerda logo abaixo de `Configurações`, na Gaveta Mobile "Mais Módulos" e na Command Palette (`Ctrl + K`).
+    - **Passo 2 — Palco Monumental Interativo "The Equilibrium Link" (`app/components/CoindexLogo.tsx`):**
+      - Criação do componente `CoindexLogoMonumental` com renderização expandida vetorial `viewBox="0 0 120 84"`, background de precisão técnica arquitetural (radar concêntrico em `r=41`, `r=16` e cruz de mira nos nós `cx=44` e `cx=76`).
+      - Suporte dinâmico a realce de segmentos via `highlightSegment` (`all`, `left`, `right`, `weave`) com transição suave de opacidade e pontos de entrelaçamento com glow pulsante.
+      - Estado `isPulsing` com aceleração do ciclo orbital de luz para 1,4s e efeito sonoro visual.
+    - **Passo 3 — Módulo "Sobre" com 5 Blocos Cinematográficos (`app/components/AboutTab.tsx`):**
+      - **Bloco 1 (Hero Monumental & Versão):** `TiltCard3D` com física giroscópica em 144Hz, iluminação radial atmosférica, logo monumental interativa e botão `"⚡ Pulsar Motor 144Hz"` disparando 22 partículas azuis em arco quântico (`triggerAuraBurst`). Badges de telemetria de versão e status da nuvem.
+      - **Bloco 2 (A Filosofia do Elo):** Seletor segmentado deslizante `SlidingSegmentedControl` interligado ao foco visual do elo da logo, com manifesto poético-técnico do Elo Esquerdo em Titânio (Fundação e Controle), Elo Direito em Apple Blue (Expansão e Futuro) e o Ponto de Entrelaçamento (Equilíbrio Perpétuo).
+      - **Bloco 3 (Missão, Visão e 4 Objetivos Estratégicos):** Bento Grid interativo com iluminação de borda por proximidade do cursor (`useProximityBorderGlow`) detalhando os 4 pilares: Simetria Contábil Estrita, Performance 144Hz Zero-Jank, Inteligência em Tempo Real e Soberania Cloud-First.
+      - **Bloco 4 (5 Valores Inegociáveis):** 5 cards estilizados destacando Precisão no Centavo (`#PrecisionFirst`), Fluidez como Respeito (`#144HzCraft`), Design que Acalma (`#CalmAndClarity`), Soberania na Nuvem (`#CloudFirstSSOT`) e Patrimônio + Saúde (`#EquilibriumOS`).
+      - **Bloco 5 (Telemetria de Engenharia & Ficha Técnica):** 4 contadores vivos com o odômetro numérico `AnimatedNumber144` (144 Hz, 100% Cloud Supabase, 56 Sprints, 0 ms de bloqueio de thread), especificação detalhada da stack técnica e assinatura oficial de engenharia.
+    - **Passo 4 — Integração na Interface Central (`app/SecondaryTabs.tsx` e `app/page.tsx`):**
+      - Renderização direta do `<AboutTab />` quando `activeTab === "about"` no despachador de abas de `SecondaryTabs`.
+      - Roteamento completo via Sidebar, Mobile Drawer e atalho rápido do teclado (`Ctrl + K`).
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

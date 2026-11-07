@@ -40,6 +40,7 @@ import { parseDateParts } from "./lib/domain/date-br";
 import { BanksTab } from "./components/BanksTab";
 import { VehiclesTab } from "./components/VehiclesTab";
 import { InvestmentsTab } from "./components/InvestmentsTab";
+import { AboutTab } from "./components/AboutTab";
 import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroundFX";
 import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
 import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
@@ -5597,6 +5598,13 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         </div>
       </div>
     );
+  }
+
+  // ============================================================================
+  // ABA 9: SOBRE O COINDEX OS (MANIFESTO, VERSÃO & TELEMETRIA 144Hz)
+  // ============================================================================
+  if (activeTab === "about") {
+    return <AboutTab />;
   }
 
   return null;
