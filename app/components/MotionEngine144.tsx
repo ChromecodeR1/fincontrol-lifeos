@@ -243,8 +243,8 @@ export const TiltCard3D: React.FC<TiltCard3DProps> = ({
 
     const card = cardRef.current;
     if (card) {
-      card.style.transform = "perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0)";
-      card.style.transition = "transform 400ms cubic-bezier(0.22, 1, 0.36, 1)";
+      card.style.transform = "none";
+      card.style.transition = "transform 350ms cubic-bezier(0.22, 1, 0.36, 1)";
     }
 
     if (glareRef.current) {

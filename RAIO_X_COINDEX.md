@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.41.0`  
-> **Última Atualização:** 7 de Novembro de 2026 (Pós-Sprint 53 — Limpeza de UI, Correção de Tipografia nos Controles Deslizantes, Trava Correta de Animações, Topbar Compacta e WebSocket Binance em Tempo Real)  
+> **Versão da Aplicação:** `0.42.0`  
+> **Última Atualização:** 7 de Novembro de 2026 (Pós-Sprint 54 — Carrossel Vertical Apple Wallet de 3 Cartões Nítidos com Scroll no Mouse, Correção Matemática dos Limites de Cartões, Modal de Ordenação com Engrenagem e Polling de 30s no Mercado)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1052,8 +1052,33 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Conexão nativa por WebSocket (`wss://stream.binance.com:9443/stream?streams=btcbrl@ticker/bnbbrl@ticker/ethbrl@ticker/solbrl@ticker`) atualizando instantaneamente as cotações a cada segundo com reconexão resiliente e badge pulsante `⚡ AO VIVO`.
       - Rota `/api/market-pulse` configurada com `dynamic = "force-dynamic"`, `revalidate = 0`, `cache: "no-store"` e cabeçalhos estritos anti-cache (`no-store, no-cache, max-age=0`), servindo como fallback confiável a cada 8 segundos para câmbio e CDI.
 
----
+  - **Sprint 54 (Novembro de 2026 — Carrossel Vertical Apple Wallet de 3 Cartões Nítidos com Scroll no Mouse, Correção Matemática dos Limites de Cartões, Modal de Ordenação com Engrenagem e Polling de 30s no Mercado):**
+    - **Passo 1 — Carrossel Vertical Apple Wallet com Limite Fixo de 3 Cartões Nítidos:**
+      - Reestruturação do widget `wallet_limits` em `app/page.tsx` para exibir no máximo 3 cartões simultaneamente (`cards.slice(clampedIndex, clampedIndex + 3)`), garantindo que a pilha não estoure verticalmente a altura dos outros Bento cards.
+      - Implementação de navegação por roda do mouse com `onWheel` coalescido (`handleWalletWheel`), debounce de 140ms (`lastWalletWheelTime`) e parada de propagação (`e.stopPropagation()`) para rolagem suave da pilha.
+      - Adição de botões táteis no cabeçalho `▲ / ▼` com desativação nos limites superior e inferior, além de contador dinâmico de janela (`1-3 de 5`).
+      - Inclusão de bordas de espiada (peek edges) no topo e no rodapé da pilha (`filter: blur(2px)`, opacidade 40%, escala 0.96) indicando visualmente cartões adjacentes fora do enquadramento.
+    - **Passo 2 — Nitidez Absoluta das Camadas de Texto nos Cartões de Crédito:**
+      - Ajuste arquitetural no componente `TiltCard3D` (`MotionEngine144.tsx`) redefinindo a transformação em repouso (`mouseLeave`) estritamente para `card.style.transform = "none"`, eliminando rasterização de texturas e subpixel blur causado por persistência de matrizes 3D.
+      - Aplicação de regras CSS `wallet-card-crisp` com `-webkit-font-smoothing: antialiased` e elevação de camadas de tipografia para `relative z-20` em `app/page.tsx` e `BanksTab.tsx`.
+    - **Passo 3 — Remoção do Retângulo Azul Seletor nos Cartões:**
+      - Remoção dos contornos azuis (`ring-2 ring-[#0A84FF]`) nos cartões da Apple Wallet, aplicando foco limpo (`outline-none focus:outline-none ring-0`) e preservando a elegância visual nativa do iOS/macOS.
+    - **Passo 4 — Correção Matemática Total dos Limites no Rodapé do Widget:**
+      - Criação do hook memoizado `cardLimitsAnalytics` que calcula limites exclusivamente com base nos cartões de crédito reais cadastrados pelo usuário (`cards`):
+        - Limite Global: soma estrita de `Number(c.limit || 0)` de todos os cartões cadastrados (R$ 34.875).
+        - Usado Global: soma da fatura atual de cada cartão (`calculateCardExposure(c, transactions, selectedMonth).used`).
+        - Disponível Global: `Math.max(0, safeSub(globalTotalLimit, globalTotalUsado))`.
+        - % Usado Global: percentual real sobre o limite total dos cartões.
+      - Substituição das barras legadas de bancos por barras de progresso individuais por cartão de crédito cadastrado, com identificação de bandeira, nome, valores e shimmer dinâmico.
+    - **Passo 5 — Modal "⚙️ Ordenar Meus Cartões" e Micro-Motions no ChartCard:**
+      - Conexão do botão de engrenagem no cabeçalho do widget `wallet_limits` via props `onCustomGearClick` e `customGearTitle` no componente `ChartCard.tsx`.
+      - Criação do modal `showReorderCardsModal` renderizado via `createPortal`, permitindo reordenar a prioridade dos cartões com botões `▲ / ▼` e salvamento com persistência síncrona tripla (Supabase `upsertCardsInDb`, `localStorage` e backup).
+      - Micro-motions táteis refinados nos três botões superiores do `ChartCard`: arraste com scale 1.25 em azul, redimensionamento com scaleX 1.1 e engrenagem com rotação de 90° no hover e 180° no clique.
+    - **Passo 6 — Calibração do Polling de Mercado para 30 Segundos:**
+      - Ajuste do intervalo de polling e conexão em `InvestmentsTab.tsx` para 30 segundos (`30000ms`), reduzindo tráfego desnecessário de rede.
+      - Remoção da contagem de segundos e horário textual do botão `⚡ AO VIVO`, mantendo apenas o ponto luminoso sonar pulsante e o ícone de raio.
 
+---
 ## 8. Comandos de Manutenção & Verificação Rápida
 
 Antes de enviar qualquer commit ou deploy:

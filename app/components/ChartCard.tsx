@@ -30,6 +30,8 @@ interface ChartCardProps {
   isDragging?: boolean;
   isDropTarget?: boolean;
   headerExtra?: React.ReactNode;
+  onCustomGearClick?: () => void;
+  customGearTitle?: string;
   className?: string;
   children: React.ReactNode;
 }
@@ -52,6 +54,8 @@ export default function ChartCard({
   isDragging = false,
   isDropTarget = false,
   headerExtra,
+  onCustomGearClick,
+  customGearTitle,
   className = "",
   children
 }: ChartCardProps) {
@@ -150,7 +154,7 @@ export default function ChartCard({
               onTouchStart={() => setCanDrag(true)}
               onTouchEnd={() => setCanDrag(false)}
               title="Arraste para reordenar este card"
-              className="cursor-grab rounded p-1 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 active:cursor-grabbing"
+              className="cursor-grab rounded p-1 text-slate-400 transition-all duration-200 hover:scale-125 hover:text-[#0A84FF] active:cursor-grabbing active:scale-90"
             >
               <GripVertical className="h-4 w-4" />
             </button>
@@ -160,7 +164,7 @@ export default function ChartCard({
               type="button"
               onClick={handleToggleSize}
               title={`Alternar proporção do card (atual: ${sizeLabel})`}
-              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-mono font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white cursor-pointer"
+              className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-mono font-medium text-slate-300 transition-transform duration-200 cubic-bezier(0.22, 1, 0.36, 1) hover:scale-x-110 hover:bg-slate-800 hover:text-white active:scale-95 cursor-pointer"
             >
               {size === "full" ? (
                 <RectangleHorizontal className="h-3.5 w-3.5 text-[#0A84FF]" />
@@ -170,14 +174,20 @@ export default function ChartCard({
               <span>{sizeLabel}</span>
             </button>
 
-            {/* 3. Engrenagem (Configurações deste gráfico) */}
-            {chartKind !== "kpi" && (
+            {/* 3. Engrenagem (Configurações deste gráfico ou custom gear action) */}
+            {(onCustomGearClick || chartKind !== "kpi") && (
               <button
                 ref={gearButtonRef}
                 type="button"
-                onClick={() => setPopoverOpen((prev) => !prev)}
-                title="Personalizar este gráfico"
-                className={`rounded p-1 transition cursor-pointer ${
+                onClick={() => {
+                  if (onCustomGearClick) {
+                    onCustomGearClick();
+                  } else {
+                    setPopoverOpen((prev) => !prev);
+                  }
+                }}
+                title={customGearTitle || (onCustomGearClick ? "Configurações deste card" : "Personalizar este gráfico")}
+                className={`rounded p-1 cursor-pointer transition-transform duration-300 cubic-bezier(0.22, 1, 0.36, 1) hover:rotate-90 active:rotate-180 active:scale-90 ${
                   popoverOpen
                     ? "bg-[#0A84FF] text-white shadow-sm"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"

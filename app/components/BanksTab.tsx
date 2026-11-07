@@ -192,13 +192,13 @@ export const BanksTab: React.FC<BanksTabProps> = ({
     return (
       <TiltCard3D maxTilt={6} className="h-full">
         <div
-          className={`wallet-physical-card relative overflow-hidden rounded-2xl border border-white/12 p-4 sm:p-5 shadow-xl transition-all duration-200 bg-gradient-to-br ${cardGradient}`}
+          className={`wallet-physical-card wallet-card-crisp relative overflow-hidden rounded-2xl border border-white/12 p-4 sm:p-5 shadow-xl transition-all duration-200 bg-gradient-to-br ${cardGradient} outline-none focus:outline-none ring-0 select-none`}
         >
           {/* Brilho reflexivo diagonal em overlay */}
           <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.10),transparent_60%)]" />
 
           {/* Cabeçalho do Cartão */}
-          <div className="relative z-10 flex items-start justify-between gap-3 mb-4">
+          <div className="relative z-20 flex items-start justify-between gap-3 mb-4">
             {/* Lado Esquerdo */}
             <div className="flex items-center gap-3 min-w-0">
               {card.logoUrl ? (
@@ -319,7 +319,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
           </div>
 
           {/* Micro-linha de Status de Limite */}
-          <div className="relative z-10 flex items-center justify-between text-[11px] mb-1.5 font-medium">
+          <div className="relative z-20 flex items-center justify-between text-[11px] mb-1.5 font-medium">
             <span className="text-white/60">Uso do limite</span>
             <span
               className={`font-semibold tabular-nums ${
@@ -335,7 +335,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
           </div>
 
           {/* Barra de Progresso com Superfície Líquida 144Hz */}
-          <div className="relative z-10 h-2 w-full rounded-full bg-black/35 border border-white/5 overflow-hidden p-[1px]">
+          <div className="relative z-20 h-2 w-full rounded-full bg-black/35 border border-white/5 overflow-hidden p-[1px]">
             <div
               className={`h-full rounded-full transition-all duration-500 ease-out min-w-[6px] relative liquid-progress-shimmer ${
                 usagePercent >= 90
@@ -351,7 +351,7 @@ export const BanksTab: React.FC<BanksTabProps> = ({
           </div>
 
           {/* Dock Métrico em 3 Colunas (Apple SF Pro Typography) */}
-          <div className={`relative z-10 mt-3.5 pt-3 border-t border-white/10 grid grid-cols-3 gap-2 items-end ${moneyBlur}`}>
+          <div className={`relative z-20 mt-3.5 pt-3 border-t border-white/10 grid grid-cols-3 gap-2 items-end ${moneyBlur}`}>
             <div>
               <span className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-0.5 block">
                 Limite Total

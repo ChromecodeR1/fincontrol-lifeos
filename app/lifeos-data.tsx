@@ -399,10 +399,25 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.41.0";
-export const PREVIOUS_VERSION = "0.40.0";
+export const APP_VERSION = "0.42.0";
+export const PREVIOUS_VERSION = "0.41.0";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.42.0",
+    date: "Nov/2026",
+    title: "Sprint 54: Carrossel Vertical Apple Wallet de 3 Cartões Nítidos com Scroll no Mouse, Correção Matemática dos Limites de Cartões, Modal de Ordenação com Engrenagem e Polling de 30s no Mercado",
+    highlights: [
+      "Carrossel Vertical no Apple Wallet (Máx. 3 Cartões Nítidos): Visualização compacta de no máximo 3 cartões simultâneos com scroll fluído via roda do mouse (onWheel com debounce de 140ms e propagação isolada), botões de navegação ▲ / ▼ e indicador de janela (ex: 1-3 de 5).",
+      "Bordas de Espiada (Peek Edges): Pequenas bordas sutis com leve desfoque e escala reduzida no topo e na base do stack indicando a existência de cartões anteriores ou posteriores na pilha.",
+      "Nitidez Absoluta dos Textos dos Cartões: Eliminação definitiva do embaçamento em cartões de crédito físicos (BanksTab e Apple Wallet) através de reset de transform 3D para 'none' em repouso, font smoothing antialiased e elevação de camadas de texto para z-index superior.",
+      "Remoção do Retângulo Azul de Seleção: Eliminação total dos anéis/bordas azuis nos cartões da Apple Wallet, adotando visual limpo com foco sem borda e elevação suave ao passar o cursor.",
+      "Correção Matemática Total dos Limites no Rodapé (cardLimitsAnalytics): Substituição do cálculo legado de bancos pelo cálculo exclusivo da soma real de todos os cartões cadastrados pelo usuário (R$ 34.875 de limite total, total utilizado no mês e total disponível), com barras de progresso individuais por cartão.",
+      "Modal '⚙️ Ordenar Meus Cartões': Abertura rápida através do ícone de engrenagem no cabeçalho do widget Apple Wallet ou botão de reordenação, permitindo reposicionar os cartões com persistência síncrona tripla (Supabase, localStorage e backup do vault).",
+      "Micro-Motions nos Controles Superiores do ChartCard: Transições táteis de alta precisão ao passar o cursor sobre o botão de arraste (scale 1.25 em azul), botão de expansão (scaleX 1.1) e botão de configurações/engrenagem (rotação de 90° e 180° no clique).",
+      "Atualização de Mercado a Cada 30 Segundos: Ajuste do intervalo de polling do mercado e criptomoedas para 30 segundos contínuos (30000ms) e remoção da contagem de segundos/relógio do badge '⚡ AO VIVO', mantendo o pulsar suave do ponto sonar verde."
+    ]
+  },
   {
     version: "0.41.0",
     date: "Nov/2026",

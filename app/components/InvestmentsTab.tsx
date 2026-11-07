@@ -139,9 +139,6 @@ export function InvestmentsTab({
   // Estado das Cotações Ao Vivo
   const [marketPulse, setMarketPulse] = useState<MarketPulseResponse | null>(null);
   const [isLoadingPulse, setIsLoadingPulse] = useState<boolean>(true);
-  const [lastPulseUpdate, setLastPulseUpdate] = useState<string>("");
-  const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
-  const wsRef = useRef<WebSocket | null>(null);
 
   // Gráficos de mercado customizáveis visíveis
   const [visibleCharts, setVisibleCharts] = useState<string[]>(DEFAULT_VISIBLE_MARKET_CHARTS);
@@ -176,8 +173,9 @@ export function InvestmentsTab({
     }
   }, []);
 
-  // Busca cotações de mercado da rota /api/market-pulse (sem cache)
+  // SPRINT 54: Busca cotações de mercado da rota /api/market-pulse (sem cache)
   const fetchMarketPulse = async () => {
+    setIsLoadingPulse(true);
     try {
       const res = await fetch("/api/market-pulse", {
         headers: {
@@ -188,21 +186,7 @@ export function InvestmentsTab({
       });
       if (res.ok) {
         const data = (await res.json()) as MarketPulseResponse;
-        setMarketPulse((prev) => {
-          if (!prev) return data;
-          // Preserva valores mais recentes caso o WebSocket já tenha atualizado crypto
-          return {
-            ...data,
-            tickers: {
-              ...data.tickers,
-              BTC: prev.tickers.BTC.priceBRL > 0 ? { ...data.tickers.BTC, priceBRL: prev.tickers.BTC.priceBRL, change24hPct: prev.tickers.BTC.change24hPct } : data.tickers.BTC,
-              BNB: prev.tickers.BNB.priceBRL > 0 ? { ...data.tickers.BNB, priceBRL: prev.tickers.BNB.priceBRL, change24hPct: prev.tickers.BNB.change24hPct } : data.tickers.BNB,
-              ETH: prev.tickers.ETH.priceBRL > 0 ? { ...data.tickers.ETH, priceBRL: prev.tickers.ETH.priceBRL, change24hPct: prev.tickers.ETH.change24hPct } : data.tickers.ETH,
-              SOL: prev.tickers.SOL.priceBRL > 0 ? { ...data.tickers.SOL, priceBRL: prev.tickers.SOL.priceBRL, change24hPct: prev.tickers.SOL.change24hPct } : data.tickers.SOL
-            }
-          };
-        });
-        setLastPulseUpdate(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        setMarketPulse(data);
       }
     } catch (err) {
       console.warn("[InvestmentsTab] Erro ao carregar cotações de mercado:", err);
@@ -211,113 +195,13 @@ export function InvestmentsTab({
     }
   };
 
-  // SPRINT 53: WebSocket nativo em tempo real com streams da Binance + fallback de polling sem cache
+  // SPRINT 54: Atualização de mercado a cada 30 segundos (30000ms) sem oscilação constante
   useEffect(() => {
     fetchMarketPulse();
-
-    let ws: WebSocket | null = null;
-    let reconnectTimer: NodeJS.Timeout | null = null;
-    let isUnmounted = false;
-
-    const connectWebSocket = () => {
-      if (typeof window === "undefined" || isUnmounted) return;
-
-      try {
-        const streamUrl = "wss://stream.binance.com:9443/stream?streams=btcbrl@ticker/bnbbrl@ticker/ethbrl@ticker/solbrl@ticker";
-        ws = new WebSocket(streamUrl);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-          if (!isUnmounted) {
-            setIsWsConnected(true);
-            setLastPulseUpdate(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-          }
-        };
-
-        ws.onmessage = (event) => {
-          if (isUnmounted) return;
-          try {
-            const parsed = JSON.parse(event.data);
-            const tickerData = parsed.data;
-            if (!tickerData || !tickerData.s) return;
-
-            const symbolMap: Record<string, "BTC" | "BNB" | "ETH" | "SOL"> = {
-              BTCBRL: "BTC",
-              BNBBRL: "BNB",
-              ETHBRL: "ETH",
-              SOLBRL: "SOL"
-            };
-
-            const key = symbolMap[tickerData.s];
-            if (!key) return;
-
-            const price = parseFloat(tickerData.c);
-            const changePct = parseFloat(tickerData.P);
-            const high = parseFloat(tickerData.h);
-            const low = parseFloat(tickerData.l);
-
-            if (price > 0) {
-              setMarketPulse((prev) => {
-                if (!prev) return prev;
-                const existing = prev.tickers[key];
-                if (!existing) return prev;
-                return {
-                  ...prev,
-                  updatedAt: new Date().toISOString(),
-                  tickers: {
-                    ...prev.tickers,
-                    [key]: {
-                      ...existing,
-                      priceBRL: price,
-                      change24hPct: !isNaN(changePct) ? changePct : existing.change24hPct,
-                      high24h: !isNaN(high) && high > 0 ? high : existing.high24h,
-                      low24h: !isNaN(low) && low > 0 ? low : existing.low24h
-                    }
-                  }
-                };
-              });
-              setLastPulseUpdate(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-            }
-          } catch {
-            // Ignora falha de parse pontual
-          }
-        };
-
-        ws.onerror = () => {
-          if (!isUnmounted) {
-            setIsWsConnected(false);
-          }
-        };
-
-        ws.onclose = () => {
-          if (!isUnmounted) {
-            setIsWsConnected(false);
-            reconnectTimer = setTimeout(connectWebSocket, 4000);
-          }
-        };
-      } catch (err) {
-        console.warn("[InvestmentsTab] Falha ao iniciar WebSocket:", err);
-        if (!isUnmounted) {
-          reconnectTimer = setTimeout(connectWebSocket, 5000);
-        }
-      }
-    };
-
-    connectWebSocket();
-
-    // Polling rápido sem cache (5s a 10s) para fiat (USD, EUR) e CDI
-    const pollInterval = setInterval(() => {
+    const interval = setInterval(() => {
       fetchMarketPulse();
-    }, 8000);
-
-    return () => {
-      isUnmounted = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      clearInterval(pollInterval);
-      if (ws) {
-        ws.close();
-      }
-    };
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Preço atual do Bitcoin em BRL
@@ -625,32 +509,18 @@ export function InvestmentsTab({
             type="button"
             onClick={fetchMarketPulse}
             disabled={isLoadingPulse}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border cursor-pointer disabled:opacity-50 ${
-              isWsConnected
-                ? "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/30 shadow-sm shadow-emerald-500/20"
-                : "bg-white/5 hover:bg-white/10 text-slate-300 border-white/10"
-            }`}
-            title={isWsConnected ? "Conectado via WebSocket em tempo real à Binance" : "Atualizar cotações ao vivo do mercado"}
+            className="px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border cursor-pointer disabled:opacity-50 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/30 shadow-sm shadow-emerald-500/20"
+            title="Cotações de mercado ao vivo (atualização automática a cada 30 segundos)"
           >
-            {isWsConnected ? (
-              <span className="flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-                </span>
-                <span className="hidden sm:inline font-bold text-emerald-300 flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-emerald-400 fill-emerald-400" /> AO VIVO
-                </span>
-                <span className="text-[10px] font-mono text-emerald-300/80">({lastPulseUpdate || "Tempo Real"})</span>
+            <span className="flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
               </span>
-            ) : (
-              <>
-                {isLoadingPulse ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                <span className="hidden sm:inline">
-                  {isLoadingPulse ? "Atualizando..." : `Ao Vivo ${lastPulseUpdate ? `(${lastPulseUpdate})` : ""}`}
-                </span>
-              </>
-            )}
+              <Zap className="w-3 h-3 text-emerald-400 fill-emerald-400" />
+              <span className="font-bold text-emerald-300">AO VIVO</span>
+            </span>
+            {isLoadingPulse && <Loader2 className="w-3 h-3 animate-spin text-emerald-300 ml-0.5" />}
           </button>
 
           <button

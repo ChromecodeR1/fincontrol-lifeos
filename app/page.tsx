@@ -32,6 +32,8 @@ import {
   Check,
   X,
   ChevronDown,
+  ChevronUp,
+  ArrowUpDown,
   Globe,
   UserCheck,
   ChevronLeft,
@@ -882,6 +884,9 @@ export default function CoindexApp() {
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedWalletCardId, setSelectedWalletCardId] = useState<string | null>(null);
+  const [walletCarouselIndex, setWalletCarouselIndex] = useState<number>(0);
+  const [showReorderCardsModal, setShowReorderCardsModal] = useState<boolean>(false);
+  const lastWalletWheelTime = useRef<number>(0);
   const [cashflowActiveTab, setCashflowActiveTab] = useState<"fluxo" | "recentes">("fluxo");
   const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
   const [customStartDate, setCustomStartDate] = useState<string>("");
@@ -3245,6 +3250,40 @@ export default function CoindexApp() {
     };
   }, [banks, cards, transactions]);
 
+  // SPRINT 54: Análise Real e Consolidada dos Limites dos Cartões de Crédito (Apple Wallet SSOT)
+  const cardLimitsAnalytics = useMemo(() => {
+    const list = cards.map((card) => {
+      const exposure = calculateCardExposure(card, transactions, selectedMonth);
+      const limit = Number(card.limit || 0);
+      const used = exposure.used;
+      const available = exposure.available;
+      const pctUsed = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+      return {
+        id: card.id,
+        name: card.name,
+        bankName: card.bankName,
+        brand: card.brand,
+        limit,
+        used,
+        available,
+        pctUsed
+      };
+    });
+
+    const globalTotalLimit = cards.reduce((acc, c) => safeAdd(acc, Number(c.limit || 0)), 0);
+    const globalTotalUsado = cards.reduce((acc, c) => safeAdd(acc, calculateCardExposure(c, transactions, selectedMonth).used), 0);
+    const globalTotalDisponivel = Math.max(0, safeSub(globalTotalLimit, globalTotalUsado));
+    const globalUsagePct = globalTotalLimit > 0 ? Math.min(100, Math.round((globalTotalUsado / globalTotalLimit) * 100)) : 0;
+
+    return {
+      cards: list,
+      globalTotalLimit,
+      globalTotalUsado,
+      globalTotalDisponivel,
+      globalUsagePct
+    };
+  }, [cards, transactions, selectedMonth]);
+
   // SPRINT 29: Mini-Sparklines SVG (Últimos 6 meses para os 4 Slim KPI Cards)
   const kpiSparklines = useMemo(() => {
     const refMonth =
@@ -3790,8 +3829,8 @@ export default function CoindexApp() {
     const scoreFixos = pctFixed <= 50 ? 100 : safeScore(100 - (pctFixed - 50) * 2.5);
 
     // 4. Saúde dos Limites (meta: >= 70% livre)
-    const totalLimit = bankLimitsAnalytics.globalTotalLimit;
-    const totalLivre = bankLimitsAnalytics.globalTotalDisponivel;
+    const totalLimit = cardLimitsAnalytics.globalTotalLimit > 0 ? cardLimitsAnalytics.globalTotalLimit : bankLimitsAnalytics.globalTotalLimit;
+    const totalLivre = cardLimitsAnalytics.globalTotalLimit > 0 ? cardLimitsAnalytics.globalTotalDisponivel : bankLimitsAnalytics.globalTotalDisponivel;
     const livreRate = totalLimit > 0 && Number.isFinite((totalLivre / totalLimit) * 100) ? (totalLivre / totalLimit) * 100 : 100;
     const scoreLimites = livreRate >= 70 ? 100 : safeScore((livreRate / 70) * 100);
 
@@ -3867,6 +3906,7 @@ export default function CoindexApp() {
     staticStatusSummary.rendaBase,
     allocation503020.pctFixed,
     bankLimitsAnalytics,
+    cardLimitsAnalytics,
     effectivePersonalBudgetLimit
   ]);
 
@@ -5599,6 +5639,33 @@ export default function CoindexApp() {
       }
     });
   };
+
+  // SPRINT 54: Ordenação dos Cartões e Persistência Tripla
+  const handleReorderCards = useCallback((newCards: CreditCardItem[]) => {
+    setCards(newCards);
+    try {
+      setUserItem("lifeos_cards_v8", JSON.stringify(newCards), currentUserId);
+      localStorage.setItem("lifeos_cards_v8", JSON.stringify(newCards));
+      localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(newCards));
+    } catch {}
+    void upsertCardsInDb(newCards);
+    notify("Ordem dos Cartões", "Ordem atualizada com sucesso!", "success", "CONFIG");
+  }, [currentUserId, notify]);
+
+  // SPRINT 54: Scroll via Roda do Mouse no Stack de Cartões (Apple Wallet) com Debounce
+  const handleWalletWheel = useCallback((e: React.WheelEvent) => {
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - lastWalletWheelTime.current < 140) return;
+    const maxIdx = Math.max(0, cards.length - 3);
+    if (e.deltaY > 15) {
+      setWalletCarouselIndex((prev) => Math.min(maxIdx, prev + 1));
+      lastWalletWheelTime.current = now;
+    } else if (e.deltaY < -15) {
+      setWalletCarouselIndex((prev) => Math.max(0, prev - 1));
+      lastWalletWheelTime.current = now;
+    }
+  }, [cards.length]);
 
 
   const handleSaveBank = (e: React.FormEvent) => {
@@ -7505,6 +7572,16 @@ export default function CoindexApp() {
                         settings={cfg}
                         defaultSettings={{ color: "auto", curveType }}
                         onSettingsChange={(nextCfg) => handleUpdateWidgetSettings(widget.id, nextCfg)}
+                        onCustomGearClick={
+                          widget.id === "wallet_limits" || widget.id === "wallet_card"
+                            ? () => setShowReorderCardsModal(true)
+                            : undefined
+                        }
+                        customGearTitle={
+                          widget.id === "wallet_limits" || widget.id === "wallet_card"
+                            ? "⚙️ Ordenar Meus Cartões"
+                            : undefined
+                        }
                         onDragStartCard={handleDragStartWidget}
                         onDragEnterCard={handleDragEnterWidget}
                         onDragEndCard={handleDragEndWidget}
@@ -8557,21 +8634,65 @@ export default function CoindexApp() {
                         )}
 
                         {/* WIDGET 5: CARTÕES & LIMITES (APPLE WALLET STACK + MERCURY/LINEAR BARS) */}
-                        {(widget.id === "wallet_limits" || widget.id === "wallet_card") && (
+                        {(widget.id === "wallet_limits" || widget.id === "wallet_card") && (() => {
+                          const maxCarouselIndex = Math.max(0, cards.length - 3);
+                          const clampedIndex = Math.min(walletCarouselIndex, maxCarouselIndex);
+                          const visibleCards = cards.slice(clampedIndex, clampedIndex + 3);
+
+                          return (
                           <div className="space-y-3">
                             {/* PARTE SUPERIOR: Apple Wallet Card Stack */}
                             <div>
                               <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/5 text-xs">
-                                <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-                                  <CreditCard className="w-3.5 h-3.5 text-[#0A84FF]" /> Meus Cartões ({cards.length})
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveTab("cards")}
-                                  className="text-[11px] text-[#0A84FF] hover:underline cursor-pointer"
-                                >
-                                  Gerenciar
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                                    <CreditCard className="w-3.5 h-3.5 text-[#0A84FF]" /> Meus Cartões ({cards.length})
+                                  </span>
+                                  {cards.length > 3 && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-400 font-mono">
+                                      {clampedIndex + 1}-{Math.min(clampedIndex + 3, cards.length)} de {cards.length}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {cards.length > 3 && (
+                                    <div className="flex items-center gap-0.5 bg-white/5 p-0.5 rounded-lg border border-white/10">
+                                      <button
+                                        type="button"
+                                        disabled={clampedIndex === 0}
+                                        onClick={() => setWalletCarouselIndex((prev) => Math.max(0, prev - 1))}
+                                        title="Cartão anterior (scroll para cima)"
+                                        className="w-5 h-5 flex items-center justify-center rounded text-slate-300 hover:text-white hover:bg-white/10 disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer"
+                                      >
+                                        <ChevronUp className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={clampedIndex >= maxCarouselIndex}
+                                        onClick={() => setWalletCarouselIndex((prev) => Math.min(maxCarouselIndex, prev + 1))}
+                                        title="Próximo cartão (scroll para baixo)"
+                                        className="w-5 h-5 flex items-center justify-center rounded text-slate-300 hover:text-white hover:bg-white/10 disabled:opacity-25 disabled:pointer-events-none transition cursor-pointer"
+                                      >
+                                        <ChevronDown className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowReorderCardsModal(true)}
+                                    title="⚙️ Ordenar Meus Cartões"
+                                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                                  >
+                                    <ArrowUpDown className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTab("cards")}
+                                    className="text-[11px] text-[#0A84FF] hover:underline cursor-pointer"
+                                  >
+                                    Gerenciar
+                                  </button>
+                                </div>
                               </div>
 
                               {cards.length === 0 ? (
@@ -8588,9 +8709,17 @@ export default function CoindexApp() {
                                   </button>
                                 </div>
                               ) : (
-                                <div className="relative pt-1 pb-2 group/wallet">
-                                  {cards.map((card, idx) => {
-                                    const isSelected = selectedWalletCardId ? selectedWalletCardId === card.id : idx === 0;
+                                <div
+                                  onWheel={handleWalletWheel}
+                                  className="relative pt-1 pb-2 group/wallet select-none"
+                                >
+                                  {clampedIndex > 0 && (
+                                    <div
+                                      aria-hidden="true"
+                                      className="h-1.5 -mb-1 mx-4 rounded-t-xl bg-gradient-to-r from-slate-600/30 via-slate-500/40 to-slate-600/30 border-t border-x border-white/10 blur-[2px] opacity-40 scale-[0.96] pointer-events-none transition-all duration-300"
+                                    />
+                                  )}
+                                  {visibleCards.map((card, idx) => {
                                     const exposure = calculateCardExposure(card, transactions, selectedMonth);
                                     const cardGradient = getCardGradient(card.name, card.bankName);
                                     const isFirst = idx === 0;
@@ -8598,133 +8727,134 @@ export default function CoindexApp() {
                                     return (
                                       <div
                                         key={card.id}
-                                        onClick={() => setSelectedWalletCardId(card.id)}
-                                        style={{ zIndex: isSelected ? 25 : idx + 1 }}
-                                        className={`relative transition-all duration-300 ease-out cursor-pointer ${
-                                          !isFirst ? "-mt-12 group-hover/wallet:-mt-7" : ""
-                                        } ${
-                                          isSelected
-                                            ? "scale-[1.02] ring-2 ring-[#0A84FF]/60 shadow-[0_10px_25px_rgba(10,132,255,0.25)] -translate-y-1 hover:!-translate-y-2"
-                                            : "hover:!-translate-y-2 opacity-90 hover:opacity-100 hover:z-30"
+                                        style={{ zIndex: idx + 1 }}
+                                        className={`relative transition-all duration-300 ease-out ${
+                                          !isFirst ? "-mt-12 group-hover/wallet:-mt-8" : ""
                                         }`}
                                       >
-                                        <TiltCard3D maxTilt={6}>
+                                        <TiltCard3D maxTilt={5}>
                                           <div
-                                            className={`wallet-physical-card relative rounded-2xl p-3.5 shadow-xl border border-white/15 bg-gradient-to-br ${cardGradient}`}
+                                            className={`wallet-physical-card wallet-card-crisp relative rounded-2xl p-3.5 shadow-xl border border-white/15 bg-gradient-to-br ${cardGradient} outline-none focus:outline-none ring-0`}
                                           >
-                                        {/* Cabeçalho do Cartão */}
-                                        <div className="flex items-center justify-between text-white mb-2">
-                                          <div className="flex items-center gap-2 min-w-0">
-                                            <span className="font-bold text-sm tracking-tight truncate">{card.name}</span>
-                                            {card.brand && (
-                                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/15 backdrop-blur-sm font-medium shrink-0">
-                                                {card.brand}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <div className="flex items-center gap-1.5 text-white/80 shrink-0">
-                                            <Zap className="w-3.5 h-3.5" />
-                                            <span className="text-[10px] font-mono tracking-widest">••••</span>
-                                          </div>
-                                        </div>
+                                            <div className="relative z-20 antialiased backface-hidden">
+                                              {/* Cabeçalho do Cartão */}
+                                              <div className="flex items-center justify-between text-white mb-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                  <span className="font-bold text-sm tracking-tight truncate">{card.name}</span>
+                                                  {card.brand && (
+                                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/15 backdrop-blur-sm font-medium shrink-0">
+                                                      {card.brand}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 text-white/80 shrink-0">
+                                                  <Zap className="w-3.5 h-3.5" />
+                                                  <span className="text-[10px] font-mono tracking-widest">••••</span>
+                                                </div>
+                                              </div>
 
-                                        {/* Valores do Cartão */}
-                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                          <div>
-                                            <span className="text-[10px] text-white/70 block uppercase tracking-wider">Fatura Atual</span>
-                                            <strong className={`text-base font-extrabold text-white block font-mono tabular-nums ${moneyBlur}`}>
-                                              {formatBRL(exposure.used)}
-                                            </strong>
-                                          </div>
-                                          <div className="text-right">
-                                            <span className="text-[10px] text-white/70 block uppercase tracking-wider">Disponível</span>
-                                            <strong className={`text-sm font-bold text-emerald-300 block font-mono tabular-nums ${moneyBlur}`}>
-                                              {formatBRL(exposure.available)}
-                                            </strong>
-                                            <span className={`text-[10px] text-white/60 block font-mono tabular-nums ${moneyBlur}`}>
-                                              Limite: {formatBRL(card.limit)}
-                                            </span>
-                                          </div>
-                                        </div>
+                                              {/* Valores do Cartão */}
+                                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                                <div>
+                                                  <span className="text-[10px] text-white/70 block uppercase tracking-wider">Fatura Atual</span>
+                                                  <strong className={`text-base font-extrabold text-white block font-mono tabular-nums ${moneyBlur}`}>
+                                                    {formatBRL(exposure.used)}
+                                                  </strong>
+                                                </div>
+                                                <div className="text-right">
+                                                  <span className="text-[10px] text-white/70 block uppercase tracking-wider">Disponível</span>
+                                                  <strong className={`text-sm font-bold text-emerald-300 block font-mono tabular-nums ${moneyBlur}`}>
+                                                    {formatBRL(exposure.available)}
+                                                  </strong>
+                                                  <span className={`text-[10px] text-white/60 block font-mono tabular-nums ${moneyBlur}`}>
+                                                    Limite: {formatBRL(card.limit)}
+                                                  </span>
+                                                </div>
+                                              </div>
 
-                                        {/* Rodapé do Cartão */}
-                                        <div className="mt-2 pt-1.5 border-t border-white/15 flex items-center justify-between text-[11px] text-white/80 font-mono">
-                                          <span>Fecha dia {card.closingDay || "—"} • Vence dia {card.dueDay || "—"}</span>
-                                          {exposure.used > 0 && (
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                triggerAuraBurst(e.currentTarget, "emerald");
-                                                handlePayCardInvoice(card.name, card.bankName || undefined);
-                                              }}
-                                              className="px-2 py-0.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-semibold text-[10px] transition cursor-pointer apple-press"
-                                            >
-                                              Pagar Fatura
-                                            </button>
-                                          )}
-                                        </div>
+                                              {/* Rodapé do Cartão */}
+                                              <div className="mt-2 pt-1.5 border-t border-white/15 flex items-center justify-between text-[11px] text-white/80 font-mono">
+                                                <span>Fecha dia {card.closingDay || "—"} • Vence dia {card.dueDay || "—"}</span>
+                                                {exposure.used > 0 && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      triggerAuraBurst(e.currentTarget, "emerald");
+                                                      handlePayCardInvoice(card.name, card.bankName || undefined);
+                                                    }}
+                                                    className="px-2 py-0.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-semibold text-[10px] transition cursor-pointer apple-press"
+                                                  >
+                                                    Pagar Fatura
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </TiltCard3D>
                                       </div>
-                                    </TiltCard3D>
-                                  </div>
-                                );
+                                    );
                                   })}
+                                  {clampedIndex < maxCarouselIndex && (
+                                    <div
+                                      aria-hidden="true"
+                                      className="h-1.5 -mt-1 mx-4 rounded-b-xl bg-gradient-to-r from-slate-600/30 via-slate-500/40 to-slate-600/30 border-b border-x border-white/10 blur-[2px] opacity-40 scale-[0.96] pointer-events-none transition-all duration-300"
+                                    />
+                                  )}
                                 </div>
                               )}
                             </div>
 
-                            {/* PARTE INFERIOR: Barras de Limites Compactas (Estilo Linear / Mercury) */}
+                            {/* PARTE INFERIOR: Barras de Limites Compactas Reais (SSOT Cartões de Crédito) */}
                             <div className="pt-2 border-t border-white/10 space-y-2.5">
                               {/* Pílulas Consolidadas */}
                               <div className={`grid grid-cols-3 gap-2 text-xs text-center ${moneyBlur}`}>
                                 <div className="py-1.5 px-2.5 rounded-xl bg-slate-950/70 border border-white/10">
                                   <span className="text-[10px] text-slate-400 block">Limite Total</span>
                                   <strong className="text-xs sm:text-sm font-bold text-white block mt-0.5 tabular-nums">
-                                    {formatBRL(bankLimitsAnalytics.globalTotalLimit)}
+                                    {formatBRL(cardLimitsAnalytics.globalTotalLimit)}
                                   </strong>
                                 </div>
                                 <div className="py-1.5 px-2.5 rounded-xl bg-slate-950/70 border border-emerald-500/20">
                                   <span className="text-[10px] text-emerald-400/80 block">Disponível</span>
                                   <strong className="text-xs sm:text-sm font-bold text-emerald-400 block mt-0.5 tabular-nums">
-                                    {formatBRL(bankLimitsAnalytics.globalTotalDisponivel)}
+                                    {formatBRL(cardLimitsAnalytics.globalTotalDisponivel)}
                                   </strong>
                                 </div>
                                 <div className="py-1.5 px-2.5 rounded-xl bg-slate-950/70 border border-indigo-500/20">
                                   <span className="text-[10px] text-indigo-300 block">% Usado</span>
                                   <strong className="text-xs sm:text-sm font-bold text-indigo-300 block mt-0.5 tabular-nums">
-                                    {bankLimitsAnalytics.globalTotalLimit > 0
-                                      ? Math.round((bankLimitsAnalytics.globalTotalUsado / bankLimitsAnalytics.globalTotalLimit) * 100)
-                                      : 0}%
+                                    {cardLimitsAnalytics.globalUsagePct}%
                                   </strong>
                                 </div>
                               </div>
 
                               {/* Lista de Barras de Progresso Slim */}
                               <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 text-xs">
-                                {bankLimitsAnalytics.banks.map((b) => {
-                                  const usedPct = b.totalLimit > 0 ? Math.min(100, Math.round((b.usado / b.totalLimit) * 100)) : 0;
+                                {cardLimitsAnalytics.cards.map((c) => {
                                   const barColor =
-                                    usedPct >= 80 ? "bg-[#FF453A]" : usedPct >= 50 ? "bg-[#FF9F0A]" : "bg-[#30D158]";
+                                    c.pctUsed >= 80 ? "bg-[#FF453A]" : c.pctUsed >= 50 ? "bg-[#FF9F0A]" : "bg-[#30D158]";
 
                                   return (
-                                    <div key={b.id} className="py-1.5 px-2.5 rounded-xl bg-slate-950/50 border border-white/5 space-y-1">
+                                    <div key={c.id} className="py-1.5 px-2.5 rounded-xl bg-slate-950/50 border border-white/5 space-y-1">
                                       <div className="flex items-center justify-between">
                                         <span className="font-medium text-slate-200 text-xs flex items-center gap-1.5 truncate">
-                                          {b.logoUrl ? (
-                                            <img src={b.logoUrl} alt={b.name} className="w-3.5 h-3.5 rounded object-cover" />
-                                          ) : (
-                                            <Landmark className="w-3.5 h-3.5 text-slate-400" />
+                                          <CreditCard className="w-3.5 h-3.5 text-[#0A84FF] shrink-0" />
+                                          <span className="truncate">{c.name}</span>
+                                          {c.brand && (
+                                            <span className="text-[9px] text-slate-400 px-1.5 py-0.2 rounded bg-white/5 shrink-0">
+                                              {c.brand}
+                                            </span>
                                           )}
-                                          <span className="truncate">{b.name}</span>
                                         </span>
                                         <span className={`text-[11px] font-mono tabular-nums text-slate-300 ${moneyBlur}`}>
-                                          <strong className="text-white">{formatBRL(b.usado)}</strong> / {formatBRL(b.totalLimit)} ({usedPct}%)
+                                          <strong className="text-white">{formatBRL(c.used)}</strong> / {formatBRL(c.limit)} ({c.pctUsed}%)
                                         </span>
                                       </div>
                                       <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden relative">
                                         <div
                                           className={`h-full rounded-full transition-all duration-500 relative liquid-progress-shimmer ${barColor}`}
-                                          style={{ width: `${usedPct}%` }}
+                                          style={{ width: `${c.pctUsed}%` }}
                                         >
                                           <span className="liquid-progress-head" />
                                         </div>
@@ -8735,7 +8865,8 @@ export default function CoindexApp() {
                               </div>
                             </div>
                           </div>
-                        )}
+                          );
+                        })()}
 
                         {/* WIDGET 6: FLUXO DE CAIXA & ATIVIDADES RECENTES */}
                         {(widget.id === "cashflow_recents" || widget.id === "cashflow_recent") && (
@@ -9367,6 +9498,112 @@ export default function CoindexApp() {
                 </ul>
               </div>
             ))}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL DE ORDENAÇÃO DE CARTÕES (SPRINT 54) VIA CREATEPORTAL */}
+      {showReorderCardsModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
+          <div className="relative w-full max-w-md max-h-[86dvh] overflow-y-auto rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] p-5 shadow-2xl space-y-4 text-xs my-auto custom-scrollbar">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/25">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">⚙️ Ordenar Meus Cartões</h3>
+                  <p className="text-[11px] text-slate-400">Defina a ordem de exibição na Apple Wallet e nos limites</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReorderCardsModal(false)}
+                className="p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white cursor-pointer transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Use as setas para reposicionar seus cartões. Os <strong className="text-white">3 primeiros</strong> cartões serão exibidos em destaque inicial no stack da Apple Wallet.
+            </p>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              {cards.map((c, index) => {
+                const isFirst = index === 0;
+                const isLast = index === cards.length - 1;
+                return (
+                  <div
+                    key={c.id}
+                    className="p-3 rounded-xl bg-slate-950/70 border border-white/10 flex items-center justify-between gap-3 hover:border-white/20 transition"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-mono text-[11px] font-bold text-slate-400 shrink-0">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white truncate">{c.name}</span>
+                          {c.brand && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-slate-300 shrink-0">
+                              {c.brand}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          Limite: {formatBRL(c.limit)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        disabled={isFirst}
+                        onClick={() => {
+                          const newCards = [...cards];
+                          const temp = newCards[index - 1];
+                          newCards[index - 1] = newCards[index];
+                          newCards[index] = temp;
+                          handleReorderCards(newCards);
+                        }}
+                        title="Mover para cima"
+                        className="w-7 h-7 rounded-lg bg-white/5 hover:bg-[#0A84FF]/20 hover:text-[#0A84FF] text-slate-300 flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isLast}
+                        onClick={() => {
+                          const newCards = [...cards];
+                          const temp = newCards[index + 1];
+                          newCards[index + 1] = newCards[index];
+                          newCards[index] = temp;
+                          handleReorderCards(newCards);
+                        }}
+                        title="Mover para baixo"
+                        className="w-7 h-7 rounded-lg bg-white/5 hover:bg-[#0A84FF]/20 hover:text-[#0A84FF] text-slate-300 flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-3 border-t border-white/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowReorderCardsModal(false)}
+                className="px-4 py-2 rounded-xl bg-[#0A84FF] hover:bg-[#0A84FF]/80 text-white font-semibold text-xs transition cursor-pointer"
+              >
+                Concluir
+              </button>
+            </div>
           </div>
         </div>,
         document.body

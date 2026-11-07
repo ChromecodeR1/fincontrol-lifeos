@@ -763,3 +763,55 @@ html[data-animations="off"] *::after {
   will-change: transform, opacity;
 }
 
+/* ============================================================================
+   SPRINT 54: MICRO-MOTIONS NOS CONTROLES DE TOPO & NITIDEZ TOTAL EM CARTÕES
+   ============================================================================ */
+
+/* Micro-motions nos 3 ícones de controle do card */
+.card-ctrl-grip {
+  cursor: grab;
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), color 200ms ease;
+}
+.card-ctrl-grip:hover {
+  transform: scale(1.25);
+  color: #0A84FF;
+}
+.card-ctrl-grip:active {
+  cursor: grabbing;
+  transform: scale(0.9);
+}
+
+.card-ctrl-resize {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms ease, color 200ms ease;
+}
+.card-ctrl-resize:hover {
+  transform: scaleX(1.1);
+}
+.card-ctrl-resize:active {
+  transform: scale(0.95);
+}
+
+.card-ctrl-gear {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms ease, color 200ms ease;
+}
+.card-ctrl-gear:hover {
+  transform: rotate(90deg);
+}
+.card-ctrl-gear:active {
+  transform: rotate(180deg) scale(0.9);
+}
+
+/* Nitidez total e anti-aliasing nos cartões de crédito */
+.wallet-card-crisp,
+.wallet-physical-card {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  backface-visibility: hidden;
+}
+.wallet-card-crisp *,
+.wallet-physical-card * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
