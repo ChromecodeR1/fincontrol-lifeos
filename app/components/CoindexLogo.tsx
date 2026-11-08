@@ -66,12 +66,12 @@ export interface CoindexLogoProps {
 }
 
 /**
- * CoindexIcon — "The Equilibrium Link" (Opção 1)
+ * CoindexIcon — "The Equilibrium Link"
  * Geometria SVG Exata (viewBox="0 0 120 84"):
  * - Elo Esquerdo: Letra "C" em Titânio (#F8FAFC), cx=44, cy=42, r=26, strokeWidth=10, aberto de -38° a +38°.
  * - Elo Direito: Anel Completo em Apple Blue (#0A84FF -> #38BDF8), cx=76, cy=42, r=26, strokeWidth=10.
- * - Over-Under Weave: Topo = Azul passa por cima com gap 3.5px; Base = Branco "C" passa por cima com gap 3.5px.
- * - Motions: Entrada cinética suave + Pulso de luz orbital contínuo (5.5s) + Física magnética no hover.
+ * - Over-Under Weave: Máscaras alfa puras com folga de 3.5px sem cortes de fundo opacos.
+ * - Motions: Aceleração GPU pura (transform: translateZ(0)) + Pulso orbital contínuo 144Hz normalizado.
  */
 export function CoindexIcon({
   className = "w-10 h-7",
@@ -86,94 +86,68 @@ export function CoindexIcon({
       viewBox="0 0 120 84"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={`select-none transition-all duration-300 group-hover:drop-shadow-[0_0_12px_rgba(10,132,255,0.45)] ${className}`}
+      className={`select-none transition-all duration-300 group-hover:drop-shadow-[0_0_14px_rgba(10,132,255,0.5)] ${className}`}
+      style={{ transform: "translateZ(0)" }}
       aria-label="Coindex Equilibrium Link"
     >
       <defs>
         {/* Gradiente Oficial Apple Blue para o Elo Direito */}
-        <linearGradient id="cxBlueGrad" x1="50" y1="16" x2="102" y2="68" gradientUnits="userSpaceOnUse">
+        <linearGradient id="cxBlueGradIcon" x1="50" y1="16" x2="102" y2="68" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#38BDF8" />
           <stop offset="60%" stopColor="#0A84FF" />
           <stop offset="100%" stopColor="#0066CC" />
         </linearGradient>
 
-        {/* Gradiente Especular Branco/Titânio para o Elo Esquerdo "C" */}
-        <linearGradient id="cxTitaniumGrad" x1="18" y1="16" x2="65" y2="68" gradientUnits="userSpaceOnUse">
+        {/* Gradiente Especular Titânio / Platina para o Elo Esquerdo "C" */}
+        <linearGradient id="cxTitaniumGradIcon" x1="18" y1="16" x2="65" y2="68" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#FFFFFF" />
           <stop offset="100%" stopColor="#E2E8F0" />
         </linearGradient>
 
-        {/* Feixe Especular do Pulso Orbital Contínuo */}
-        <linearGradient id="coindexSpecularPulse" x1="0%" y1="0%" x2="100%" y2="0%">
+        {/* Feixe Especular do Pulso Orbital Contínuo (144Hz) */}
+        <linearGradient id="coindexSpecularPulseIcon" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#38BDF8" stopOpacity="0" />
           <stop offset="50%" stopColor="#FFFFFF" stopOpacity="0.95" />
           <stop offset="100%" stopColor="#0A84FF" stopOpacity="0" />
         </linearGradient>
+
+        {/* Máscara Alfa Transparente: Intersecção Superior (Azul passa por cima) */}
+        <mask id="cxWeaveMaskLeftIcon" maskUnits="userSpaceOnUse">
+          <rect x="0" y="0" width="120" height="84" fill="#FFFFFF" />
+          <path d="M 76 16 A 26 26 0 0 0 52 32" stroke="#000000" strokeWidth="17" strokeLinecap="round" fill="none" />
+        </mask>
+
+        {/* Máscara Alfa Transparente: Intersecção Inferior (Titânio passa por cima) */}
+        <mask id="cxWeaveMaskRightIcon" maskUnits="userSpaceOnUse">
+          <rect x="0" y="0" width="120" height="84" fill="#FFFFFF" />
+          <path d="M 44 68 A 26 26 0 0 0 64.49 58.01" stroke="#000000" strokeWidth="17" strokeLinecap="round" fill="none" />
+        </mask>
       </defs>
 
       {/* ========================================================
-          GRUPO ESQUERDO: ELO "C" EM TITÂNIO (cx=44, cy=42, r=26)
-          Translada -1.5px no hover magnético com GPU compositor
+          ELO DIREITO: ANEL COMPLETO APPLE BLUE (cx=76, cy=42, r=26)
           ======================================================== */}
-      <g className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform] group-hover:-translate-x-[1.5px]">
-        {/* Camada 1: Arco Completo da Letra "C" */}
-        <path
-          d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
-          stroke="url(#cxTitaniumGrad)"
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={enableMotion ? "coindex-ring-draw" : ""}
-          fill="none"
-        />
-
-        {/* Trilha do Pulso Orbital no Elo Esquerdo */}
-        {enableMotion && (
-          <path
-            d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
-            stroke="url(#coindexSpecularPulse)"
-            strokeWidth="4"
-            strokeLinecap="round"
-            fill="none"
-            className="coindex-orbital-glow"
-          />
-        )}
-      </g>
-
-      {/* ========================================================
-          INTERSECÇÃO SUPERIOR: ELO DIREITO AZUL PASSA POR CIMA
-          Corte de 3.5px (strokeWidth=17) com a cor do fundo
-          ======================================================== */}
-      <path
-        d="M 76 16 A 26 26 0 0 0 52 32"
-        stroke="var(--cupertino-sidebar, #0B0E14)"
-        strokeWidth="17"
-        strokeLinecap="butt"
-        fill="none"
-        className="transition-colors duration-200"
-      />
-
-      {/* ========================================================
-          GRUPO DIREITO: ANEL COMPLETO APPLE BLUE (cx=76, cy=42, r=26)
-          Translada +1.5px no hover magnético com GPU compositor
-          ======================================================== */}
-      <g className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform] group-hover:translate-x-[1.5px]">
-        {/* Camada 2: Anel Completo Azul */}
+      <g
+        className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[1.5px]"
+        style={{ willChange: "transform", transform: "translateZ(0)" }}
+        mask="url(#cxWeaveMaskRightIcon)"
+      >
         <circle
           cx="76"
           cy="42"
           r="26"
-          stroke="url(#cxBlueGrad)"
+          stroke="url(#cxBlueGradIcon)"
           strokeWidth="10"
+          pathLength="100"
           className={enableMotion ? "coindex-ring-draw" : ""}
           fill="none"
         />
 
-        {/* Trilha do Pulso Orbital no Elo Direito (Defasada em 2.75s para efeito infinito) */}
         {enableMotion && (
           <path
+            pathLength="100"
             d="M 102 42 A 26 26 0 1 1 50 42 A 26 26 0 1 1 102 42"
-            stroke="url(#coindexSpecularPulse)"
+            stroke="url(#coindexSpecularPulseIcon)"
             strokeWidth="4"
             strokeLinecap="round"
             fill="none"
@@ -184,28 +158,35 @@ export function CoindexIcon({
       </g>
 
       {/* ========================================================
-          INTERSECÇÃO INFERIOR: ELO ESQUERDO BRANCO "C" PASSA POR CIMA
-          Corte de 3.5px (strokeWidth=17) com a cor do fundo
+          ELO ESQUERDO: ELO "C" EM TITÂNIO (cx=44, cy=42, r=26)
           ======================================================== */}
-      <g className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform] group-hover:-translate-x-[1.5px]">
-        {/* Recorte de fundo no azul */}
+      <g
+        className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-[1.5px]"
+        style={{ willChange: "transform", transform: "translateZ(0)" }}
+        mask="url(#cxWeaveMaskLeftIcon)"
+      >
         <path
-          d="M 44 68 A 26 26 0 0 0 64.49 58.01"
-          stroke="var(--cupertino-sidebar, #0B0E14)"
-          strokeWidth="17"
-          strokeLinecap="round"
-          fill="none"
-          className="transition-colors duration-200"
-        />
-
-        {/* Arco Sobreposto do Elo Branco ("C") passando por cima na base */}
-        <path
-          d="M 44 68 A 26 26 0 0 0 64.49 58.01"
-          stroke="url(#cxTitaniumGrad)"
+          pathLength="100"
+          d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
+          stroke="url(#cxTitaniumGradIcon)"
           strokeWidth="10"
           strokeLinecap="round"
+          strokeLinejoin="round"
+          className={enableMotion ? "coindex-ring-draw" : ""}
           fill="none"
         />
+
+        {enableMotion && (
+          <path
+            pathLength="100"
+            d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
+            stroke="url(#coindexSpecularPulseIcon)"
+            strokeWidth="4"
+            strokeLinecap="round"
+            fill="none"
+            className="coindex-orbital-glow"
+          />
+        )}
       </g>
     </svg>
   );
@@ -240,6 +221,7 @@ export function CoindexLogoMonumental({
       className={`select-none transition-all duration-500 ease-out group ${
         isPulsing ? "scale-105 drop-shadow-[0_0_36px_rgba(10,132,255,0.7)]" : "hover:scale-105 drop-shadow-[0_0_24px_rgba(10,132,255,0.35)]"
       } ${className}`}
+      style={{ transform: "translateZ(0)" }}
       aria-label="Coindex Equilibrium Link Monumental"
     >
       <defs>
@@ -268,12 +250,24 @@ export function CoindexLogoMonumental({
           <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.8" />
           <stop offset="100%" stopColor="#0A84FF" stopOpacity="0" />
         </radialGradient>
+
+        {/* Máscara Alfa Transparente: Intersecção Superior */}
+        <mask id="cxWeaveMaskLeftMonumental" maskUnits="userSpaceOnUse">
+          <rect x="0" y="0" width="120" height="84" fill="#FFFFFF" />
+          <path d="M 76 16 A 26 26 0 0 0 52 32" stroke="#000000" strokeWidth="17" strokeLinecap="round" fill="none" />
+        </mask>
+
+        {/* Máscara Alfa Transparente: Intersecção Inferior */}
+        <mask id="cxWeaveMaskRightMonumental" maskUnits="userSpaceOnUse">
+          <rect x="0" y="0" width="120" height="84" fill="#FFFFFF" />
+          <path d="M 44 68 A 26 26 0 0 0 64.49 58.01" stroke="#000000" strokeWidth="17" strokeLinecap="round" fill="none" />
+        </mask>
       </defs>
 
       {/* ========================================================
           CAMADA DE FUNDO ARQUITETURAL: RADAR DE PRECISÃO & GEOMETRIA
           ======================================================== */}
-      <g className="text-slate-500 dark:text-slate-400">
+      <g className="text-slate-500 dark:text-slate-400 pointer-events-none">
         {/* Linha técnica do horizonte */}
         <line
           x1="6"
@@ -338,13 +332,48 @@ export function CoindexLogoMonumental({
       </g>
 
       {/* ========================================================
+          GRUPO DIREITO: ANEL COMPLETO APPLE BLUE (cx=76, cy=42, r=26)
+          ======================================================== */}
+      <g
+        className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[2px]"
+        style={{ opacity: rightOpacity, willChange: "transform, opacity", transform: "translateZ(0)" }}
+        mask="url(#cxWeaveMaskRightMonumental)"
+      >
+        <circle
+          cx="76"
+          cy="42"
+          r="26"
+          stroke="url(#cxBlueGradMonumental)"
+          strokeWidth="10"
+          pathLength="100"
+          className={enableMotion ? "coindex-ring-draw" : ""}
+          fill="none"
+        />
+
+        {enableMotion && (
+          <path
+            pathLength="100"
+            d="M 102 42 A 26 26 0 1 1 50 42 A 26 26 0 1 1 102 42"
+            stroke="url(#cxPulseMonumental)"
+            strokeWidth="4"
+            strokeLinecap="round"
+            fill="none"
+            className="coindex-orbital-glow"
+            style={{ animationDelay: isPulsing ? "-0.7s" : "-2.75s", animationDuration: pulseDuration }}
+          />
+        )}
+      </g>
+
+      {/* ========================================================
           GRUPO ESQUERDO: ELO "C" EM TITÂNIO (cx=44, cy=42, r=26)
           ======================================================== */}
       <g
-        className="transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform,opacity] group-hover:-translate-x-[2px]"
-        style={{ opacity: leftOpacity }}
+        className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-[2px]"
+        style={{ opacity: leftOpacity, willChange: "transform, opacity", transform: "translateZ(0)" }}
+        mask="url(#cxWeaveMaskLeftMonumental)"
       >
         <path
+          pathLength="100"
           d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
           stroke="url(#cxTitaniumGradMonumental)"
           strokeWidth="10"
@@ -356,6 +385,7 @@ export function CoindexLogoMonumental({
 
         {enableMotion && (
           <path
+            pathLength="100"
             d="M 64.49 25.99 A 26 26 0 1 0 64.49 58.01"
             stroke="url(#cxPulseMonumental)"
             strokeWidth="4"
@@ -368,81 +398,14 @@ export function CoindexLogoMonumental({
       </g>
 
       {/* ========================================================
-          INTERSECÇÃO SUPERIOR: ELO DIREITO AZUL PASSA POR CIMA
-          ======================================================== */}
-      <path
-        d="M 76 16 A 26 26 0 0 0 52 32"
-        stroke="var(--cupertino-card, #0B0E14)"
-        strokeWidth="17"
-        strokeLinecap="butt"
-        fill="none"
-        className="transition-colors duration-200"
-      />
-
-      {/* ========================================================
-          GRUPO DIREITO: ANEL COMPLETO APPLE BLUE (cx=76, cy=42, r=26)
-          ======================================================== */}
-      <g
-        className="transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform,opacity] group-hover:translate-x-[2px]"
-        style={{ opacity: rightOpacity }}
-      >
-        <circle
-          cx="76"
-          cy="42"
-          r="26"
-          stroke="url(#cxBlueGradMonumental)"
-          strokeWidth="10"
-          className={enableMotion ? "coindex-ring-draw" : ""}
-          fill="none"
-        />
-
-        {enableMotion && (
-          <path
-            d="M 102 42 A 26 26 0 1 1 50 42 A 26 26 0 1 1 102 42"
-            stroke="url(#cxPulseMonumental)"
-            strokeWidth="4"
-            strokeLinecap="round"
-            fill="none"
-            className="coindex-orbital-glow"
-            style={{ animationDelay: "-2.75s", animationDuration: pulseDuration }}
-          />
-        )}
-      </g>
-
-      {/* ========================================================
-          INTERSECÇÃO INFERIOR: ELO ESQUERDO BRANCO "C" PASSA POR CIMA
-          ======================================================== */}
-      <g
-        className="transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [will-change:transform,opacity] group-hover:-translate-x-[2px]"
-        style={{ opacity: leftOpacity }}
-      >
-        <path
-          d="M 44 68 A 26 26 0 0 0 64.49 58.01"
-          stroke="var(--cupertino-card, #0B0E14)"
-          strokeWidth="17"
-          strokeLinecap="round"
-          fill="none"
-          className="transition-colors duration-200"
-        />
-
-        <path
-          d="M 44 68 A 26 26 0 0 0 64.49 58.01"
-          stroke="url(#cxTitaniumGradMonumental)"
-          strokeWidth="10"
-          strokeLinecap="round"
-          fill="none"
-        />
-      </g>
-
-      {/* ========================================================
           DESTAQUE DE ENTRELAÇAMENTO (WEAVE FOCUS)
           ======================================================== */}
       {weaveHighlight && (
-        <g className="transition-opacity duration-300">
-          <circle cx="60" cy="22.8" r="7" fill="url(#cxWeaveGlow)" className="animate-pulse" />
-          <circle cx="60" cy="61.2" r="7" fill="url(#cxWeaveGlow)" className="animate-pulse" />
-          <circle cx="60" cy="22.8" r="3.5" fill="#38BDF8" />
-          <circle cx="60" cy="61.2" r="3.5" fill="#FFFFFF" />
+        <g className="transition-opacity duration-300 pointer-events-none">
+          <circle cx="60" cy="21.5" r="7" fill="url(#cxWeaveGlow)" className="animate-pulse" />
+          <circle cx="60" cy="62.5" r="7" fill="url(#cxWeaveGlow)" className="animate-pulse" />
+          <circle cx="60" cy="21.5" r="3.5" fill="#38BDF8" />
+          <circle cx="60" cy="62.5" r="3.5" fill="#FFFFFF" />
         </g>
       )}
     </svg>

@@ -400,13 +400,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.44.0";
-export const PREVIOUS_VERSION = "0.43.0";
-export const COINDEX_APP_VERSION = "0.44.0";
+export const APP_VERSION = "0.44.1";
+export const PREVIOUS_VERSION = "0.44.0";
+export const COINDEX_APP_VERSION = "0.44.1";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.44.1",
+    date: "Nov/2026",
+    title: "Sprint 57: Correção do Motion da Logo Principal 144Hz e Reforma Cinemática da Página Sobre com Manifesto Editorial Aprofundado",
+    highlights: [
+      "Correção Cirúrgica de Motion na Logo (CoindexLogo): Eliminação de engasgos e saltos de quadro no pulso orbital 144Hz através de normalização vetorial (pathLength='100'), máscaras alfa puras (SVG mask) para entrelaçamento over-under sem cortes de fundo opacos e aceleração GPU estrita (transform: translateZ(0)).",
+      "O Manifesto Coindex (Coin + Index + Co-Op): Redação aprofundada da tríade etimológica e conceitual do produto dividida em três pilares (O Ativo/Moeda, O Catálogo/Índice e a Parceria/Co-Op Copilot).",
+      "Linha do Tempo de Evolução & Engenharia: Trilha cronológica interativa estruturada em 6 Grandes Eras Tecnológicas documentando a trajetória das 57 sprints de desenvolvimento contínuo da plataforma.",
+      "Reforma Cinemática da Página Sobre (AboutTab): Reconstrução completa com Hero monumental imersivo, Bento Grid com iluminação de proximidade (useProximityBorderGlow), os 5 Valores Inegociáveis e telemetria de engenharia com contadores vivos a 144Hz."
+    ]
+  },
   {
     version: "0.44.0",
     date: "Nov/2026",

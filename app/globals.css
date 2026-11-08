@@ -418,8 +418,8 @@ select:focus-visible {
 /* Traçado suave de entrada cinética da logo Equilibrium Link */
 @keyframes coindexRingDraw {
   from {
-    stroke-dashoffset: 200;
-    opacity: 0.1;
+    stroke-dashoffset: 100;
+    opacity: 0.2;
   }
   to {
     stroke-dashoffset: 0;
@@ -428,14 +428,16 @@ select:focus-visible {
 }
 
 .coindex-ring-draw {
-  stroke-dasharray: 200;
-  animation: coindexRingDraw 650ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  stroke-dasharray: 100;
+  animation: coindexRingDraw 550ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: stroke-dashoffset, opacity;
+  transform: translateZ(0);
 }
 
-/* Pulso de luz orbital contínuo nos anéis da logo Equilibrium Link */
+/* Pulso de luz orbital contínuo nos anéis da logo Equilibrium Link — Loop 144Hz Perfeito Sem Saltos */
 @keyframes coindexOrbitalPulse {
   0% {
-    stroke-dashoffset: 168;
+    stroke-dashoffset: 100;
   }
   100% {
     stroke-dashoffset: 0;
@@ -443,9 +445,11 @@ select:focus-visible {
 }
 
 .coindex-orbital-glow {
-  stroke-dasharray: 18 150;
+  stroke-dasharray: 16 84;
   animation: coindexOrbitalPulse 5.5s linear infinite;
   pointer-events: none;
+  will-change: stroke-dashoffset;
+  transform: translateZ(0);
 }
 
 /* Micro-interação tátil de clique / toque Apple */

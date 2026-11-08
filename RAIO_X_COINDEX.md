@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.44.0`  
-> **Última Atualização:** 7 de Novembro de 2026 (Pós-Sprint 56 — Módulo "Sobre" com Palco Monumental Interativo 144Hz da Logo "The Equilibrium Link", Manifesto Coindex de Missão/Visão/Valores, Telemetria de Engenharia e Versão Oficial v0.44.0)  
+> **Versão da Aplicação:** `0.44.1`  
+> **Última Atualização:** 8 de Novembro de 2026 (Pós-Sprint 57 — Correção Cirúrgica de Motion na Logo Principal 144Hz e Reforma Cinemática da Página Sobre com Manifesto Editorial Aprofundado)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1124,6 +1124,19 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Passo 4 — Integração na Interface Central (`app/SecondaryTabs.tsx` e `app/page.tsx`):**
       - Renderização direta do `<AboutTab />` quando `activeTab === "about"` no despachador de abas de `SecondaryTabs`.
       - Roteamento completo via Sidebar, Mobile Drawer e atalho rápido do teclado (`Ctrl + K`).
+
+  - **Sprint 57 (Novembro de 2026 — Correção Cirúrgica de Motion na Logo Principal 144Hz e Reforma Cinemática da Página Sobre com Manifesto Editorial Aprofundado):**
+    - **Passo 1 — Correção do Motion da Logo Principal (`app/components/CoindexLogo.tsx` e `app/globals.css`):**
+      - Resolução definitiva de engasgos e saltos de quadro no pulso orbital 144Hz através de normalização vetorial com `pathLength="100"` nos elementos SVG e keyframes de `stroke-dashoffset` sincronizados (100 -> 0) com `stroke-dasharray: 16 84`, garantindo um loop contínuo e sem costura (zero subpixel discrepancy).
+      - Substituição de recortes estáticos com cor de fundo (`var(--cupertino-sidebar)`) por máscaras alfa puras (`<mask id="...">`) com transparência real nos pontos de entrelaçamento over-under (folga de 3.5px), eliminando blocos sólidos e artefatos de renderização em diferentes temas ou gradientes.
+      - Aceleração por hardware pura com `transform: translateZ(0)` e `will-change: transform` nos grupos vetoriais e `will-change: stroke-dashoffset` na classe `.coindex-orbital-glow`, erradicando cascatas de repintura (layer invalidation) no compositor.
+    - **Passo 2 — Reforma Cinemática da Página "Sobre" (`app/components/AboutTab.tsx`):**
+      - **Seção 1 (Hero de Abertura Monumental):** Palco heróico com a Logo Gigante Animada (`CoindexLogoMonumental`), tipografia suíça display, badges oficiais de telemetria da versão `v0.44.1 (Estável)` e botão tátil `"⚡ Pulsar Motor 144Hz"` com disparo quântico de 22 partículas azuis (`triggerAuraBurst`).
+      - **Seção 2 (O Manifesto Coindex — Coin + Index + Co-Op):** Explicação aprofundada da tríade etimológica e de produto em 3 colunas monumentais: *COIN* (O Ativo, tangibilidade e motor contábil em centavos inteiros), *INDEX* (O Catálogo, cotações B3 ao vivo, telemetria Inmetro e zonas de pace Strava) e *CO-OP / COPILOT* (A Parceria, detecção de assinaturas, ritual Coindex Wrapped e soberania com Supabase RLS). Inclui o explorador interativo da geometria do elo com `SlidingSegmentedControl`.
+      - **Seção 3 (Missão, Visão e 4 Objetivos Estratégicos):** Cards Bento em vidro translúcido Cupertino com iluminação reativa à proximidade do cursor (`useProximityBorderGlow`).
+      - **Seção 4 (Linha do Tempo de Evolução & Engenharia):** Trilha visual interativa pelas 6 Grandes Eras de Engenharia da plataforma (Gênese Contábil, Expansão de Domínios, Engenharia 144Hz, Mercado Ao Vivo, Soberania Cloud-First e The Equilibrium Era).
+      - **Seção 5 (Os 5 Valores Fundamentais):** Cards com micro-motions táteis de elevação (`hover:-translate-y-2`) destacando Precisão no Centavo, Fluidez como Respeito, Design que Acalma, Soberania na Nuvem e Patrimônio + Saúde.
+      - **Seção 6 (Rodapé Técnico Executivo):** 4 odômetros numéricos vivos a 144Hz (`AnimatedNumber144`), especificação completa da stack técnica e créditos de arquitetura de software.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

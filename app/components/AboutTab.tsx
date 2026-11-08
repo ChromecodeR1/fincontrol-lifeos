@@ -23,7 +23,17 @@ import {
   RefreshCw,
   Award,
   Flame,
-  Fingerprint
+  Fingerprint,
+  Coins,
+  DollarSign,
+  LineChart,
+  TrendingUp,
+  Calendar,
+  Clock,
+  ChevronRight,
+  Milestone,
+  Check,
+  ExternalLink
 } from "lucide-react";
 import { CoindexLogoMonumental } from "./CoindexLogo";
 import { TiltCard3D, triggerAuraBurst, useProximityBorderGlow } from "./MotionEngine144";
@@ -36,7 +46,8 @@ import {
 } from "../lifeos-data";
 
 /**
- * BentoCardWithGlow — Helper para isolar a instância do hook useProximityBorderGlow
+ * BentoCardWithGlow — Componente para encapsular o hook useProximityBorderGlow
+ * mantendo renderização 144Hz acelerada por GPU.
  */
 function BentoCardWithGlow({
   children,
@@ -58,10 +69,123 @@ function BentoCardWithGlow({
   );
 }
 
+interface EngineeringEra {
+  id: string;
+  number: string;
+  name: string;
+  period: string;
+  sprints: string;
+  tagline: string;
+  description: string;
+  achievements: string[];
+  techBadge: string;
+  accentColor: string;
+}
+
+const ENGINEERING_ERAS: EngineeringEra[] = [
+  {
+    id: "era-1",
+    number: "01",
+    name: "Gênese & Simetria Contábil",
+    period: "2024 – 2025",
+    sprints: "Sprints 01 a 15",
+    tagline: "A Fundação Matemática em Centavos Inteiros",
+    description: "Concepção do motor contábil puro para erradicar de vez os erros de ponto flutuante. Criação da tabela avançada de lançamentos e isolamento do Livro Caixa como fonte única de verdade contábil.",
+    achievements: [
+      "Motor matemático finance.ts com safeAdd e safeSub em centavos inteiros",
+      "Arquitetura de Livro Caixa com zero desvios contábeis",
+      "Modelagem relacional de despesas fixas, variáveis e receitas"
+    ],
+    techBadge: "Pure TypeScript Math",
+    accentColor: "from-emerald-500/20 via-emerald-500/5 to-transparent border-emerald-500/30 text-emerald-400"
+  },
+  {
+    id: "era-2",
+    number: "02",
+    name: "Expansão de Domínios & Telemetria",
+    period: "Início de 2026",
+    sprints: "Sprints 16 a 30",
+    tagline: "Vida Automotiva, Cartões e Fisiologia Atlética",
+    description: "Extensão do ecossistema para além do saldo bancário: telemetria de consumo km/L com padrão Inmetro, segregação de faturas de cartão com parcelamentos futuros e integração oficial Strava API v3.",
+    achievements: [
+      "Módulo Veículos: odômetro, consumo médio ponderado e custo TCO por km",
+      "Cálculo de exposição real de cartões e faturas parceladas a vencer",
+      "Integração OAuth2 com Strava para ingestão de atividades esportivas"
+    ],
+    techBadge: "Strava v3 & Inmetro API",
+    accentColor: "from-amber-500/20 via-amber-500/5 to-transparent border-amber-500/30 text-amber-400"
+  },
+  {
+    id: "era-3",
+    number: "03",
+    name: "Engenharia 144Hz & Design Cupertino",
+    period: "Meados de 2026",
+    sprints: "Sprints 31 a 45",
+    tagline: "Estética Apple Copilot Pure e Zero-Jank",
+    description: "Revolução visual adotando a filosofia Cyber-Glassmorphism e Apple Copilot Pure. Migração para o Next.js 16 (App Router) com Turbopack, temas dinâmicos Claro/Escuro e GPU compositor.",
+    achievements: [
+      "Dual Theme dinâmico (Cupertino Light e Cyberpunk Dark)",
+      "MotionEngine 144Hz com will-change, GPU composition e zero thread lock",
+      "Migração estrutural para Next.js 16 com Turbopack nativo"
+    ],
+    techBadge: "Next.js 16 & Turbopack",
+    accentColor: "from-blue-500/20 via-blue-500/5 to-transparent border-blue-500/30 text-blue-400"
+  },
+  {
+    id: "era-4",
+    number: "04",
+    name: "Mercado Financeiro & B3 Ao Vivo",
+    period: "Outubro de 2026",
+    sprints: "Sprints 46 a 50",
+    tagline: "Marcação a Mercado Contínua e CDI Real",
+    description: "Criação do módulo especialista de Investimentos com cotações em tempo real via WebSocket e polling a cada 30 segundos. Cálculo do CDI diário oficial BCB SGS e reconciliação bidirecional estrita com o Caixa.",
+    achievements: [
+      "Stream ao vivo de cotações B3 (PETR4, VALE3, FIIs) e criptoativos",
+      "Cálculo automático de juros compostos com curva real do CDI diário",
+      "Motor cashbook-sync.ts eliminando qualquer divergência entre abas"
+    ],
+    techBadge: "Market WebSocket & BCB",
+    accentColor: "from-purple-500/20 via-purple-500/5 to-transparent border-purple-500/30 text-purple-400"
+  },
+  {
+    id: "era-5",
+    number: "05",
+    name: "Soberania Cloud-First Supabase",
+    period: "Novembro de 2026",
+    sprints: "Sprints 51 a 55",
+    tagline: "A Nuvem como Fonte Única da Verdade",
+    description: "Eliminação total de persistência local frágil. Todos os dados passam a viver exclusivamente na nuvem Supabase com isolamento RLS. Lançamento do Detector de Assinaturas, Edição Inline e Calendário Heatmap.",
+    achievements: [
+      "Arquitetura 100% Cloud Supabase SSOT sem dependências locais",
+      "Detector automatizado de assinaturas periódicas e conciliador de faturas",
+      "Edição inline por duplo clique e seleção em lote no Livro Caixa"
+    ],
+    techBadge: "Supabase Cloud SSOT",
+    accentColor: "from-sky-500/20 via-sky-500/5 to-transparent border-sky-500/30 text-sky-400"
+  },
+  {
+    id: "era-6",
+    number: "06",
+    name: "The Equilibrium Era & Manifesto",
+    period: "Versão Atual • v0.44.1",
+    sprints: "Sprints 56 a 57",
+    tagline: "A Identidade Definitiva e a Simbiose de Vida",
+    description: "Consagração do símbolo 'The Equilibrium Link' com máscaras alfa puras e aceleração GPU estrita. Publicação do Manifesto Editorial Coindex (Coin + Index + Co-Op) e telemetria de 144Hz sem engasgos.",
+    achievements: [
+      "Palco Monumental 'The Equilibrium Core' com loop contínuo 144Hz perfeito",
+      "Redação do Manifesto da Tríade: O Ativo, O Catálogo e o Co-Piloto Soberano",
+      "Ficha técnica oficial de 57 sprints de evolução contínua"
+    ],
+    techBadge: "Equilibrium 144Hz OS",
+    accentColor: "from-cyan-500/25 via-blue-600/10 to-transparent border-cyan-400/40 text-cyan-300"
+  }
+];
+
 export function AboutTab() {
   const [highlightSegment, setHighlightSegment] = useState<"all" | "left" | "right" | "weave">("all");
   const [isPulsing, setIsPulsing] = useState(false);
   const [pulseCycle, setPulseCycle] = useState(0);
+  const [selectedEraId, setSelectedEraId] = useState<string>("era-6");
   const pulseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleTriggerPulse = useCallback((e: React.MouseEvent<HTMLElement>) => {
@@ -84,23 +208,29 @@ export function AboutTab() {
     { id: "weave", label: "O Entrelaçamento (Equilíbrio)" }
   ];
 
+  const currentEra = ENGINEERING_ERAS.find((e) => e.id === selectedEraId) || ENGINEERING_ERAS[5];
+
   return (
-    <div className="space-y-10 pb-16 animate-fadeIn">
+    <div className="space-y-14 pb-20 animate-fadeIn">
       {/* ========================================================================
-          BLOCO 1: HERO MONUMENTAL & VERSÃO DO COINDEX OS
+          SEÇÃO 1: HERO DE ABERTURA MONUMENTAL & IDENTIDADE DO COINDEX OS
           ======================================================================== */}
       <TiltCard3D
         maxTilt={3.5}
         glare={true}
         className="relative overflow-hidden rounded-3xl border border-slate-700/60 bg-gradient-to-b from-slate-900/90 via-slate-900/70 to-slate-950/95 p-8 md:p-14 shadow-2xl backdrop-blur-2xl"
       >
-        {/* Iluminação de Fundo Atmosférica */}
-        <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[620px] h-[360px] bg-gradient-to-b from-sky-500/25 via-blue-600/10 to-transparent blur-3xl rounded-full" />
-        <div className="pointer-events-none absolute -bottom-24 right-1/4 w-[340px] h-[220px] bg-cyan-500/10 blur-3xl rounded-full" />
+        {/* Iluminação de Fundo Atmosférica Cibernética */}
+        <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[680px] h-[380px] bg-gradient-to-b from-sky-500/25 via-blue-600/10 to-transparent blur-3xl rounded-full" />
+        <div className="pointer-events-none absolute -bottom-28 right-1/4 w-[380px] h-[240px] bg-cyan-500/10 blur-3xl rounded-full" />
 
         <div className="relative z-10 flex flex-col items-center text-center">
-          {/* Logo Monumental Interativa */}
-          <div className="relative mb-6 cursor-pointer" onClick={handleTriggerPulse} title="Clique para pulsar o motor 144Hz">
+          {/* Logo Monumental Interativa com Aceleração 144Hz */}
+          <div
+            className="relative mb-6 cursor-pointer"
+            onClick={handleTriggerPulse}
+            title="Clique para acelerar o motor 144Hz e disparar o pulso orbital"
+          >
             <CoindexLogoMonumental
               enableMotion={true}
               isPulsing={isPulsing}
@@ -111,176 +241,324 @@ export function AboutTab() {
           {/* Botão de Disparo do Pulso 144Hz */}
           <button
             onClick={handleTriggerPulse}
-            className="apple-press inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full text-xs font-semibold tracking-wide border border-blue-500/40 bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 hover:border-blue-400 transition-all duration-300 shadow-[0_0_16px_rgba(10,132,255,0.25)]"
+            className="apple-press inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full text-xs font-semibold tracking-wide border border-blue-500/40 bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 hover:border-blue-400 transition-all duration-300 shadow-[0_0_18px_rgba(10,132,255,0.25)] cursor-pointer"
           >
             <Zap className={`w-3.5 h-3.5 text-blue-400 ${isPulsing ? "animate-spin" : ""}`} />
             <span>⚡ Pulsar Motor 144Hz</span>
-            {isPulsing && <span className="text-[10px] text-sky-300 font-mono font-bold animate-pulse">OVERCLOCK</span>}
+            {isPulsing && (
+              <span className="text-[10px] text-sky-300 font-mono font-bold animate-pulse">
+                OVERCLOCK
+              </span>
+            )}
           </button>
 
-          {/* Tipografia de Alta Precisão */}
-          <div className="space-y-2 mb-6">
+          {/* Tipografia de Alta Precisão & Naming */}
+          <div className="space-y-3 mb-6">
             <div className="inline-flex items-center gap-3">
-              <h1 className="text-4xl md:text-6xl font-black tracking-[0.14em] uppercase text-white drop-shadow-[0_2px_12px_rgba(255,255,255,0.15)]">
+              <h1 className="text-4xl md:text-6xl font-black tracking-[0.14em] uppercase text-white drop-shadow-[0_2px_14px_rgba(255,255,255,0.18)]">
                 COINDEX
               </h1>
               <span className="text-xs md:text-sm px-3 py-1 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/40 font-mono font-black tracking-widest shadow-inner">
                 OS
               </span>
             </div>
-            <p className="text-sm md:text-lg font-medium text-slate-300 tracking-wide max-w-xl mx-auto">
+            <p className="text-base md:text-xl font-semibold text-slate-200 tracking-wide max-w-2xl mx-auto">
               {COINDEX_RELEASE_CODENAME}
+            </p>
+            <p className="text-xs md:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
+              Onde a precisão cirúrgica de cada centavo encontra a expansão contínua da sua liberdade financeira e telemetria de longevidade.
             </p>
           </div>
 
           {/* Badges Oficiais de Telemetria e Versão */}
-          <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-3xl">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-mono font-semibold">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-3xl pt-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-mono font-semibold shadow-sm">
               <Sparkles className="w-3.5 h-3.5 text-blue-400" />
               v{COINDEX_APP_VERSION} (Estável)
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300 text-xs font-mono">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-slate-300 text-xs font-mono">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
               Build: {COINDEX_BUILD_DATE}
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-medium">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               Motor 144Hz GPU Ativo
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-mono font-medium">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-mono font-medium">
               <Cloud className="w-3.5 h-3.5 text-sky-400" />
               100% Cloud Supabase SSOT
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-mono font-medium">
+              <Lock className="w-3.5 h-3.5 text-indigo-400" />
+              Zero Rastreadores • Soberano
             </span>
           </div>
         </div>
       </TiltCard3D>
 
       {/* ========================================================================
-          BLOCO 2: A FILOSOFIA DO ELO (THE EQUILIBRIUM LINK MANIFESTO)
+          SEÇÃO 2: O MANIFESTO COINDEX (COIN + INDEX + CO-OP)
           ======================================================================== */}
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/50 p-6 md:p-10 shadow-xl backdrop-blur-md">
-        <div className="max-w-2xl mx-auto text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-semibold uppercase tracking-wider mb-3">
-            <Layers className="w-3.5 h-3.5" />
-            Geometria Sagrada do Produto
+      <div className="space-y-8">
+        <div className="max-w-3xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold uppercase tracking-wider mb-2">
+            <Coins className="w-3.5 h-3.5" />
+            Etimologia & Filosofia
           </div>
           <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-            A Filosofia do Elo (The Equilibrium Link)
+            O Manifesto Coindex: A Tríade da Soberania Pessoal
           </h2>
-          <p className="text-slate-400 text-sm mt-2">
-            Por que dois elos entrelaçados em vez de um símbolo financeiro convencional? Selecione as camadas para entender a anatomia do símbolo.
+          <p className="text-slate-400 text-sm md:text-base leading-relaxed mt-2">
+            O nome <strong className="text-white">COINDEX</strong> não nasceu de um gerador aleatório de marcas. Ele é a síntese harmônica de três pilares inegociáveis de engenharia que sustentam a plataforma:
           </p>
         </div>
 
-        {/* Seletor Segmentado Deslizante */}
-        <div className="flex justify-center mb-8">
-          <SlidingSegmentedControl
-            options={segmentOptions}
-            value={highlightSegment}
-            onChange={(val) => setHighlightSegment(val)}
-            activeColor="bg-[#0A84FF] text-white shadow-lg shadow-blue-500/30"
-            size="md"
-          />
+        {/* Grade Tríplice: COIN + INDEX + CO-OP */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Pilar 1: COIN */}
+          <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-b from-amber-500/10 via-slate-900/60 to-slate-950/80 p-6 md:p-8 flex flex-col justify-between shadow-xl backdrop-blur-md transition-all duration-300 hover:border-amber-500/40 hover:-translate-y-1">
+            <div className="space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-inner">
+                <Coins className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-400">
+                  Pilar I • O Ativo & A Tangibilidade
+                </span>
+                <h3 className="text-2xl font-black text-white tracking-tight mt-0.5">
+                  COIN
+                </h3>
+                <p className="text-xs text-amber-300/80 font-medium">A Solidez do Capital e a Simetria do Centavo</p>
+              </div>
+              <p className="text-xs md:text-sm text-slate-300 leading-relaxed pt-1">
+                Representa a moeda como tempo e energia de vida acumulados. No Coindex, nenhuma transação é uma estimativa estatística abstrata: <strong className="text-white">cada centavo é real, binário e sagrado</strong>.
+              </p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Operamos com matemática em inteiros contábeis puros, erradicando desvios de arredondamento em ponto flutuante. Se o dinheiro existe, ele está no Livro Caixa sem fantasmas.
+              </p>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-amber-500/20 space-y-2 text-xs text-slate-300 font-mono">
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Zero Floating-Point Drift</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Livro Caixa como SSOT Absoluto</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Fim dos Lançamentos Fantasmas</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Pilar 2: INDEX */}
+          <div className="rounded-2xl border border-blue-500/25 bg-gradient-to-b from-blue-500/10 via-slate-900/60 to-slate-950/80 p-6 md:p-8 flex flex-col justify-between shadow-xl backdrop-blur-md transition-all duration-300 hover:border-blue-500/40 hover:-translate-y-1">
+            <div className="space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-inner">
+                <LineChart className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-blue-400">
+                  Pilar II • O Catálogo & A Inteligência
+                </span>
+                <h3 className="text-2xl font-black text-white tracking-tight mt-0.5">
+                  INDEX
+                </h3>
+                <p className="text-xs text-blue-300/80 font-medium">A Estruturação Sistemática da Vida e do Mercado</p>
+              </div>
+              <p className="text-xs md:text-sm text-slate-300 leading-relaxed pt-1">
+                Inspirado nos índices mestres da economia (CDI, Selic, IPCA, B3). O Coindex eleva o conceito de índice para <strong className="text-white">todas as dimensões da existência diária</strong>.
+              </p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Indexamos a curva real de juros compostos, a telemetria Inmetro de consumo e TCO por quilômetro dos seus veículos, e as zonas de ritmo cardíaco (pace) das corridas no Strava.
+              </p>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-blue-500/20 space-y-2 text-xs text-slate-300 font-mono">
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>CDI Oficial BCB SGS + B3 Ao Vivo</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>Telemetria Inmetro & TCO Veicular</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>Índices Biológicos & Pace Strava</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Pilar 3: CO-OP / COPILOT */}
+          <div className="rounded-2xl border border-indigo-500/25 bg-gradient-to-b from-indigo-500/10 via-slate-900/60 to-slate-950/80 p-6 md:p-8 flex flex-col justify-between shadow-xl backdrop-blur-md transition-all duration-300 hover:border-indigo-500/40 hover:-translate-y-1">
+            <div className="space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-inner">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-indigo-400">
+                  Pilar III • A Parceria & A Soberania
+                </span>
+                <h3 className="text-2xl font-black text-white tracking-tight mt-0.5">
+                  CO-OP / COPILOT
+                </h3>
+                <p className="text-xs text-indigo-300/80 font-medium">A Cooperação Homem-Máquina com Privacidade Total</p>
+              </div>
+              <p className="text-xs md:text-sm text-slate-300 leading-relaxed pt-1">
+                O software nunca deve ser um cemitério passivo de números digitados no vácuo. O Coindex <strong className="text-white">coopera ativamente como seu co-piloto diário</strong>.
+              </p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Ele detecta aumentos em assinaturas recorrentes, antecipa vencimentos críticos de cartão e consolida o ritual mensal do Coindex Wrapped. Tudo protegido por criptografia RLS na nuvem.
+              </p>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-indigo-500/20 space-y-2 text-xs text-slate-300 font-mono">
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span>Supabase RLS com Criptografia</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span>Detector Preditivo de Assinaturas</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span>Zero Venda de Dados e Zero Ads</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Card Explicativo Dinâmico de acordo com o segmento focado */}
-        <div className="max-w-3xl mx-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-6 md:p-8 transition-all duration-300">
-          {highlightSegment === "all" && (
-            <div className="space-y-3 animate-fadeIn">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400">
-                  <Scale className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">A Simbiose Perfeita entre Rigor e Ambição</h3>
-                  <p className="text-xs text-blue-400 font-mono">Dois Sistemas Integrados em Movimento Contínuo</p>
-                </div>
-              </div>
-              <p className="text-sm text-slate-300 leading-relaxed pt-2">
-                O <strong className="text-white">Coindex OS</strong> não é uma simples planilha nem um app bancário engessado. Ele foi concebido para resolver o maior dilema humano contemporâneo: como construir um patrimônio exponencial sem sacrificar a saúde, a paz de espírito e a clareza do dia a dia. A logo expressa o entrelaçamento perpétuo onde controle sustenta a expansão e a ambição respeita o equilíbrio.
-              </p>
+        {/* MÓDULO INTERATIVO: A FILOSOFIA DO ELO (THE EQUILIBRIUM LINK EXPLORER) */}
+        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/50 p-6 md:p-10 shadow-xl backdrop-blur-md">
+          <div className="max-w-2xl mx-auto text-center mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-semibold uppercase tracking-wider mb-2">
+              <Layers className="w-3.5 h-3.5" />
+              Anatomia Vetorial da Logo
             </div>
-          )}
+            <h3 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+              A Geometria do Elo: Por que Dois Elos Entrelaçados?
+            </h3>
+            <p className="text-slate-400 text-xs md:text-sm mt-1">
+              Selecione uma das camadas abaixo para acender os anéis da logo monumental e compreender o equilíbrio over-under:
+            </p>
+          </div>
 
-          {highlightSegment === "left" && (
-            <div className="space-y-3 animate-fadeIn">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-slate-200/10 border border-slate-300/30 text-slate-200">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">O Elo Esquerdo (Titânio) — A Fundação & O Controle</h3>
-                  <p className="text-xs text-slate-400 font-mono">Letra &quot;C&quot; aberta em metal nobre • Centro cx=44</p>
-                </div>
-              </div>
-              <p className="text-sm text-slate-300 leading-relaxed pt-2">
-                Representa a disciplina inegociável, o Livro Caixa contábil sem desvios de centavos, a contenção de desperdícios e a segurança do patrimônio construído. Sua curvatura esculpe a letra <strong className="text-white">&quot;C&quot; de Coindex</strong>, aberta para receber novos fluxos, mas rígida e inabalável como o titânio aeroespacial.
-              </p>
-            </div>
-          )}
+          {/* Seletor Segmentado Deslizante */}
+          <div className="flex justify-center mb-6">
+            <SlidingSegmentedControl
+              options={segmentOptions}
+              value={highlightSegment}
+              onChange={(val) => setHighlightSegment(val)}
+              activeColor="bg-[#0A84FF] text-white shadow-lg shadow-blue-500/30"
+              size="md"
+            />
+          </div>
 
-          {highlightSegment === "right" && (
-            <div className="space-y-3 animate-fadeIn">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400">
-                  <ArrowUpRight className="w-5 h-5" />
+          {/* Card Explicativo Dinâmico da Camada */}
+          <div className="max-w-3xl mx-auto rounded-2xl border border-slate-800 bg-slate-950/70 p-6 md:p-8 transition-all duration-300">
+            {highlightSegment === "all" && (
+              <div className="space-y-3 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400">
+                    <Scale className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">A Simbiose Perfeita entre Rigor e Ambição</h4>
+                    <p className="text-xs text-blue-400 font-mono">Dois Sistemas Integrados em Movimento Contínuo 144Hz</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">O Elo Direito (Apple Blue) — A Expansão & O Futuro</h3>
-                  <p className="text-xs text-sky-400 font-mono">Anel fechado infinito • Centro cx=76</p>
-                </div>
+                <p className="text-xs md:text-sm text-slate-300 leading-relaxed pt-1">
+                  O <strong className="text-white">Coindex OS</strong> resolve o dilema moderno de quem acumula patrimônio mas perde a saúde e a paz de espírito. A logo expressa o entrelaçamento perpétuo onde o rigor sustenta a expansão e a ambição respeita o equilíbrio orgânico.
+                </p>
               </div>
-              <p className="text-sm text-slate-300 leading-relaxed pt-2">
-                O anel completo em azul Apple personifica a multiplicação patrimonial, o poder dos juros compostos, a marcação a mercado ao vivo, a telemetria biológica das corridas no Strava e a liberdade de explorar novos horizontes. É dinâmico, ilimitado e pulsa com luz orbital contínua.
-              </p>
-            </div>
-          )}
+            )}
 
-          {highlightSegment === "weave" && (
-            <div className="space-y-3 animate-fadeIn">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400">
-                  <Sparkles className="w-5 h-5" />
+            {highlightSegment === "left" && (
+              <div className="space-y-3 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-slate-200/10 border border-slate-300/30 text-slate-200">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">O Elo Esquerdo (Titânio) — A Fundação & O Controle</h4>
+                    <p className="text-xs text-slate-400 font-mono">Letra &quot;C&quot; aberta em metal nobre • Centro cx=44</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">O Ponto de Entrelaçamento — O Equilíbrio Perpétuo</h3>
-                  <p className="text-xs text-cyan-400 font-mono">Over-Under Weave com folga de 3.5px</p>
-                </div>
+                <p className="text-xs md:text-sm text-slate-300 leading-relaxed pt-1">
+                  Representa a disciplina inegociável, o Livro Caixa contábil sem desvios de centavos, a contenção de desperdícios e a segurança do patrimônio construído. Sua curvatura esculpe a letra <strong className="text-white">&quot;C&quot; de Coindex</strong>, aberta para receber novos fluxos, mas inabalável como o titânio aeroespacial.
+                </p>
               </div>
-              <p className="text-sm text-slate-300 leading-relaxed pt-2">
-                No topo, o anel azul da expansão passa por cima do titânio. Na base, o titânio passa por cima do azul. Esse entrelaçamento físico tridimensional demonstra que nenhum dos lados governa isolado: o controle financeiro financia sua expansão, e a expansão fornece oxigênio para manter o controle vivo e relevante.
-              </p>
-            </div>
-          )}
+            )}
+
+            {highlightSegment === "right" && (
+              <div className="space-y-3 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400">
+                    <ArrowUpRight className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">O Elo Direito (Apple Blue) — A Expansão & O Futuro</h4>
+                    <p className="text-xs text-sky-400 font-mono">Anel fechado infinito • Centro cx=76</p>
+                  </div>
+                </div>
+                <p className="text-xs md:text-sm text-slate-300 leading-relaxed pt-1">
+                  O anel completo em azul Apple personifica a multiplicação patrimonial, o poder dos juros compostos, a marcação a mercado ao vivo, a telemetria biológica das corridas no Strava e a liberdade de explorar novos horizontes. É dinâmico, ilimitado e pulsa com luz orbital contínua.
+                </p>
+              </div>
+            )}
+
+            {highlightSegment === "weave" && (
+              <div className="space-y-3 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">O Ponto de Entrelaçamento — O Equilíbrio Perpétuo</h4>
+                    <p className="text-xs text-cyan-400 font-mono">Over-Under Weave com máscara alfa pura de 3.5px</p>
+                  </div>
+                </div>
+                <p className="text-xs md:text-sm text-slate-300 leading-relaxed pt-1">
+                  No topo, o anel azul da expansão passa por cima do titânio. Na base, o titânio passa por cima do azul. Esse entrelaçamento físico tridimensional demonstra que nenhum dos lados governa isolado: o controle financeiro financia sua expansão, e a expansão fornece oxigênio para manter o controle vivo e relevante.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* ========================================================================
-          BLOCO 3: BENTO GRID: MISSÃO, VISÃO E OBJETIVOS ESTRATÉGICOS
+          SEÇÃO 3: MISSÃO, VISÃO E OBJETIVOS ESTRATÉGICOS (BENTO GRID 144Hz)
           ======================================================================== */}
-      <div>
-        <div className="mb-6">
+      <div className="space-y-6">
+        <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-2">
             <Compass className="w-3.5 h-3.5" />
-            Manifesto Coindex
+            Diretrizes de Arquitetura
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">
-            Missão, Visão e Objetivos Estratégicos
+          <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+            Missão, Visão e 4 Objetivos Estratégicos
           </h2>
           <p className="text-slate-400 text-sm">
-            Nossos alicerces de engenharia e produto para transformar a vida financeira dos usuários.
+            Nossos alicerces de engenharia de software e design para transformar a vida financeira dos usuários.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Missão */}
           <BentoCardWithGlow className="lg:col-span-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-blue-500/15 border border-blue-500/30 text-blue-400 shadow-inner">
                   <Compass className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-blue-400">
+                  <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-blue-400">
                     Propósito Primordial
                   </span>
                   <h3 className="text-xl font-bold text-white">Missão</h3>
@@ -292,19 +570,19 @@ export function AboutTab() {
             </div>
             <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center gap-2 text-xs text-slate-400">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Transparência radical, zero anúncios, zero venda de dados.</span>
+              <span>Transparência radical, zero anúncios e zero comercialização de comportamento.</span>
             </div>
           </BentoCardWithGlow>
 
           {/* Visão */}
           <BentoCardWithGlow className="lg:col-span-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-sky-500/15 border border-sky-500/30 text-sky-400 shadow-inner">
                   <Target className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
+                  <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-sky-400">
                     O Futuro que Construímos
                   </span>
                   <h3 className="text-xl font-bold text-white">Visão</h3>
@@ -323,11 +601,11 @@ export function AboutTab() {
           {/* 4 Objetivos Estratégicos */}
           <BentoCardWithGlow className="lg:col-span-12">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400">
+              <div className="p-3 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shadow-inner">
                 <Cpu className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-400">
+                <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-indigo-400">
                   Pilares de Execução
                 </span>
                 <h3 className="text-xl font-bold text-white">4 Objetivos Estratégicos</h3>
@@ -335,7 +613,7 @@ export function AboutTab() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-950/50 space-y-1.5">
+              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-950/60 space-y-1.5 transition hover:border-slate-700">
                 <div className="flex items-center gap-2 text-white font-semibold text-sm">
                   <Scale className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>1. Simetria Contábil Estrita</span>
@@ -345,7 +623,7 @@ export function AboutTab() {
                 </p>
               </div>
 
-              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-950/50 space-y-1.5">
+              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-950/60 space-y-1.5 transition hover:border-slate-700">
                 <div className="flex items-center gap-2 text-white font-semibold text-sm">
                   <Zap className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>2. Performance 144Hz Zero-Jank</span>
@@ -355,7 +633,7 @@ export function AboutTab() {
                 </p>
               </div>
 
-              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-950/50 space-y-1.5">
+              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-950/60 space-y-1.5 transition hover:border-slate-700">
                 <div className="flex items-center gap-2 text-white font-semibold text-sm">
                   <Activity className="w-4 h-4 text-blue-400 shrink-0" />
                   <span>3. Inteligência em Tempo Real</span>
@@ -365,7 +643,7 @@ export function AboutTab() {
                 </p>
               </div>
 
-              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-950/50 space-y-1.5">
+              <div className="p-4 rounded-xl border border-slate-800/80 bg-slate-950/60 space-y-1.5 transition hover:border-slate-700">
                 <div className="flex items-center gap-2 text-white font-semibold text-sm">
                   <Cloud className="w-4 h-4 text-sky-400 shrink-0" />
                   <span>4. Soberania e Nuvem Cloud-First</span>
@@ -380,25 +658,114 @@ export function AboutTab() {
       </div>
 
       {/* ========================================================================
-          BLOCO 4: OS 5 VALORES INEGIOCIÁVEIS DA COINDEX
+          SEÇÃO 4: LINHA DO TEMPO DE EVOLUÇÃO & ENGENHARIA (6 GRANDES ERAS)
           ======================================================================== */}
-      <div>
-        <div className="mb-6">
+      <div className="space-y-6">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold uppercase tracking-wider mb-2">
+            <Milestone className="w-3.5 h-3.5" />
+            Trajetória de Produto
+          </div>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+            Linha do Tempo de Evolução & Engenharia
+          </h2>
+          <p className="text-slate-400 text-sm">
+            57 Sprints de desenvolvimento contínuo divididas em 6 Eras Tecnológicas fundamentais:
+          </p>
+        </div>
+
+        {/* Trilha de Seletor de Eras (Cards Horizontais) */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {ENGINEERING_ERAS.map((era) => {
+            const isSelected = era.id === selectedEraId;
+            return (
+              <button
+                key={era.id}
+                type="button"
+                onClick={() => setSelectedEraId(era.id)}
+                className={`p-3.5 rounded-2xl border text-left transition-all duration-300 cursor-pointer flex flex-col justify-between ${
+                  isSelected
+                    ? "bg-[#0A84FF]/20 border-[#0A84FF] text-white shadow-lg shadow-blue-500/20 scale-[1.02]"
+                    : "bg-slate-900/60 hover:bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-mono text-xs font-bold text-slate-500">{era.number}</span>
+                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${isSelected ? "bg-blue-500/30 text-blue-300" : "bg-slate-800 text-slate-400"}`}>
+                      {era.period}
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-200 line-clamp-1">{era.name}</h4>
+                </div>
+                <div className="text-[10px] font-mono text-slate-500 mt-2 truncate">
+                  {era.sprints}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Detalhe da Era Selecionada */}
+        <div className={`rounded-3xl border bg-gradient-to-br ${currentEra.accentColor} p-6 md:p-10 shadow-2xl backdrop-blur-xl transition-all duration-500`}>
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5 mb-6">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-mono text-xs font-black px-2 py-0.5 rounded bg-white/10 text-white">
+                  ERA {currentEra.number}
+                </span>
+                <span className="text-xs font-mono text-slate-300 font-bold">{currentEra.sprints}</span>
+                <span className="text-slate-500">•</span>
+                <span className="text-xs font-mono text-slate-400">{currentEra.period}</span>
+              </div>
+              <h3 className="text-xl md:text-2xl font-black text-white">{currentEra.name}</h3>
+              <p className="text-xs md:text-sm text-cyan-200/90 font-medium mt-0.5">{currentEra.tagline}</p>
+            </div>
+            <span className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs font-mono font-semibold text-white">
+              {currentEra.techBadge}
+            </span>
+          </div>
+
+          <p className="text-sm md:text-base text-slate-200 leading-relaxed mb-6">
+            {currentEra.description}
+          </p>
+
+          <div className="space-y-2.5">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300">
+              Conquistas Centrais da Era:
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {currentEra.achievements.map((ach, idx) => (
+                <div key={idx} className="p-3.5 rounded-xl border border-white/10 bg-slate-950/60 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <span className="text-xs text-slate-300 leading-relaxed font-medium">{ach}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================
+          SEÇÃO 5: OS 5 VALORES FUNDAMENTAIS
+          ======================================================================== */}
+      <div className="space-y-6">
+        <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-2">
             <ShieldCheck className="w-3.5 h-3.5" />
             Cultura de Excelência
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">
+          <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
             Os 5 Valores Inegociáveis da Coindex
           </h2>
           <p className="text-slate-400 text-sm">
-            Princípios invioláveis que guiam cada linha de código, design de componente e decisão arquitetural.
+            Princípios invioláveis que guiam cada linha de código, componente e decisão arquitetural.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Valor 1 */}
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/40 hover:-translate-y-1 flex flex-col justify-between">
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/40 hover:-translate-y-2 flex flex-col justify-between">
             <div className="space-y-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                 <Scale className="w-5 h-5" />
@@ -414,7 +781,7 @@ export function AboutTab() {
           </div>
 
           {/* Valor 2 */}
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-blue-500/40 hover:-translate-y-1 flex flex-col justify-between">
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-blue-500/40 hover:-translate-y-2 flex flex-col justify-between">
             <div className="space-y-3">
               <div className="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
                 <Zap className="w-5 h-5" />
@@ -430,7 +797,7 @@ export function AboutTab() {
           </div>
 
           {/* Valor 3 */}
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-sky-500/40 hover:-translate-y-1 flex flex-col justify-between">
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-sky-500/40 hover:-translate-y-2 flex flex-col justify-between">
             <div className="space-y-3">
               <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
                 <Sparkles className="w-5 h-5" />
@@ -446,7 +813,7 @@ export function AboutTab() {
           </div>
 
           {/* Valor 4 */}
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-indigo-500/40 hover:-translate-y-1 flex flex-col justify-between">
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-indigo-500/40 hover:-translate-y-2 flex flex-col justify-between">
             <div className="space-y-3">
               <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
                 <Cloud className="w-5 h-5" />
@@ -462,7 +829,7 @@ export function AboutTab() {
           </div>
 
           {/* Valor 5 */}
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-amber-500/40 hover:-translate-y-1 flex flex-col justify-between">
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-amber-500/40 hover:-translate-y-2 flex flex-col justify-between">
             <div className="space-y-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
                 <Activity className="w-5 h-5" />
@@ -480,7 +847,7 @@ export function AboutTab() {
       </div>
 
       {/* ========================================================================
-          BLOCO 5: TELEMETRIA DE ENGENHARIA & FICHA TÉCNICA
+          SEÇÃO 6: RODAPÉ TÉCNICO EXECUTIVO & TELEMETRIA 144Hz
           ======================================================================== */}
       <div className="rounded-3xl border border-slate-800/80 bg-gradient-to-b from-slate-900/70 to-slate-950 p-6 md:p-10 shadow-2xl backdrop-blur-md">
         <div className="mb-8">
@@ -524,7 +891,7 @@ export function AboutTab() {
             <div className="text-xs font-medium text-slate-400 mb-2">Evolução Contínua</div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl md:text-4xl font-black text-sky-400 font-mono tracking-tight">
-                <AnimatedNumber144 value={56 + pulseCycle} />
+                <AnimatedNumber144 value={57 + pulseCycle} />
               </span>
               <span className="text-sm font-bold text-sky-400">Sprints</span>
             </div>
@@ -551,7 +918,7 @@ export function AboutTab() {
               <span>Stack Tecnológica Oficial</span>
             </div>
             <div className="text-xs font-mono text-slate-400">
-              Next.js 16 (App Router) • React 19 • TypeScript 5.7 • Tailwind CSS v4
+              Next.js 16.4 (App Router) • React 19 • TypeScript 5.7 • Tailwind CSS v4
             </div>
           </div>
 
