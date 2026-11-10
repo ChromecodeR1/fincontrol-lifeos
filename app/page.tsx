@@ -524,243 +524,8 @@ function ForecastCyberTooltip({
   );
 }
 
-/**
- * HOTFIX SPRINT 47.1: Motor de Resgate & Merge Seguro LWW para Bancos e Cartões
- * Previne sobrescrita destrutiva pela nuvem e ressurgimento de itens excluídos via Tombstones.
- */
-export function mergeEntitiesSafe<
-  T extends { id: string; name?: string; updatedAt?: string; deletedAt?: string; rev?: number }
->(
-  localList: T[],
-  remoteList: T[],
-  tombstones: Set<string>
-): T[] {
-  const mergedMap = new Map<string, T>();
-
-  const isLocalNewerOrEqual = (local: T, remote: T): boolean => {
-    const localTime = local.updatedAt ? new Date(local.updatedAt).getTime() : 0;
-    const remoteTime = remote.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
-    if (localTime !== remoteTime) {
-      return localTime >= remoteTime;
-    }
-    const localRev = local.rev ?? 0;
-    const remoteRev = remote.rev ?? 0;
-    if (localRev !== remoteRev) {
-      return localRev >= remoteRev;
-    }
-    return true; // Empate: dá preferência absoluta ao local
-  };
-
-  // 1. Registra entidades remotas válidas
-  for (const remote of remoteList) {
-    if (!remote || !remote.id) continue;
-    if (tombstones.has(remote.id) || remote.deletedAt) continue;
-    mergedMap.set(remote.id, remote);
-  }
-
-  // 2. Mescla entidades locais com LWW (Last-Write-Wins)
-  for (const local of localList) {
-    if (!local || !local.id) continue;
-    if (tombstones.has(local.id) || local.deletedAt) continue;
-
-    const existing = mergedMap.get(local.id);
-    if (!existing) {
-      mergedMap.set(local.id, local);
-    } else {
-      if (isLocalNewerOrEqual(local, existing)) {
-        mergedMap.set(local.id, local);
-      }
-    }
-  }
-
-  // 3. Desduplicação inteligente por nome canônico
-  const byName = new Map<string, T>();
-  for (const item of mergedMap.values()) {
-    const normName = item.name ? item.name.trim().toLowerCase() : null;
-    if (!normName) {
-      byName.set(item.id, item);
-      continue;
-    }
-    const existing = byName.get(normName);
-    if (!existing) {
-      byName.set(normName, item);
-    } else {
-      if (isLocalNewerOrEqual(item, existing)) {
-        byName.set(normName, item);
-      }
-    }
-  }
-
-  return Array.from(byName.values());
-}
-
-/**
- * Varredor de Resgate Automático de Bancos e Cartões (Sprint 47.1)
- * Inspeciona todo o localStorage e histórico de transações para reconstruir instituições e cartões faltantes.
- */
-export function rescueMissingBanksAndCards(
-  currentBanks: BankItem[],
-  currentCards: CreditCardItem[],
-  currentTxs: Transaction[],
-  tombstones: Set<string>
-): { rescuedBanks: BankItem[]; rescuedCards: CreditCardItem[]; rescuedCount: number } {
-  let rescuedCount = 0;
-  const candidateBanks: BankItem[] = [...currentBanks];
-  const candidateCards: CreditCardItem[] = [...currentCards];
-
-  if (typeof window !== "undefined" && window.localStorage) {
-    try {
-      const totalKeys = window.localStorage.length;
-      for (let i = 0; i < totalKeys; i++) {
-        const key = window.localStorage.key(i);
-        if (!key) continue;
-
-        // Inspeciona chaves de bancos
-        if (
-          key.includes("banks_v8") ||
-          key.includes("banks_v1") ||
-          key.includes("vault_banks_backup") ||
-          (key.startsWith("coindex_") && key.includes("banks"))
-        ) {
-          try {
-            const raw = window.localStorage.getItem(key);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) {
-                for (const item of parsed) {
-                  if (item && typeof item === "object" && item.id && item.name) {
-                    if (!tombstones.has(item.id) && !item.deletedAt) {
-                      candidateBanks.push(item);
-                    }
-                  }
-                }
-              }
-            }
-          } catch {
-            // Ignora JSONs corrompidos
-          }
-        }
-
-        // Inspeciona chaves de cartões
-        if (
-          key.includes("cards_v8") ||
-          key.includes("vault_cards_backup") ||
-          (key.startsWith("coindex_") && key.includes("cards"))
-        ) {
-          try {
-            const raw = window.localStorage.getItem(key);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) {
-                for (const item of parsed) {
-                  if (item && typeof item === "object" && item.id && item.name) {
-                    if (!tombstones.has(item.id) && !item.deletedAt) {
-                      candidateCards.push(item);
-                    }
-                  }
-                }
-              }
-            }
-          } catch {
-            // Ignora JSONs corrompidos
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("[coindex] Erro ao varrer localStorage para resgate de bancos/cartões:", e);
-    }
-  }
-
-  // Mescla inicial segura
-  let rescuedBanks = mergeEntitiesSafe(candidateBanks, [], tombstones);
-  let rescuedCards = mergeEntitiesSafe(candidateCards, [], tombstones);
-
-  // Garante que bancos padrões essenciais existam caso não estejam tombstoned
-  if (!rescuedBanks.some((b) => b.name === "BTG Pactual") && !tombstones.has("b3")) {
-    const btg = INITIAL_BANKS.find((b) => b.name === "BTG Pactual");
-    if (btg) rescuedBanks.push(btg);
-  }
-  if (!rescuedBanks.some((b) => b.name === "Nubank") && !tombstones.has("b1")) {
-    const nu = INITIAL_BANKS.find((b) => b.name === "Nubank");
-    if (nu) rescuedBanks.push(nu);
-  }
-  if (!rescuedBanks.some((b) => b.name === "Inter") && !tombstones.has("b2")) {
-    const inter = INITIAL_BANKS.find((b) => b.name === "Inter");
-    if (inter) rescuedBanks.push(inter);
-  }
-
-  // Garante cartões padrões se vazios
-  if (rescuedCards.length === 0) {
-    for (const initCard of INITIAL_CARDS) {
-      if (!tombstones.has(initCard.id)) {
-        rescuedCards.push(initCard);
-      }
-    }
-  }
-
-  // Inspeciona todas as transações ativas para auto-reconstrução de instituições e cartões
-  for (const tx of currentTxs) {
-    // 1. Resgate de Cartão citado em transação
-    if (tx.cardUsed && typeof tx.cardUsed === "string" && tx.cardUsed.trim().length > 0) {
-      const cardName = tx.cardUsed.trim();
-      const cardExists = rescuedCards.some(
-        (c) => c.name.toLowerCase() === cardName.toLowerCase() || (tx.cardId && c.id === tx.cardId)
-      );
-      if (!cardExists) {
-        const slugId = tx.cardId || `card-rescued-${cardName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-        if (!tombstones.has(slugId)) {
-          rescuedCards.push({
-            id: slugId,
-            name: cardName,
-            brand: "Mastercard Black",
-            limit: 5000,
-            closingDay: 25,
-            dueDay: 5,
-            bankName: tx.bankAccount || undefined,
-            updatedAt: new Date().toISOString(),
-            rev: 1
-          });
-          rescuedCount++;
-        }
-      }
-    }
-
-    // 2. Resgate de Bancos citados em transação
-    const banksToCheck = [tx.bankAccount, tx.sourceBank, tx.destinationBank].filter(
-      (b): b is string => Boolean(b && typeof b === "string" && b.trim().length > 0)
-    );
-
-    for (const bName of banksToCheck) {
-      const cleanBName = bName.trim();
-      if (["dinheiro", "pix", "ted", "doc", "boleto", "outros"].includes(cleanBName.toLowerCase())) {
-        continue;
-      }
-      const bankExists = rescuedBanks.some(
-        (b) => b.name.toLowerCase() === cleanBName.toLowerCase() || (tx.bankId && b.id === tx.bankId)
-      );
-      if (!bankExists) {
-        const slugId = tx.bankId || `bank-rescued-${cleanBName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-        if (!tombstones.has(slugId)) {
-          rescuedBanks.push({
-            id: slugId,
-            name: cleanBName,
-            limitType: "Cartão de Crédito",
-            accountType: "Conta Digital",
-            updatedAt: new Date().toISOString(),
-            rev: 1
-          });
-          rescuedCount++;
-        }
-      }
-    }
-  }
-
-  // Re-aplica merge final para ordenar e desduplicar
-  rescuedBanks = mergeEntitiesSafe(rescuedBanks, [], tombstones);
-  rescuedCards = mergeEntitiesSafe(rescuedCards, [], tombstones);
-
-  return { rescuedBanks, rescuedCards, rescuedCount };
-}
+// SPRINT 60: Soberania Estrita da Nuvem — Supabase SSOT
+// mergeEntitiesSafe e rescueMissingBanksAndCards eliminados para impedir ressuscitação de cartões/bancos obsoletos do cache local.
 
 export default function CoindexApp() {
   const [isHydrated, setIsHydrated] = useState(false);
@@ -1869,21 +1634,36 @@ export default function CoindexApp() {
         const sDebtors = localStorage.getItem("lifeos_debtors_v8");
         if (sDebtors) setDebtorMap(JSON.parse(sDebtors));
 
-        // SPRINT 47.1: Auto-Resgate e Sincronização Síncrona Tripla de Bancos e Cartões
-        const { rescuedBanks, rescuedCards } = rescueMissingBanksAndCards(
-          INITIAL_BANKS,
-          INITIAL_CARDS,
-          initialTxs,
-          tombstonesOnStart
-        );
-        setBanks(rescuedBanks);
-        setCards(rescuedCards);
-        setUserItem("lifeos_banks_v8", JSON.stringify(rescuedBanks), currentUserId);
-        localStorage.setItem("lifeos_banks_v1", JSON.stringify(rescuedBanks));
-        localStorage.setItem("coindex_vault_banks_backup", JSON.stringify(rescuedBanks));
-        setUserItem("lifeos_cards_v8", JSON.stringify(rescuedCards), currentUserId);
-        localStorage.setItem("lifeos_cards_v8", JSON.stringify(rescuedCards));
-        localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(rescuedCards));
+        // SPRINT 60: Limpeza proativa de chaves legadas e carregamento limpo
+        const staleLegacyKeys = [
+          "lifeos_banks_v1",
+          "coindex_vault_cards_backup",
+          "coindex_vault_banks_backup"
+        ];
+        staleLegacyKeys.forEach((k) => {
+          try {
+            localStorage.removeItem(k);
+          } catch {}
+        });
+
+        // Carregamento de bancos e cartões respeitando tombstones
+        let initialCards = INITIAL_CARDS;
+        const sCards = getUserItem("lifeos_cards_v8", currentUserId) || localStorage.getItem("lifeos_cards_v8");
+        if (sCards) {
+          try {
+            initialCards = JSON.parse(sCards);
+          } catch {}
+        }
+        setCards(initialCards.filter((c: CreditCardItem) => !tombstonesOnStart.has(c.id)));
+
+        let initialBanks = INITIAL_BANKS;
+        const sBanks = getUserItem("lifeos_banks_v8", currentUserId) || localStorage.getItem("lifeos_banks_v8");
+        if (sBanks) {
+          try {
+            initialBanks = JSON.parse(sBanks);
+          } catch {}
+        }
+        setBanks(initialBanks.filter((b: BankItem) => !tombstonesOnStart.has(b.id)));
         const sStatus = localStorage.getItem("lifeos_status_v8");
         if (sStatus) setStaticStatus(JSON.parse(sStatus));
         const sWish = localStorage.getItem("lifeos_wish_v8");
@@ -2133,112 +1913,57 @@ export default function CoindexApp() {
             }
           }
 
-          // SPRINT 47.1: União Aditiva Segura (Non-Destructive Union Merge) por ID + Tombstone Check
+          // SPRINT 60: Soberania Estrita da Nuvem (Supabase SSOT)
           // 1. CARDS
-          let localCardsForMerge: CreditCardItem[] = [];
-          try {
-            const rawLocalCards =
-              getUserItem("lifeos_cards_v8", targetUserId) ||
-              localStorage.getItem("lifeos_cards_v8") ||
-              localStorage.getItem("coindex_vault_cards_backup");
-            if (rawLocalCards) {
-              localCardsForMerge = JSON.parse(rawLocalCards);
-            }
-          } catch (e) {
-            console.error("Erro ao ler cartões locais para merge:", e);
-          }
-          if (localCardsForMerge.length === 0 && cards.length > 0) {
-            localCardsForMerge = cards;
-          }
+          const cloudCards = (d.cards && d.cards.length > 0)
+            ? d.cards.filter((c) => !currentTombstones.has(c.id))
+            : (d.cloudVault?.cards && d.cloudVault.cards.length > 0)
+            ? d.cloudVault.cards.filter((c) => !currentTombstones.has(c.id))
+            : [];
 
-          const mergedCards = mergeEntitiesSafe(localCardsForMerge, d.cards || [], currentTombstones);
-          setCards(mergedCards);
-          setUserItem("lifeos_cards_v8", JSON.stringify(mergedCards), targetUserId);
-          localStorage.setItem("lifeos_cards_v8", JSON.stringify(mergedCards));
-          localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(mergedCards));
-
-          // Auto-Heal Push: Envia cartões locais mais recentes ou não cadastrados no Supabase
-          const remoteCardIds = new Set((d.cards || []).map((c) => c.id));
-          const cardsToHeal = mergedCards.filter((c) => {
-            if (!remoteCardIds.has(c.id)) return true;
-            const remote = (d.cards || []).find((rc) => rc.id === c.id);
-            if (!remote) return true;
-            const localTime = c.updatedAt ? new Date(c.updatedAt).getTime() : 0;
-            const remoteTime = remote.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
-            return localTime > remoteTime || (c.rev ?? 0) > (remote.rev ?? 0);
-          });
-          if (cardsToHeal.length > 0) {
-            void upsertCardsInDb(cardsToHeal);
+          if (cloudCards.length > 0 || (d.cards && d.cards.length === 0 && d.cloudVault?.cards && d.cloudVault.cards.length === 0)) {
+            setCards(cloudCards);
+            setUserItem("lifeos_cards_v8", JSON.stringify(cloudCards), targetUserId);
+            localStorage.setItem("lifeos_cards_v8", JSON.stringify(cloudCards));
           }
 
           // 2. BANKS
-          let localBanksForMerge: BankItem[] = [];
-          try {
-            const rawLocalBanks =
-              getUserItem("lifeos_banks_v8", targetUserId) ||
-              getUserItem("lifeos_banks_v1", targetUserId) ||
-              localStorage.getItem("lifeos_banks_v1") ||
-              localStorage.getItem("coindex_vault_banks_backup");
-            if (rawLocalBanks) {
-              localBanksForMerge = JSON.parse(rawLocalBanks);
-            }
-          } catch (e) {
-            console.error("Erro ao ler bancos locais para merge:", e);
-          }
-          if (localBanksForMerge.length === 0 && banks.length > 0) {
-            localBanksForMerge = banks;
+          const cloudBanks = (d.banks && d.banks.length > 0)
+            ? d.banks.filter((b) => !currentTombstones.has(b.id))
+            : (d.cloudVault?.banks && d.cloudVault.banks.length > 0)
+            ? d.cloudVault.banks.filter((b) => !currentTombstones.has(b.id))
+            : [];
+
+          if (cloudBanks.length > 0 || (d.banks && d.banks.length === 0 && d.cloudVault?.banks && d.cloudVault.banks.length === 0)) {
+            setBanks(cloudBanks);
+            setUserItem("lifeos_banks_v8", JSON.stringify(cloudBanks), targetUserId);
+            localStorage.setItem("lifeos_banks_v8", JSON.stringify(cloudBanks));
           }
 
-          const remoteBanks = d.banks || [];
-          const mergedBanks = mergeEntitiesSafe(localBanksForMerge, remoteBanks, currentTombstones);
-          setBanks(mergedBanks);
-          setUserItem("lifeos_banks_v8", JSON.stringify(mergedBanks), targetUserId);
-          localStorage.setItem("lifeos_banks_v1", JSON.stringify(mergedBanks));
-          localStorage.setItem("coindex_vault_banks_backup", JSON.stringify(mergedBanks));
-
-          // Auto-Heal Push: Envia bancos locais mais recentes ou não cadastrados no Supabase
-          const remoteBankIds = new Set(remoteBanks.map((b) => b.id));
-          const banksToHeal = mergedBanks.filter((b) => {
-            if (!remoteBankIds.has(b.id)) return true;
-            const remote = remoteBanks.find((rb) => rb.id === b.id);
-            if (!remote) return true;
-            const localTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-            const remoteTime = remote.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
-            return localTime > remoteTime || (b.rev ?? 0) > (remote.rev ?? 0);
-          });
-          if (banksToHeal.length > 0) {
-            void upsertBanksInDb(banksToHeal);
-          }
-          if (d.staticStatus.length > 0) {
+          if (d.staticStatus && d.staticStatus.length > 0) {
             setStaticStatus(d.staticStatus);
             localStorage.setItem("lifeos_status_v8", JSON.stringify(d.staticStatus));
           }
-          if (d.wishlist.length > 0) {
+          if (d.wishlist && d.wishlist.length > 0) {
             setWishlist(d.wishlist);
             localStorage.setItem("lifeos_wish_v8", JSON.stringify(d.wishlist));
           }
-          if (d.bioLogs.length > 0) {
+          if (d.bioLogs && d.bioLogs.length > 0) {
             setBioLogs(d.bioLogs);
             localStorage.setItem("lifeos_bio_v8", JSON.stringify(d.bioLogs));
           }
-          // 3. BRAIN NOTES & DESEJOS DE COMPRA (Auto-Heal e Sincronização Cloud SSOT)
-          let localNotesForMerge: BrainNote[] = [];
-          try {
-            const rawLocalNotes = getUserItem("lifeos_notes_v8", targetUserId) || localStorage.getItem("lifeos_notes_v8");
-            if (rawLocalNotes) {
-              localNotesForMerge = JSON.parse(rawLocalNotes);
-            }
-          } catch (e) {
-            console.error("Erro ao ler notas locais:", e);
-          }
-          const remoteNotes = d.notes || [];
-          const mergedNotes = mergeEntitiesSafe(localNotesForMerge, remoteNotes, currentTombstones);
-          setNotes(mergedNotes);
 
-          // Push para nuvem: Envia desejos e notas locais não cadastrados no Supabase
-          const remoteNoteIds = new Set(remoteNotes.map((n) => n.id));
-          const notesToHeal = mergedNotes.filter((n) => !remoteNoteIds.has(n.id));
-          notesToHeal.forEach((n) => void upsertNoteInDb(n));
+          // 3. BRAIN NOTES & DESEJOS DE COMPRA (Soberania Cloud SSOT)
+          const cloudNotes = (d.notes && d.notes.length > 0)
+            ? d.notes.filter((n) => !currentTombstones.has(n.id))
+            : (d.cloudVault?.notes && d.cloudVault.notes.length > 0)
+            ? d.cloudVault.notes.filter((n) => !currentTombstones.has(n.id))
+            : [];
+          if (cloudNotes.length > 0) {
+            setNotes(cloudNotes);
+            setUserItem("lifeos_notes_v8", JSON.stringify(cloudNotes), targetUserId);
+            localStorage.setItem("lifeos_notes_v8", JSON.stringify(cloudNotes));
+          }
           if (d.okrs.length > 0) {
             setOkrs(d.okrs);
             localStorage.setItem("lifeos_okrs_v8", JSON.stringify(d.okrs));
@@ -2300,25 +2025,6 @@ export default function CoindexApp() {
               setSimulatorMonthlyContribution(invSt.simulatorMonthlyContribution);
               localStorage.setItem("coindex_simulator_monthly_contribution", String(invSt.simulatorMonthlyContribution));
             }
-          } else {
-            // Backup inicial proativo do cofre para garantir persistência imediata
-            void saveCloudVaultInDb(
-              {
-                version: COINDEX_APP_VERSION,
-                syncedAt: new Date().toISOString(),
-                investmentState: {
-                  realBalanceOverride: manualAdjustment,
-                  yieldMode,
-                  visibleMarketCharts,
-                  simulatorMonthlyContribution
-                },
-                cards: mergedCards,
-                banks: mergedBanks,
-                notes: mergedNotes,
-                staticStatus: d.staticStatus
-              },
-              targetUserId || undefined
-            );
           }
 
           setSheetsSyncStatus({
@@ -6197,11 +5903,20 @@ export default function CoindexApp() {
         recordTombstone(id, currentUserId);
         const updated = cards.filter((c) => c.id !== id);
         setCards(updated);
-        // Persistência Síncrona Tripla (Sprint 47.1)
         setUserItem("lifeos_cards_v8", JSON.stringify(updated), currentUserId);
         localStorage.setItem("lifeos_cards_v8", JSON.stringify(updated));
-        localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(updated));
+
+        // SPRINT 60: Exclusão remota e sincronização IMEDIATA do Cofre Mestre sem o cartão
         void deleteCardInDb(id);
+        const currentTombstones = getTombstones(currentUserId);
+        void saveCloudVaultInDb(
+          {
+            cards: updated,
+            tombstones: Array.from(currentTombstones)
+          },
+          currentUserId || undefined
+        );
+
         notify("Cartão Removido", `"${card?.name || "Cartão"}" excluído com sucesso.`, "warning", "CONFIG");
       }
     });
@@ -6342,18 +6057,26 @@ export default function CoindexApp() {
         recordTombstone(id, currentUserId);
         const updated = banks.filter((b) => b.id !== id);
         setBanks(updated);
-        // Persistência Síncrona Tripla (Sprint 47.1)
         setUserItem("lifeos_banks_v8", JSON.stringify(updated), currentUserId);
-        localStorage.setItem("lifeos_banks_v1", JSON.stringify(updated));
-        localStorage.setItem("coindex_vault_banks_backup", JSON.stringify(updated));
+        localStorage.setItem("lifeos_banks_v8", JSON.stringify(updated));
 
         const updatedCards = cards.map((c) => (c.bankId === id ? { ...c, bankId: undefined } : c));
         setCards(updatedCards);
         setUserItem("lifeos_cards_v8", JSON.stringify(updatedCards), currentUserId);
         localStorage.setItem("lifeos_cards_v8", JSON.stringify(updatedCards));
-        localStorage.setItem("coindex_vault_cards_backup", JSON.stringify(updatedCards));
 
+        // SPRINT 60: Exclusão remota e sincronização IMEDIATA do Cofre Mestre sem o banco
         void deleteBankInDb(id);
+        const currentTombstones = getTombstones(currentUserId);
+        void saveCloudVaultInDb(
+          {
+            banks: updated,
+            cards: updatedCards,
+            tombstones: Array.from(currentTombstones)
+          },
+          currentUserId || undefined
+        );
+
         notify("Banco Removido", `"${bank?.name || "Banco"}" excluído com sucesso.`, "warning", "CONFIG");
       }
     });
@@ -7155,44 +6878,119 @@ export default function CoindexApp() {
   const handleManualForceCloudSync = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
+    setSheetsSyncStatus({
+      state: "idle",
+      message: "Sincronizando com a Nuvem...",
+      timestamp: new Date().toLocaleTimeString("pt-BR")
+    });
+
     try {
-      await upsertTransactionsInDb(transactions, debtorMap);
-      await saveCloudVaultInDb(
-        {
-          version: COINDEX_APP_VERSION,
-          syncedAt: new Date().toISOString(),
-          investmentState: {
-            realBalanceOverride: manualAdjustment,
-            yieldMode,
-            visibleMarketCharts,
-            simulatorMonthlyContribution
-          },
-          cards,
-          banks,
-          notes,
-          staticStatus,
-          tombstones: Array.from(getTombstones(currentUserId))
-        },
-        currentUserId || undefined
-      );
-      setSheetsSyncStatus({
-        state: "success",
-        message: "Sincronizado",
-        timestamp: new Date().toLocaleTimeString("pt-BR")
+      // 1. Limpeza proativa de chaves legadas e caches de sessão obsoletos
+      const staleKeys = [
+        "lifeos_banks_v1",
+        "coindex_vault_cards_backup",
+        "coindex_vault_banks_backup"
+      ];
+      staleKeys.forEach((k) => {
+        try {
+          localStorage.removeItem(k);
+          if (currentUserId) removeUserItem(k, currentUserId);
+        } catch {}
       });
-      notify(
-        "☁️ Sincronização Concluída",
-        "100% dos dados, investimentos e preferências salvos com sucesso no Cofre Nuvem Supabase!",
-        "success",
-        "CONFIG"
-      );
+
+      // 2. Busca dados frescos com Soberania Estrita da Nuvem (Supabase SSOT)
+      const tombstonesOnSync = getTombstones(currentUserId);
+      const res = await fetchAllCoindexData(tombstonesOnSync);
+
+      if (res.ok && res.data) {
+        const d = res.data;
+
+        // Hidratação 100% pura da nuvem para transações
+        if (d.transactions) {
+          setTransactions(d.transactions);
+          setUserItem("lifeos_txs_v8", JSON.stringify(d.transactions), currentUserId);
+          localStorage.setItem("lifeos_txs_v8", JSON.stringify(d.transactions));
+        }
+
+        // Cartões puros da nuvem
+        const cloudCards = (d.cards && d.cards.length > 0)
+          ? d.cards.filter((c) => !tombstonesOnSync.has(c.id))
+          : (d.cloudVault?.cards && d.cloudVault.cards.length > 0)
+          ? d.cloudVault.cards.filter((c) => !tombstonesOnSync.has(c.id))
+          : [];
+        setCards(cloudCards);
+        setUserItem("lifeos_cards_v8", JSON.stringify(cloudCards), currentUserId);
+        localStorage.setItem("lifeos_cards_v8", JSON.stringify(cloudCards));
+
+        // Bancos puros da nuvem
+        const cloudBanks = (d.banks && d.banks.length > 0)
+          ? d.banks.filter((b) => !tombstonesOnSync.has(b.id))
+          : (d.cloudVault?.banks && d.cloudVault.banks.length > 0)
+          ? d.cloudVault.banks.filter((b) => !tombstonesOnSync.has(b.id))
+          : [];
+        setBanks(cloudBanks);
+        setUserItem("lifeos_banks_v8", JSON.stringify(cloudBanks), currentUserId);
+        localStorage.setItem("lifeos_banks_v8", JSON.stringify(cloudBanks));
+
+        // Notas / Desejos puros da nuvem
+        if (d.notes) {
+          const cloudNotes = d.notes.filter((n) => !tombstonesOnSync.has(n.id));
+          setNotes(cloudNotes);
+          setUserItem("lifeos_notes_v8", JSON.stringify(cloudNotes), currentUserId);
+          localStorage.setItem("lifeos_notes_v8", JSON.stringify(cloudNotes));
+        }
+
+        // Status puros da nuvem
+        if (d.staticStatus) {
+          setStaticStatus(d.staticStatus);
+          localStorage.setItem("lifeos_status_v8", JSON.stringify(d.staticStatus));
+        }
+
+        // Investimentos & Calibração do Cofre Mestre
+        if (d.cloudVault?.investmentState) {
+          const invSt = d.cloudVault.investmentState;
+          if (invSt.realBalanceOverride !== undefined && invSt.realBalanceOverride !== null) {
+            setManualAdjustment(invSt.realBalanceOverride);
+            localStorage.setItem("coindex_patrimony_real_adjustment", String(invSt.realBalanceOverride));
+            setUserItem("coindex_patrimony_real_adjustment", String(invSt.realBalanceOverride), currentUserId);
+          }
+          if (invSt.yieldMode && ["bruto", "liquido", "aportes"].includes(invSt.yieldMode)) {
+            setYieldMode(invSt.yieldMode);
+            localStorage.setItem("coindex_patrimony_yield_mode", invSt.yieldMode);
+          }
+          if (Array.isArray(invSt.visibleMarketCharts) && invSt.visibleMarketCharts.length > 0) {
+            setVisibleMarketCharts(invSt.visibleMarketCharts);
+            localStorage.setItem("coindex_visible_market_charts", JSON.stringify(invSt.visibleMarketCharts));
+          }
+          if (invSt.simulatorMonthlyContribution !== undefined && invSt.simulatorMonthlyContribution > 0) {
+            setSimulatorMonthlyContribution(invSt.simulatorMonthlyContribution);
+            localStorage.setItem("coindex_simulator_monthly_contribution", String(invSt.simulatorMonthlyContribution));
+          }
+        }
+
+        setSheetsSyncStatus({
+          state: "success",
+          message: `Sincronizado (${d.transactions.length} lançamentos)`,
+          timestamp: new Date().toLocaleTimeString("pt-BR")
+        });
+
+        notify(
+          "☁️ Nuvem Atualizada",
+          `Soberania Cloud ativada: ${cloudCards.length} cartões e ${cloudBanks.length} bancos atualizados do Supabase.`,
+          "success",
+          "CONFIG"
+        );
+      } else {
+        throw new Error(res.error || "Falha ao obter dados do Supabase");
+      }
     } catch (err) {
+      console.error("[coindex] Erro ao sincronizar nuvem:", err);
       setSheetsSyncStatus({
         state: "error",
         message: "Erro ao sincronizar",
         timestamp: new Date().toLocaleTimeString("pt-BR")
       });
-      notify("Erro de Sincronização", "Não foi possível sincronizar com o Supabase.", "error", "CONFIG");
+      notify("Erro de Sincronização", "Não foi possível carregar os dados da nuvem.", "error", "CONFIG");
     } finally {
       setIsSyncing(false);
     }
@@ -10439,6 +10237,16 @@ export default function CoindexApp() {
                         className="w-7 h-7 rounded-lg bg-white/5 hover:bg-[#0A84FF]/20 hover:text-[#0A84FF] text-slate-300 flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
                       >
                         <ChevronDown className="w-4 h-4" />
+                      </button>
+
+                      {/* SPRINT 60: Exclusão direta no gerenciador de cartões */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCard(c.id)}
+                        title="Excluir este cartão"
+                        className="w-7 h-7 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 flex items-center justify-center transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>

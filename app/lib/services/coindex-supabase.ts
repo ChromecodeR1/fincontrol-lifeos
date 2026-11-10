@@ -493,12 +493,17 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       }
     }
 
+    const effectiveTombstones = new Set(tombstoneSet || []);
+    if (Array.isArray(cloudVault?.tombstones)) {
+      cloudVault.tombstones.forEach((t) => effectiveTombstones.add(t));
+    }
+
     const cardRows = (cardsRes.data ?? []) as Array<Record<string, unknown>>;
     const catRows = (catsRes.data ?? []) as Array<Record<string, unknown>>;
 
     const isExcluded = (id: string, deletedAt?: unknown) => {
       if (deletedAt) return true;
-      if (tombstoneSet && tombstoneSet.has(id)) return true;
+      if (effectiveTombstones.has(id)) return true;
       return false;
     };
 
@@ -530,9 +535,9 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
 
     if (cards.length === 0) {
       if (cloudVault?.cards && cloudVault.cards.length > 0) {
-        cards = cloudVault.cards;
+        cards = cloudVault.cards.filter((c: CreditCardItem) => !isExcluded(c.id, c.deletedAt));
       } else if (Array.isArray(rawCloudBackup?.cards) && rawCloudBackup.cards.length > 0) {
-        cards = rawCloudBackup.cards;
+        cards = rawCloudBackup.cards.filter((c: any) => !isExcluded(c.id, c.deletedAt));
       }
     }
 
@@ -554,9 +559,9 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
 
     if (banks.length === 0) {
       if (cloudVault?.banks && cloudVault.banks.length > 0) {
-        banks = cloudVault.banks;
+        banks = cloudVault.banks.filter((b: BankItem) => !isExcluded(b.id, b.deletedAt));
       } else if (Array.isArray(rawCloudBackup?.banks) && rawCloudBackup.banks.length > 0) {
-        banks = rawCloudBackup.banks;
+        banks = rawCloudBackup.banks.filter((b: any) => !isExcluded(b.id, b.deletedAt));
       }
     }
 

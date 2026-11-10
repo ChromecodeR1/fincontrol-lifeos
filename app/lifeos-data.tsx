@@ -400,13 +400,26 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.45.2";
-export const PREVIOUS_VERSION = "0.45.1";
-export const COINDEX_APP_VERSION = "0.45.2";
+export const APP_VERSION = "0.46.0";
+export const PREVIOUS_VERSION = "0.45.2";
+export const COINDEX_APP_VERSION = "0.46.0";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.46.0",
+    date: "Nov/2026",
+    title: "Sprint 60: Soberania Estrita da Nuvem (Supabase SSOT), Eliminação Definitiva da Ressuscitação de Cartões/Bancos e Exclusão Instantânea no Cofre",
+    highlights: [
+      "Soberania Estrita da Nuvem (Supabase SSOT): Eliminação dos algoritmos aditivos mergeEntitiesSafe e rescueMissingBanksAndCards que ressuscitavam itens obsoletos do localStorage em outros computadores; o estado remoto do Supabase agora sobrescreve o cache local com autoridade absoluta.",
+      "Expurgo de Chaves Legadas de Sessão: Limpeza proativa de chaves antigas de localStorage (lifeos_cards_v8, lifeos_banks_v1, coindex_vault_cards_backup, coindex_vault_banks_backup) ao inicializar e ao forçar sincronização.",
+      "Desativação de Push Proativo no Init: Desativação do auto-heal automático na inicialização, impedindo que computadores secundários com dados locais defasados empurrem cartões ou bancos deletados de volta para o Supabase.",
+      "Exclusão Atômica com Cofre Mestre: Ao excluir cartões ou bancos (handleDeleteCard / handleDeleteBank), registra tombstone, exclui na tabela dedicada e regrava imediatamente o registro mestre __COINDEX_CLOUD_VAULT__ sem o item.",
+      "Botão de Exclusão Direta no Gerenciador de Cartões: Adição de ícone de lixeira (Trash2) em cada cartão no modal '⚙️ Ordenar Meus Cartões' do Dashboard para exclusão rápida e direta.",
+      "Sincronização Manual Pura na Topbar: Ao clicar no badge de sincronização, limpa caches obsoletos, consulta o Supabase e reidrata a aplicação 100% com o estado mais recente da nuvem."
+    ]
+  },
   {
     version: "0.45.2",
     date: "Nov/2026",

@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.45.2`  
-> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 59 — Auditoria de Abastecimentos, Plano Preventivo Personalizável e Seleção por Long-Press)  
+> **Versão da Aplicação:** `0.46.0`  
+> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 60 — Soberania Estrita da Nuvem Supabase SSOT e Exclusão Instantânea com Cofre Mestre)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
