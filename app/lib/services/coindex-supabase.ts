@@ -265,6 +265,10 @@ export interface CoindexCloudVaultState {
   notes?: BrainNote[];
   staticStatus?: StaticStatusItem[];
   autoInmetroConfig?: unknown;
+  vehicleMaintenance?: {
+    history?: Record<string, number>;
+    customItems?: unknown[];
+  };
   uiSettings?: {
     themeMode?: ThemeMode;
     bgFxMode?: string;

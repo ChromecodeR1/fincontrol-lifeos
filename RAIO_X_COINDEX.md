@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.45.1`  
-> **Última Atualização:** 9 de Novembro de 2026 (Pós-Sprint 58.1 — Aplicação do Manifesto Pessoal na Aba Sobre e Correção de Nitidez Vetorial da Logo)  
+> **Versão da Aplicação:** `0.45.2`  
+> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 59 — Auditoria de Abastecimentos, Plano Preventivo Personalizável e Seleção por Long-Press)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---

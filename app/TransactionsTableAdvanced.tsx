@@ -22,6 +22,7 @@ import {
   X,
   FileText,
   Check,
+  CheckSquare,
   Loader2
 } from "lucide-react";
 import {
@@ -90,7 +91,9 @@ interface TransactionRowProps {
   catColor: string;
   moneyBlur: string;
   isSelected?: boolean;
+  showCheckbox?: boolean;
   onToggleSelect?: (id: string) => void;
+  onLongPress?: (id: string) => void;
   onToggleStatus: (tx: Transaction) => void;
   onEdit: (tx: Transaction) => void;
   onDelete: (id: string) => void;
@@ -104,7 +107,9 @@ const TransactionRow = React.memo<TransactionRowProps>(({
   catColor,
   moneyBlur,
   isSelected,
+  showCheckbox = false,
   onToggleSelect,
+  onLongPress,
   onToggleStatus,
   onEdit,
   onDelete,
@@ -117,6 +122,26 @@ const TransactionRow = React.memo<TransactionRowProps>(({
   const [inlineField, setInlineField] = useState<"date" | "description" | "category" | "amount" | null>(null);
   const [inlineVal, setInlineVal] = useState<string>("");
   const [justSaved, setJustSaved] = useState<boolean>(false);
+
+  // SPRINT 59: Long-Press de 320ms para seleção rápida
+  const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handlePointerDown = () => {
+    if (!onLongPress) return;
+    longPressTimerRef.current = setTimeout(() => {
+      onLongPress(tx.id);
+      if (typeof window !== "undefined" && window.navigator?.vibrate) {
+        window.navigator.vibrate(40);
+      }
+    }, 320);
+  };
+
+  const handlePointerUpOrCancel = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
 
   const handleCommitInline = (field: "date" | "description" | "category" | "amount", val: string) => {
     setInlineField(null);
@@ -154,19 +179,24 @@ const TransactionRow = React.memo<TransactionRowProps>(({
 
   return (
     <tr
-      className={`hover:bg-white/[0.03] transition-colors ${
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUpOrCancel}
+      onPointerLeave={handlePointerUpOrCancel}
+      className={`hover:bg-white/[0.03] transition-colors select-none ${
         justSaved ? "bg-emerald-500/20" : isSelected ? "bg-[#0A84FF]/10" : ""
       }`}
     >
-      {/* Checkbox de Seleção em Lote */}
-      <td className="py-3.5 pl-3 pr-1 w-8 text-center">
-        <input
-          type="checkbox"
-          checked={Boolean(isSelected)}
-          onChange={() => onToggleSelect?.(tx.id)}
-          className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#0A84FF] focus:ring-0 cursor-pointer"
-        />
-      </td>
+      {/* Checkbox de Seleção em Lote (exibido apenas se showCheckbox for true) */}
+      {showCheckbox && (
+        <td className="py-3.5 pl-3 pr-1 w-8 text-center">
+          <input
+            type="checkbox"
+            checked={Boolean(isSelected)}
+            onChange={() => onToggleSelect?.(tx.id)}
+            className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#0A84FF] focus:ring-0 cursor-pointer"
+          />
+        </td>
+      )}
 
       {/* Data Formatada com DD/MM/AAAA (Duplo Clique para Editar Inline) */}
       <td
@@ -470,9 +500,33 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
   onBatchChangeCategory,
   onBatchDeleteTransactions
 }) => {
-  // SPRINT 55 (M-03): Seleção em Lote (Multi-Select)
+  // SPRINT 55 & 59: Seleção em Lote e Modo de Seleção sob demanda (Long-Press / Botão)
+  const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
   const [batchCategory, setBatchCategory] = useState<string>("");
+  const showCheckboxes = isSelectionMode || selectedTxIds.size > 0;
+  const longPressMobileRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // SPRINT 59: Atalho Esc para fechar o modo de seleção e limpar seleções
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && (isSelectionMode || selectedTxIds.size > 0)) {
+        setIsSelectionMode(false);
+        setSelectedTxIds(new Set());
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSelectionMode, selectedTxIds.size]);
+
+  const handleLongPressRow = useCallback((id: string) => {
+    setIsSelectionMode(true);
+    setSelectedTxIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
   // SPRINT 37: Fluidez 120Hz via useDeferredValue no Input de Busca (Davi Kroner)
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
@@ -856,6 +910,33 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
 
           <button
             type="button"
+            onClick={() => {
+              setIsSelectionMode((prev) => {
+                const next = !prev;
+                if (!next) setSelectedTxIds(new Set());
+                return next;
+              });
+            }}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+              showCheckboxes
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
+                : "bg-slate-900 hover:bg-slate-800 border-white/10 text-slate-300"
+            }`}
+            title="Ativar ou desativar modo de seleção em lote"
+          >
+            {showCheckboxes ? (
+              <>
+                <X className="w-3.5 h-3.5" /> ✕ Sair da Seleção
+              </>
+            ) : (
+              <>
+                <CheckSquare className="w-3.5 h-3.5 text-[#0A84FF]" /> ☑️ Selecionar
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={exportTableCSV}
             className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-slate-200 font-bold flex items-center gap-1.5 transition cursor-pointer"
             title="Exportar planilha compatível com Microsoft Excel"
@@ -960,11 +1041,41 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
             return (
               <div
                 key={`mobile-${tx.id}`}
-                className="glass-card p-3.5 rounded-2xl border border-white/[0.08] space-y-2.5 shadow-sm active:scale-[0.99] transition-transform"
+                onPointerDown={() => {
+                  longPressMobileRef.current = setTimeout(() => {
+                    handleLongPressRow(tx.id);
+                    if (typeof window !== "undefined" && window.navigator?.vibrate) {
+                      window.navigator.vibrate(40);
+                    }
+                  }, 320);
+                }}
+                onPointerUp={() => {
+                  if (longPressMobileRef.current) {
+                    clearTimeout(longPressMobileRef.current);
+                    longPressMobileRef.current = null;
+                  }
+                }}
+                onPointerLeave={() => {
+                  if (longPressMobileRef.current) {
+                    clearTimeout(longPressMobileRef.current);
+                    longPressMobileRef.current = null;
+                  }
+                }}
+                className={`glass-card p-3.5 rounded-2xl border transition-all ${
+                  selectedTxIds.has(tx.id) ? "border-[#0A84FF] bg-[#0A84FF]/10" : "border-white/[0.08]"
+                } space-y-2.5 shadow-sm active:scale-[0.99] select-none`}
               >
-                {/* Linha 1: Data + Categoria + Status */}
+                {/* Linha 1: Checkbox (se ativo) + Data + Categoria + Status */}
                 <div className="flex items-center justify-between text-xs gap-2">
                   <div className="flex items-center gap-2">
+                    {showCheckboxes && (
+                      <input
+                        type="checkbox"
+                        checked={selectedTxIds.has(tx.id)}
+                        onChange={() => handleToggleSelect(tx.id)}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#0A84FF] focus:ring-0 cursor-pointer"
+                      />
+                    )}
                     <span className="font-mono tabular-nums text-slate-400 text-[11px]">
                       {formatDateBR(tx.date)}
                     </span>
@@ -1080,16 +1191,18 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
         <table className="w-full text-left border-collapse text-xs">
           <thead className="relative z-30">
             <tr className="border-b border-white/[0.08] bg-slate-950/80 text-slate-400">
-              {/* SPRINT 55: MULTI-SELECT CHECKBOX (M-03) */}
-              <th className="py-3.5 pl-3 pr-1 w-8 text-center">
-                <input
-                  type="checkbox"
-                  aria-label="Selecionar todos os lançamentos visíveis"
-                  className="w-4 h-4 rounded border-white/20 bg-black/40 text-[#0A84FF] accent-[#0A84FF] cursor-pointer"
-                  checked={visibleTxs.length > 0 && selectedTxIds.size === visibleTxs.length}
-                  onChange={handleToggleSelectAll}
-                />
-              </th>
+              {/* SPRINT 55 & 59: MULTI-SELECT CHECKBOX (exibido apenas se showCheckboxes) */}
+              {showCheckboxes && (
+                <th className="py-3.5 pl-3 pr-1 w-8 text-center">
+                  <input
+                    type="checkbox"
+                    aria-label="Selecionar todos os lançamentos visíveis"
+                    className="w-4 h-4 rounded border-white/20 bg-black/40 text-[#0A84FF] accent-[#0A84FF] cursor-pointer"
+                    checked={visibleTxs.length > 0 && selectedTxIds.size === visibleTxs.length}
+                    onChange={handleToggleSelectAll}
+                  />
+                </th>
+              )}
 
               {/* 1. DATA */}
               <th className="py-3.5 px-3">
@@ -1578,7 +1691,9 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     catColor={catColor}
                     moneyBlur={moneyBlur}
                     isSelected={selectedTxIds.has(tx.id)}
+                    showCheckbox={showCheckboxes}
                     onToggleSelect={handleToggleSelect}
+                    onLongPress={handleLongPressRow}
                     onInlineSave={onUpdateSingleTransaction}
                     onToggleStatus={handleToggleStatus}
                     onEdit={handleStartEditTransaction}
@@ -1592,10 +1707,10 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
       </div>
       </div>
 
-      {/* SPRINT 55: BARRA FLUTUANTE DE AÇÕES EM LOTE (M-03) */}
-      {selectedTxIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9990] flex items-center gap-3 px-5 py-3 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black/80 animate-in fade-in slide-in-from-bottom-4 duration-200">
-          <div className="flex items-center gap-2 pr-3 border-r border-white/10 text-xs font-semibold text-white">
+      {/* SPRINT 55 & 59: BARRA FLUTUANTE DE AÇÕES EM LOTE FIXA VIA CREATEPORTAL */}
+      {selectedTxIds.size > 0 && typeof document !== "undefined" && createPortal(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9990] flex flex-wrap items-center justify-center gap-3 px-5 py-3 rounded-2xl bg-slate-900/95 backdrop-blur-2xl border border-white/20 shadow-2xl shadow-black/80 animate-in fade-in slide-in-from-bottom-4 duration-200 text-xs">
+          <div className="flex items-center gap-2 pr-3 border-r border-white/10 font-semibold text-white">
             <span className="w-6 h-6 rounded-full bg-[#0A84FF] text-white flex items-center justify-center text-[11px] font-bold">
               {selectedTxIds.size}
             </span>
@@ -1609,6 +1724,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                 if (onBatchUpdateStatus) {
                   onBatchUpdateStatus(Array.from(selectedTxIds), "Pago");
                   setSelectedTxIds(new Set());
+                  setIsSelectionMode(false);
                 }
               }}
               className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
@@ -1622,6 +1738,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                 if (onBatchUpdateStatus) {
                   onBatchUpdateStatus(Array.from(selectedTxIds), "Pendente");
                   setSelectedTxIds(new Set());
+                  setIsSelectionMode(false);
                 }
               }}
               className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
@@ -1636,6 +1753,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                 if (e.target.value && onBatchChangeCategory) {
                   onBatchChangeCategory(Array.from(selectedTxIds), e.target.value);
                   setSelectedTxIds(new Set());
+                  setIsSelectionMode(false);
                 }
               }}
               className="px-2.5 py-1.5 rounded-xl bg-slate-800 text-slate-200 border border-white/15 text-xs font-medium cursor-pointer outline-none focus:border-[#0A84FF]"
@@ -1653,6 +1771,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                   if (onBatchDeleteTransactions) {
                     onBatchDeleteTransactions(Array.from(selectedTxIds));
                     setSelectedTxIds(new Set());
+                    setIsSelectionMode(false);
                   }
                 }
               }}
@@ -1663,14 +1782,18 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
 
             <button
               type="button"
-              onClick={() => setSelectedTxIds(new Set())}
+              onClick={() => {
+                setSelectedTxIds(new Set());
+                setIsSelectionMode(false);
+              }}
               className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
-              title="Cancelar seleção"
+              title="Cancelar seleção (Esc)"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Controle de Renderização Progressiva (Virtual Windowing Controls) */}

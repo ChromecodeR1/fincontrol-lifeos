@@ -64,8 +64,11 @@ import {
   calculateVehicleTco,
   isFuelTransaction,
   calculateVehicleMaintenancePlan,
-  VehicleMaintenanceItem
+  VehicleMaintenanceItem,
+  CustomMaintenanceDefinition,
+  DEFAULT_MAINTENANCE_SCHEDULE
 } from "../lib/domain/vehicle-math";
+import { saveCloudVaultInDb } from "../lib/services/coindex-supabase";
 
 export interface VehiclesTabProps {
   autoMetrics: {
@@ -149,7 +152,17 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
   const [calcGasPrice, setCalcGasPrice] = useState<string>("5.99");
   const [calcEthPrice, setCalcEthPrice] = useState<string>("4.19");
 
-  // SPRINT 55: A-01 — Histórico e Plano de Manutenção Preventiva por Odômetro
+  // SPRINT 55 & 59: Histórico e Personalização Completa do Plano de Manutenção Preventiva por Odômetro
+  const [customSchedule, setCustomSchedule] = useState<CustomMaintenanceDefinition[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_MAINTENANCE_SCHEDULE;
+    try {
+      const saved = localStorage.getItem("lifeos_vehicle_maintenance_items_v2");
+      return saved ? JSON.parse(saved) : DEFAULT_MAINTENANCE_SCHEDULE;
+    } catch {
+      return DEFAULT_MAINTENANCE_SCHEDULE;
+    }
+  });
+
   const [maintenanceHistory, setMaintenanceHistory] = useState<Record<string, number>>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -161,8 +174,152 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
   });
 
   const maintenancePlan = useMemo(() => {
-    return calculateVehicleMaintenancePlan(autoMetrics.maxKm || 0, maintenanceHistory);
-  }, [autoMetrics.maxKm, maintenanceHistory]);
+    return calculateVehicleMaintenancePlan(autoMetrics.maxKm || 0, maintenanceHistory, customSchedule);
+  }, [autoMetrics.maxKm, maintenanceHistory, customSchedule]);
+
+  // Modal de Edição / Criação de Item Preventivo
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [itemModalId, setItemModalId] = useState<string>("");
+  const [itemModalName, setItemModalName] = useState<string>("");
+  const [itemModalDesc, setItemModalDesc] = useState<string>("");
+  const [itemModalCost, setItemModalCost] = useState<string>("350");
+  const [itemModalLastKm, setItemModalLastKm] = useState<string>("0");
+  const [itemModalIntervalKm, setItemModalIntervalKm] = useState<string>("10000");
+  const [itemModalNextDueKm, setItemModalNextDueKm] = useState<string>("10000");
+  const [isEditingExisting, setIsEditingExisting] = useState<boolean>(false);
+
+  // Sincronização inteligente bidirecional: nextDueKm = lastDoneKm + intervalKm
+  const handleLastKmChange = (val: string) => {
+    setItemModalLastKm(val);
+    const last = parseInt(val, 10);
+    const interval = parseInt(itemModalIntervalKm, 10);
+    if (!isNaN(last) && !isNaN(interval) && interval > 0) {
+      setItemModalNextDueKm(String(last + interval));
+    }
+  };
+
+  const handleIntervalKmChange = (val: string) => {
+    setItemModalIntervalKm(val);
+    const last = parseInt(itemModalLastKm, 10) || 0;
+    const interval = parseInt(val, 10);
+    if (!isNaN(interval) && interval > 0) {
+      setItemModalNextDueKm(String(last + interval));
+    }
+  };
+
+  const handleNextDueKmChange = (val: string) => {
+    setItemModalNextDueKm(val);
+    const last = parseInt(itemModalLastKm, 10) || 0;
+    const nextDue = parseInt(val, 10);
+    if (!isNaN(nextDue) && nextDue > last) {
+      setItemModalIntervalKm(String(nextDue - last));
+    }
+  };
+
+  const handleOpenNewItemModal = () => {
+    const currentKm = autoMetrics.maxKm || 0;
+    setItemModalId(`item_${Date.now()}`);
+    setItemModalName("");
+    setItemModalDesc("");
+    setItemModalCost("250");
+    setItemModalLastKm(String(currentKm));
+    setItemModalIntervalKm("10000");
+    setItemModalNextDueKm(String(currentKm + 10000));
+    setIsEditingExisting(false);
+    setShowItemModal(true);
+  };
+
+  const handleOpenEditItemModal = (item: VehicleMaintenanceItem) => {
+    setItemModalId(item.id);
+    setItemModalName(item.name);
+    setItemModalDesc(item.description);
+    setItemModalCost(String(item.estimatedCost));
+    setItemModalLastKm(String(item.lastDoneKm));
+    setItemModalIntervalKm(String(item.intervalKm));
+    setItemModalNextDueKm(String(item.nextDueKm));
+    setIsEditingExisting(true);
+    setShowItemModal(true);
+  };
+
+  const handleSaveItemModal = () => {
+    if (!itemModalName.trim()) {
+      notify("Nome Obrigatório", "Informe o nome da revisão preventiva.", "warning");
+      return;
+    }
+    const lastKm = parseInt(itemModalLastKm, 10) || 0;
+    const intervalKm = Math.max(1, parseInt(itemModalIntervalKm, 10) || 10000);
+    const cost = parseFloat(itemModalCost.replace(",", ".")) || 0;
+
+    const updatedItem: CustomMaintenanceDefinition = {
+      id: itemModalId || `item_${Date.now()}`,
+      name: itemModalName.trim(),
+      description: itemModalDesc.trim(),
+      estimatedCost: cost,
+      intervalKm,
+      lastDoneKm: lastKm
+    };
+
+    let nextList: CustomMaintenanceDefinition[];
+    if (isEditingExisting) {
+      nextList = customSchedule.map((it) => (it.id === updatedItem.id ? updatedItem : it));
+    } else {
+      nextList = [...customSchedule, updatedItem];
+    }
+
+    setCustomSchedule(nextList);
+    const nextHist = { ...maintenanceHistory, [updatedItem.id]: lastKm };
+    setMaintenanceHistory(nextHist);
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lifeos_vehicle_maintenance_items_v2", JSON.stringify(nextList));
+      localStorage.setItem("lifeos_vehicle_maintenance_v1", JSON.stringify(nextHist));
+    }
+
+    void saveCloudVaultInDb({
+      vehicleMaintenance: {
+        customItems: nextList,
+        history: nextHist
+      }
+    });
+
+    notify(
+      isEditingExisting ? "Item Atualizado!" : "Item Criado!",
+      `${updatedItem.name} salvo com sucesso no plano preventivo.`,
+      "success"
+    );
+    setShowItemModal(false);
+  };
+
+  const handleDeleteItem = (id: string, name: string) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o item preventivo "${name}"?`)) return;
+    const nextList = customSchedule.filter((it) => it.id !== id);
+    setCustomSchedule(nextList);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lifeos_vehicle_maintenance_items_v2", JSON.stringify(nextList));
+    }
+    void saveCloudVaultInDb({
+      vehicleMaintenance: {
+        customItems: nextList,
+        history: maintenanceHistory
+      }
+    });
+    notify("Item Removido", `"${name}" foi removido do seu plano preventivo.`, "info");
+  };
+
+  const handleRestoreDefaults = () => {
+    if (!window.confirm("Deseja restaurar os 5 itens preventivos originais de fábrica?")) return;
+    setCustomSchedule(DEFAULT_MAINTENANCE_SCHEDULE);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lifeos_vehicle_maintenance_items_v2", JSON.stringify(DEFAULT_MAINTENANCE_SCHEDULE));
+    }
+    void saveCloudVaultInDb({
+      vehicleMaintenance: {
+        customItems: DEFAULT_MAINTENANCE_SCHEDULE,
+        history: maintenanceHistory
+      }
+    });
+    notify("Padrões Restaurados", "O plano preventivo retornou à configuração oficial de fábrica.", "success");
+  };
 
   const handleRegisterMaintenance = async (item: VehicleMaintenanceItem) => {
     const currentKm = autoMetrics.maxKm || 0;
@@ -171,6 +328,12 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
     if (typeof window !== "undefined") {
       localStorage.setItem("lifeos_vehicle_maintenance_v1", JSON.stringify(nextHist));
     }
+    void saveCloudVaultInDb({
+      vehicleMaintenance: {
+        customItems: customSchedule,
+        history: nextHist
+      }
+    });
 
     if (onAddTransaction) {
       await onAddTransaction({
@@ -324,14 +487,16 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
     }
   };
 
-  // 1. Filtragem e Análise de Combustível
-  const fuelTxs: Transaction[] = autoMetrics.autoTxs.filter(
-    (t: Transaction) =>
-      t.category.toLowerCase().includes("gasolina") ||
-      t.category.toLowerCase().includes("combustível") ||
-      t.category.toLowerCase().includes("etanol") ||
-      (t.liters && t.liters > 0)
-  );
+  // 1. Filtragem e Análise de Combustível (Deduplicado por ID e sem falsos positivos como impostos)
+  const fuelTxs: Transaction[] = useMemo(() => {
+    const seen = new Set<string>();
+    return autoMetrics.autoTxs.filter((t: Transaction) => {
+      if (!isFuelTransaction(t)) return false;
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+  }, [autoMetrics.autoTxs]);
 
   // Pré-popula os preços da calculadora com o último registro de cada combustível se houver
   useEffect(() => {
@@ -403,22 +568,52 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
     avgSemaforoBadge = "🟡 Mediano";
   }
 
-  // Gasto Mensal com Combustível (R$)
-  const fuelByMonthMap = new Map<string, number>();
-  fuelTxs.forEach((t: Transaction) => {
-    const m = t.date.slice(0, 7);
-    fuelByMonthMap.set(m, (fuelByMonthMap.get(m) || 0) + t.amount);
-  });
-  const fuelMonthlyData = Array.from(fuelByMonthMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([m, total]) => {
-      const [y, mm] = m.split("-");
-      return {
-        month: m,
-        label: `${mm}/${y.slice(2)}`,
-        total: Number(total.toFixed(2))
+  // Helper de decomposição de ano e mês à prova de falhas de formato (DD-MM-AAAA ou AAAA-MM-DD)
+  const parseYearMonth = (dateStr: string): { year: number; month: number; key: string; label: string } | null => {
+    if (!dateStr) return null;
+    const parts = dateStr.trim().split(/[-/]/);
+    let y = 0;
+    let m = 0;
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        y = parseInt(parts[0], 10);
+        m = parseInt(parts[1], 10);
+      } else if (parts[2].length === 4) {
+        y = parseInt(parts[2], 10);
+        m = parseInt(parts[1], 10);
+      }
+    }
+    if (!y || !m || isNaN(y) || isNaN(m)) return null;
+    const mm = String(m).padStart(2, "0");
+    const key = `${y}-${mm}`;
+    const label = `${mm}/${String(y).slice(-2)}`;
+    return { year: y, month: m, key, label };
+  };
+
+  // Gasto Mensal com Combustível (R$) — Ordenação cronológica estrita YYYY-MM e rótulos canônicos MM/AA
+  const fuelMonthlyData = useMemo(() => {
+    const map = new Map<string, { year: number; month: number; label: string; total: number }>();
+    fuelTxs.forEach((t: Transaction) => {
+      const parsed = parseYearMonth(t.date);
+      if (!parsed) return;
+      const existing = map.get(parsed.key) || {
+        year: parsed.year,
+        month: parsed.month,
+        label: parsed.label,
+        total: 0
       };
+      existing.total += t.amount || 0;
+      map.set(parsed.key, existing);
     });
+
+    return Array.from(map.values())
+      .sort((a, b) => a.year - b.year || a.month - b.month)
+      .map((item) => ({
+        month: `${item.year}-${String(item.month).padStart(2, "0")}`,
+        label: item.label,
+        total: Number(item.total.toFixed(2))
+      }));
+  }, [fuelTxs]);
 
   // Preço por Litro ao Longo do Tempo (R$/L)
   const pricePerLiterData = sortedFuelAsc
@@ -467,34 +662,16 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
             onClick={() => setShowQuickFuelModal(true)}
             className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-xs text-white font-extrabold flex items-center gap-1.5 shadow-lg shadow-amber-600/25 transition cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" /> + Abastecimento Rápido
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleOpenNewTxModal("Gasolina")}
-            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-amber-300 font-bold flex items-center gap-1.5 transition cursor-pointer"
-          >
-            <Fuel className="w-3.5 h-3.5 text-amber-400" /> Posto Express (Abastecer)
+            <Fuel className="w-3.5 h-3.5" /> Registrar Abastecimento
           </button>
 
           <button
             type="button"
             onClick={() => setShowInmetroModal(true)}
-            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-indigo-300 font-bold flex items-center gap-1.5 transition"
+            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs text-indigo-300 font-bold flex items-center gap-1.5 transition cursor-pointer"
           >
             <Settings className="w-3.5 h-3.5 text-indigo-400" /> Metas INMETRO
           </button>
-
-          <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-white/10">
-            <span className="text-[11px]">Odômetro:</span>
-            <input
-              type="color"
-              value={chartTheme.odometerLine}
-              onChange={(e) => updateChartThemeColor("odometerLine", e.target.value)}
-              className="color-circle"
-            />
-          </label>
         </div>
       </div>
 
@@ -1381,7 +1558,7 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
           })}
       </div>
 
-      {/* SPRINT 55: A-01 — PLANO DE MANUTENÇÃO PREVENTIVA POR ODÔMETRO */}
+      {/* SPRINT 55 & 59: A-01 — PLANO DE MANUTENÇÃO PREVENTIVA POR ODÔMETRO (TOTALMENTE PERSONALIZÁVEL) */}
       <div className="glass-card p-6 rounded-3xl border border-white/[0.08] shadow-xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.08] pb-3">
           <div className="flex items-center gap-2.5">
@@ -1396,9 +1573,27 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Acompanhe o desgaste natural dos 5 componentes vitais e antecipe trocas antes de quebras graves.
+                Acompanhe o desgaste natural dos componentes vitais, personalize intervalos e antecipe trocas antes de quebras graves.
               </p>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleOpenNewItemModal}
+              className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-indigo-600/20"
+            >
+              <Plus className="w-3.5 h-3.5" /> + Novo Item Preventivo
+            </button>
+            <button
+              type="button"
+              onClick={handleRestoreDefaults}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 text-xs font-semibold transition cursor-pointer"
+              title="Restaurar os 5 itens originais de fábrica"
+            >
+              Restaurar Padrões
+            </button>
           </div>
         </div>
 
@@ -1453,14 +1648,32 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
                   <span className="text-[11px] text-slate-400">
                     Est.: <strong className="text-white">{formatBRL(item.estimatedCost)}</strong>
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRegisterMaintenance(item)}
-                    className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
-                    title="Salvar revisão feita no odômetro atual e lançar despesa no Livro Caixa"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Registrar Revisão
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditItemModal(item)}
+                      className="p-1.5 rounded-xl bg-white/5 hover:bg-indigo-500/20 text-slate-300 hover:text-indigo-300 border border-white/10 text-[11px] transition cursor-pointer"
+                      title="Editar item preventivo"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteItem(item.id, item.name)}
+                      className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 text-[11px] transition cursor-pointer"
+                      title="Excluir item preventivo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRegisterMaintenance(item)}
+                      className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                      title="Salvar revisão feita no odômetro atual e lançar despesa no Livro Caixa"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Revisar
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -1716,6 +1929,140 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
               </button>
             </div>
           </form>
+        </div>,
+        document.body
+      )}
+
+      {/* SPRINT 59: Modal de Edição / Criação de Item Preventivo via createPortal */}
+      {showItemModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
+          <div className="relative w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl my-auto text-xs">
+            {/* Header */}
+            <div className="shrink-0 px-5 pt-4 pb-3 border-b border-[var(--cupertino-border)] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300">
+                  <Wrench className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-white">
+                    {isEditingExisting ? "Editar Item Preventivo" : "Novo Item Preventivo"}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Ajuste prazos por odômetro e custos estimados da revisão
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowItemModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Form Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-3.5">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Nome do Componente / Revisão *</label>
+                <input
+                  type="text"
+                  value={itemModalName}
+                  onChange={(e) => setItemModalName(e.target.value)}
+                  placeholder="Ex: Óleo do Motor & Filtros"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Descrição / Detalhes</label>
+                <textarea
+                  rows={2}
+                  value={itemModalDesc}
+                  onChange={(e) => setItemModalDesc(e.target.value)}
+                  placeholder="Ex: Troca do óleo lubrificante sintético 5W30 e filtro..."
+                  className={`${inputClass} resize-none`}
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Custo Estimado (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={itemModalCost}
+                  onChange={(e) => setItemModalCost(e.target.value)}
+                  placeholder="350,00"
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 space-y-3">
+                <span className="text-[11px] font-bold text-indigo-300 block">
+                  Telemetria por Odômetro (Sincronização Inteligente)
+                </span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-400 block mb-1">Última Troca (KM)</label>
+                    <input
+                      type="number"
+                      value={itemModalLastKm}
+                      onChange={(e) => handleLastKmChange(e.target.value)}
+                      placeholder="80000"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-400 block mb-1">Intervalo (KM)</label>
+                    <input
+                      type="number"
+                      value={itemModalIntervalKm}
+                      onChange={(e) => handleIntervalKmChange(e.target.value)}
+                      placeholder="10000"
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-semibold block mb-1">
+                    Próxima Troca Prevista (KM)
+                  </label>
+                  <input
+                    type="number"
+                    value={itemModalNextDueKm}
+                    onChange={(e) => handleNextDueKmChange(e.target.value)}
+                    placeholder="90000"
+                    className={`${inputClass} border-indigo-500/40 text-indigo-300 font-mono font-bold`}
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Atualize a próxima KM para recalcular o intervalo automaticamente, ou altere o intervalo para atualizar a próxima KM.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="shrink-0 px-5 py-3 border-t border-[var(--cupertino-border)] bg-[var(--cupertino-card)]/80 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowItemModal(false)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveItemModal}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold flex items-center gap-1.5 shadow-lg shadow-indigo-600/25 transition cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Salvar Item Preventivo</span>
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

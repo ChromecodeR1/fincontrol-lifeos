@@ -79,20 +79,58 @@ export interface VehicleTcoResult {
   tcoItems: VehicleTcoItem[];
 }
 
-export function isFuelTransaction(tx: { category: string; description?: string; liters?: number }): boolean {
+export function isFuelTransaction(tx: { category?: string; description?: string; liters?: number; fuelType?: string }): boolean {
   if (tx.liters && tx.liters > 0) return true;
-  const cat = (tx.category || "").toLowerCase();
-  const desc = (tx.description || "").toLowerCase();
-  return (
-    cat.includes("gasolina") ||
+  if (tx.fuelType && ["Gasolina", "Etanol", "Diesel", "GNV"].includes(tx.fuelType)) return true;
+
+  const cat = (tx.category || "").toLowerCase().trim();
+  const desc = (tx.description || "").toLowerCase().trim();
+
+  // Exclusão estrita de falsos positivos conhecidos (como Impostos, IPVA, Seguro)
+  if (
+    cat.includes("imposto") ||
+    desc.includes("imposto") ||
+    cat.includes("ipva") ||
+    desc.includes("ipva") ||
+    cat.includes("licenciamento") ||
+    desc.includes("licenciamento") ||
+    cat.includes("seguro") ||
+    cat.includes("multa")
+  ) {
+    return false;
+  }
+
+  // Categorias canônicas de combustível
+  if (
+    cat === "gasolina" ||
+    cat === "etanol" ||
+    cat === "combustível" ||
+    cat === "combustivel" ||
+    cat === "abastecimento" ||
     cat.includes("combustível") ||
     cat.includes("combustivel") ||
-    cat.includes("etanol") ||
+    cat.includes("gasolina") ||
+    cat.includes("etanol")
+  ) {
+    return true;
+  }
+
+  // Descrições específicas de abastecimento ou postos de combustível
+  if (
     desc.includes("abastecimento") ||
-    desc.includes("posto") ||
     desc.includes("gasolina") ||
-    desc.includes("etanol")
-  );
+    desc.includes("etanol") ||
+    desc.includes("diesel") ||
+    desc.includes("gnv") ||
+    /\bposto\b/i.test(desc) ||
+    /\bipiranga\b/i.test(desc) ||
+    /\bshell\b/i.test(desc) ||
+    /\bpetrobras\b/i.test(desc)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 export function calculateVehicleConsumption(
@@ -351,7 +389,16 @@ export interface VehicleMaintenanceItem {
   description: string;
 }
 
-export const DEFAULT_MAINTENANCE_SCHEDULE = [
+export interface CustomMaintenanceDefinition {
+  id: string;
+  name: string;
+  intervalKm: number;
+  estimatedCost: number;
+  description: string;
+  lastDoneKm?: number;
+}
+
+export const DEFAULT_MAINTENANCE_SCHEDULE: CustomMaintenanceDefinition[] = [
   {
     id: "oil_filter",
     name: "Óleo do Motor & Filtros",
@@ -391,12 +438,17 @@ export const DEFAULT_MAINTENANCE_SCHEDULE = [
 
 export function calculateVehicleMaintenancePlan(
   currentOdometerKm: number,
-  maintenanceHistory: Record<string, number> = {}
+  maintenanceHistory: Record<string, number> = {},
+  customSchedule?: CustomMaintenanceDefinition[]
 ): VehicleMaintenanceItem[] {
   const currentKm = Math.max(0, currentOdometerKm || 0);
+  const schedule = customSchedule && customSchedule.length > 0 ? customSchedule : DEFAULT_MAINTENANCE_SCHEDULE;
 
-  return DEFAULT_MAINTENANCE_SCHEDULE.map((item) => {
-    let lastDone = maintenanceHistory[item.id];
+  return schedule.map((item) => {
+    let lastDone = item.lastDoneKm;
+    if (typeof lastDone !== "number" || isNaN(lastDone)) {
+      lastDone = maintenanceHistory[item.id];
+    }
     if (typeof lastDone !== "number" || isNaN(lastDone)) {
       if (currentKm >= item.intervalKm) {
         lastDone = Math.floor(currentKm / item.intervalKm) * item.intervalKm;
@@ -405,10 +457,11 @@ export function calculateVehicleMaintenancePlan(
       }
     }
 
-    const nextDue = lastDone + item.intervalKm;
+    const interval = Math.max(1, item.intervalKm || 10000);
+    const nextDue = lastDone + interval;
     const remainingKm = nextDue - currentKm;
     const kmSinceLast = Math.max(0, currentKm - lastDone);
-    const wearPercent = Math.min(100, Math.max(0, Math.round((kmSinceLast / item.intervalKm) * 100)));
+    const wearPercent = Math.min(100, Math.max(0, Math.round((kmSinceLast / interval) * 100)));
 
     let urgency: "ok" | "warning" | "danger" = "ok";
     if (remainingKm <= 0) {
@@ -420,14 +473,14 @@ export function calculateVehicleMaintenancePlan(
     return {
       id: item.id,
       name: item.name,
-      intervalKm: item.intervalKm,
+      intervalKm: interval,
       lastDoneKm: lastDone,
       nextDueKm: nextDue,
       remainingKm,
       wearPercent,
       urgency,
-      estimatedCost: item.estimatedCost,
-      description: item.description
+      estimatedCost: item.estimatedCost || 0,
+      description: item.description || ""
     };
   });
 }

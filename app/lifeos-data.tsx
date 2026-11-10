@@ -400,13 +400,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.45.1";
-export const PREVIOUS_VERSION = "0.45.0";
-export const COINDEX_APP_VERSION = "0.45.1";
+export const APP_VERSION = "0.45.2";
+export const PREVIOUS_VERSION = "0.45.1";
+export const COINDEX_APP_VERSION = "0.45.2";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.45.2",
+    date: "Nov/2026",
+    title: "Sprint 59: Auditoria Automotiva, Desduplicação de Abastecimentos, Personalização Preventiva e Seleção por Long-Press",
+    highlights: [
+      "Auditoria & Desduplicação Estrita de Combustível (vehicle-math / VehiclesTab): Eliminação de falsos positivos como 'Imposto' e deduplicação de transações por ID; correção da agregação mensal com parse canônico de YYYY-MM para datas DD-MM-AAAA, eliminando o corte de rótulo ('11/') e ordenando estritamente em ordem cronológica (MM/AA).",
+      "Limpeza do Cabeçalho de Veículos: Unificação dos botões de abastecimento em um único botão '+ Registrar Abastecimento', e migração do seletor de cor do odômetro para o popover de configurações da engrenagem do próprio gráfico.",
+      "Plano Preventivo por Odômetro 100% Personalizável: Adição de novos itens preventivos, edição completa de intervalos, custos e quilometragens com sincronização inteligente bidirecional (nextKm = lastKm + intervalKm / intervalKm = nextKm - lastKm), exclusão, restauração de padrões de fábrica e sincronização com o Cofre Mestre de Nuvem.",
+      "Modo de Seleção Sob Demanda na Tabela (TransactionsTableAdvanced): Checkboxes ocultas por padrão (coluna Data como primeira coluna visível), ativadas por botão '☑️ Selecionar' ou Long-Press tátil de 320ms em qualquer linha/card; barra de ações em lote flutuante renderizada via createPortal fixa na tela com suporte a Esc para cancelamento."
+    ]
+  },
   {
     version: "0.45.1",
     date: "Nov/2026",
