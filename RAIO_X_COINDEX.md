@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.45.0`  
-> **Última Atualização:** 9 de Novembro de 2026 (Pós-Sprint 58 — Persistência Absoluta Multi-Device via Túnel de Metadados Universal e Cofre Mestre Cloud Vault na Tabela Transactions do Supabase)  
+> **Versão da Aplicação:** `0.45.1`  
+> **Última Atualização:** 9 de Novembro de 2026 (Pós-Sprint 58.1 — Aplicação do Manifesto Pessoal na Aba Sobre e Correção de Nitidez Vetorial da Logo)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1158,6 +1158,21 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Permite forçar o envio imediato de todas as transações locais e do cofre mestre com notificação toast de sucesso instantânea (`☁️ Sincronização Concluída: 100% dos dados salvos no Cofre Nuvem Supabase!`).
     - **Passo 5 — Garantia Zero Migration:**
       - Eliminação definitiva da necessidade de executar scripts SQL de migração DDL manuais no painel do Supabase; o sistema opera imediatamente em qualquer computador ou navegador a partir do primeiro login.
+
+
+  - **Sprint 58.1 (Novembro de 2026 — Reforma Limpa da Aba Sobre com Manifesto Pessoal e Nitidez Vetorial Absoluta da Logo):**
+    - **Passo 1 — Correção Definitiva da Logo Pixelada e Remoção do Card Torto (`app/components/CoindexLogo.tsx` e `app/components/AboutTab.tsx`):**
+      - Diagnóstico da causa raiz: eliminação do container `<TiltCard3D>` (que causava inclinação e distorção óptica do card no palco principal) e remoção de `transform: scale(...)`, `will-change: transform` e filtros CSS `drop-shadow(...)` sobre o SVG da logo.
+      - Renderização do SVG gigante com dimensões nativas diretas (`width={200} height={140} viewBox="0 0 120 84" shapeRendering="geometricPrecision"`).
+      - Desacoplamento do halo de iluminação ambiente para uma `<div>` HTML de fundo (`absolute -inset-6 rounded-full bg-gradient-to-tr from-[#0A84FF]/20 via-[#38BDF8]/10 to-transparent blur-2xl`).
+      - Micro-interação de hover restrita a deslocamento vetorial puro (`translate-x-[1.5px]` e `-translate-x-[1.5px]`), garantindo nitidez cristalina em 100% dos displays Retina e alta densidade.
+    - **Passo 2 — Expurgo Total de Jargões Técnicos e Ficha de Engenharia (`app/components/AboutTab.tsx`):**
+      - Remoção integral do botão de overclock de 144Hz, badges de telemetria de GPU/SSOT, seção de contadores em Hz/ms e blocos de código/linguagens de programação, redirecionando o tom da página para o desenvolvimento pessoal.
+    - **Passo 3 — Nova Estrutura Editorial Focada em Propósito e Vida (`app/components/AboutTab.tsx`):**
+      - **Seção 1 (Palco Principal):** Logo oficial The Equilibrium Link grande e nítida, tipografia limpa `COINDEX`, subtítulo `Desenvolvimento Pessoal • Gestão Financeira • Saúde & Conhecimento` e pílula discreta com `Versão 0.45.1`.
+      - **Seção 2 (O Manifesto):** Card nobre de leitura contendo o manifesto pessoal de integração entre objetivos pessoais, profissionais e financeiros, destacando o Coindex como ponto de clareza, foco e direção.
+      - **Seção 3 (Os 4 Pilares do Ecossistema):** Grid Bento 2x2 com iluminação de proximidade (`useProximityBorderGlow`) detalhando Organização Financeira & Patrimônio, Saúde & Bem-Estar, Conhecimento & Insights e Hábitos & Metas.
+      - **Seção 4 (Missão, Visão, Valores & Símbolo do Equilíbrio):** Tríade institucional acompanhada da explicação do entrelaçamento contínuo entre o Elo Esquerdo em Titânio (disciplina, clareza e fundação) e o Elo Direito em Apple Blue (expansão, sonhos e futuro), finalizando com rodapé minimalista.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

@@ -400,13 +400,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.45.0";
-export const PREVIOUS_VERSION = "0.44.1";
-export const COINDEX_APP_VERSION = "0.45.0";
+export const APP_VERSION = "0.45.1";
+export const PREVIOUS_VERSION = "0.45.0";
+export const COINDEX_APP_VERSION = "0.45.1";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.45.1",
+    date: "Nov/2026",
+    title: "Sprint 58.1: Reforma Limpa da Aba Sobre com Manifesto Pessoal e Nitidez Vetorial Absoluta da Logo",
+    highlights: [
+      "Nitidez Vetorial Absoluta da Logo (CoindexLogo): Eliminação de transform: scale, will-change: transform e filtros CSS drop-shadow que causavam pixelização; dimensões nativas diretas (width={200} height={140} viewBox='0 0 120 84' shapeRendering='geometricPrecision'), halo de luz ambiente suave desacoplado em div HTML de fundo e deslocamento vetorial puro no hover (translate -1.5px/1.5px) com nitidez cristalina.",
+      "Remoção do Card Torto no Palco Principal (AboutTab): Substituição do TiltCard3D por um palco reto, sóbrio e elegante em Cupertino Glassmorphism, alinhado ao design system da Apple.",
+      "Expurgo Total de Jargões Técnicos: Remoção completa do botão de overclock de 144Hz, badges de telemetria de GPU/SSOT, seção de ficha técnica com contadores em Hz/ms e blocos de código/linguagens de programação, redirecionando o tom da página para o desenvolvimento pessoal.",
+      "Manifesto Editorial & 4 Pilares do Ecossistema: Nova estrutura focada em Organização Financeira & Patrimônio, Saúde & Exercícios, Conhecimento & Insights e Hábitos & Metas, com Missão, Visão, Valores e o significado humano do Símbolo do Equilíbrio."
+    ]
+  },
   {
     version: "0.45.0",
     date: "Nov/2026",

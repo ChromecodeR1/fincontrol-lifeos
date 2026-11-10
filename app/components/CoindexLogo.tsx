@@ -85,9 +85,9 @@ export function CoindexIcon({
     <svg
       viewBox="0 0 120 84"
       fill="none"
+      shapeRendering="geometricPrecision"
       xmlns="http://www.w3.org/2000/svg"
-      className={`select-none transition-all duration-300 group-hover:drop-shadow-[0_0_14px_rgba(10,132,255,0.5)] ${className}`}
-      style={{ transform: "translateZ(0)" }}
+      className={`select-none transition-opacity duration-300 ${className}`}
       aria-label="Coindex Equilibrium Link"
     >
       <defs>
@@ -128,8 +128,7 @@ export function CoindexIcon({
           ELO DIREITO: ANEL COMPLETO APPLE BLUE (cx=76, cy=42, r=26)
           ======================================================== */}
       <g
-        className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[1.5px]"
-        style={{ willChange: "transform", transform: "translateZ(0)" }}
+        className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[1.5px]"
         mask="url(#cxWeaveMaskRightIcon)"
       >
         <circle
@@ -161,8 +160,7 @@ export function CoindexIcon({
           ELO ESQUERDO: ELO "C" EM TITÂNIO (cx=44, cy=42, r=26)
           ======================================================== */}
       <g
-        className="transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-[1.5px]"
-        style={{ willChange: "transform", transform: "translateZ(0)" }}
+        className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-[1.5px]"
         mask="url(#cxWeaveMaskLeftIcon)"
       >
         <path
@@ -214,14 +212,14 @@ export function CoindexLogoMonumental({
 
   return (
     <svg
+      width={200}
+      height={140}
       viewBox="0 0 120 84"
       fill="none"
+      shapeRendering="geometricPrecision"
       xmlns="http://www.w3.org/2000/svg"
       onClick={onClick}
-      className={`select-none transition-all duration-500 ease-out group ${
-        isPulsing ? "scale-105 drop-shadow-[0_0_36px_rgba(10,132,255,0.7)]" : "hover:scale-105 drop-shadow-[0_0_24px_rgba(10,132,255,0.35)]"
-      } ${className}`}
-      style={{ transform: "translateZ(0)" }}
+      className={`select-none ${className}`}
       aria-label="Coindex Equilibrium Link Monumental"
     >
       <defs>
@@ -335,8 +333,8 @@ export function CoindexLogoMonumental({
           GRUPO DIREITO: ANEL COMPLETO APPLE BLUE (cx=76, cy=42, r=26)
           ======================================================== */}
       <g
-        className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[2px]"
-        style={{ opacity: rightOpacity, willChange: "transform, opacity", transform: "translateZ(0)" }}
+        className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[1.5px]"
+        style={{ opacity: rightOpacity }}
         mask="url(#cxWeaveMaskRightMonumental)"
       >
         <circle
@@ -368,8 +366,8 @@ export function CoindexLogoMonumental({
           GRUPO ESQUERDO: ELO "C" EM TITÂNIO (cx=44, cy=42, r=26)
           ======================================================== */}
       <g
-        className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-[2px]"
-        style={{ opacity: leftOpacity, willChange: "transform, opacity", transform: "translateZ(0)" }}
+        className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-[1.5px]"
+        style={{ opacity: leftOpacity }}
         mask="url(#cxWeaveMaskLeftMonumental)"
       >
         <path
