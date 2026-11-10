@@ -26,6 +26,188 @@ import {
   DEFAULT_DASHBOARD_LAYOUT
 } from "../../lifeos-data";
 
+/**
+ * Codificação UTF-8 Base64 universal e segura contra caracteres especiais e acentuação
+ * (compatível com Browser e Node.js).
+ */
+export function safeBase64Encode(str: string): string {
+  try {
+    if (typeof window !== "undefined" && typeof window.btoa === "function") {
+      return window.btoa(unescape(encodeURIComponent(str)));
+    }
+    return Buffer.from(str, "utf-8").toString("base64");
+  } catch {
+    return Buffer.from(str, "utf-8").toString("base64");
+  }
+}
+
+/**
+ * Decodificação UTF-8 Base64 universal e segura contra caracteres especiais e acentuação.
+ */
+export function safeBase64Decode(str: string): string {
+  try {
+    if (typeof window !== "undefined" && typeof window.atob === "function") {
+      return decodeURIComponent(escape(window.atob(str)));
+    }
+    return Buffer.from(str, "base64").toString("utf-8");
+  } catch {
+    return Buffer.from(str, "base64").toString("utf-8");
+  }
+}
+
+export const TX_METADATA_DELIMITER = " ||__CXM__:";
+export const VAULT_CATEGORY = "__COINDEX_CLOUD_VAULT__";
+export const VAULT_DESC_PREFIX = "__COINDEX_CLOUD_VAULT_V2__:";
+
+/**
+ * Retorna um UUID v4 determinístico válido (RFC 4122) para o registro do cofre mestre do usuário,
+ * garantindo compatibilidade estrita caso a coluna 'id' seja do tipo UUID ou TEXT no PostgreSQL.
+ */
+export function getVaultRowId(userId: string): string {
+  const cleanHex = (userId || "").replace(/[^a-fA-F0-9]/g, "").toLowerCase().padEnd(12, "0").slice(0, 12);
+  return `00000000-0000-4000-8000-${cleanHex}`;
+}
+
+/**
+ * Empacota metadados estendidos do lançamento (gaveta de investimento, ticker, preço de cota,
+ * ajustes, dados de veículo, parcelas, devedores) no túnel de descrição para o Supabase.
+ */
+export function encodeTxForSupabase(tx: Transaction): {
+  cleanDescription: string;
+  enrichedDescription: string;
+  meta: Record<string, unknown>;
+} {
+  const rawDesc = String(tx.description || "");
+  const delimiterIndex = rawDesc.indexOf(TX_METADATA_DELIMITER);
+  const cleanDescription = delimiterIndex >= 0 ? rawDesc.slice(0, delimiterIndex).trim() : rawDesc;
+
+  const meta: Record<string, unknown> = {};
+
+  // Metadados estendidos de Investimentos (SPRINT 48 & 58)
+  if (tx.investmentBucket) meta.investmentBucket = tx.investmentBucket;
+  if (tx.assetTicker) meta.assetTicker = tx.assetTicker;
+  if (tx.entryQuotePrice !== undefined && tx.entryQuotePrice !== null) meta.entryQuotePrice = tx.entryQuotePrice;
+  if (tx.manualYieldPct !== undefined && tx.manualYieldPct !== null) meta.manualYieldPct = tx.manualYieldPct;
+
+  // Metadados bancários e cartões
+  if (tx.cardUsed) meta.cardUsed = tx.cardUsed;
+  if (tx.cardName) meta.cardName = tx.cardName;
+  if (tx.bankAccount) meta.bankAccount = tx.bankAccount;
+  if (tx.bankId) meta.bankId = tx.bankId;
+
+  // Parcelamentos e competência
+  if (tx.paidAmount !== undefined && tx.paidAmount !== null) meta.paidAmount = tx.paidAmount;
+  if (tx.installmentInfo) meta.installmentInfo = tx.installmentInfo;
+  if (tx.installmentGroupId) meta.installmentGroupId = tx.installmentGroupId;
+  if (tx.installmentSeriesId) meta.installmentSeriesId = tx.installmentSeriesId;
+  if (tx.invoiceMonth) meta.invoiceMonth = tx.invoiceMonth;
+  if (tx.invoiceCompetence) meta.invoiceCompetence = tx.invoiceCompetence;
+  if (tx.cashMonth) meta.cashMonth = tx.cashMonth;
+  if (tx.flowType) meta.flowType = tx.flowType;
+
+  // Rateio e devedores
+  if (tx.isSplit !== undefined && tx.isSplit !== null) meta.isSplit = tx.isSplit;
+  if (tx.thirdPartyAmount !== undefined && tx.thirdPartyAmount !== null) meta.thirdPartyAmount = tx.thirdPartyAmount;
+  if (tx.thirdPartyName) meta.thirdPartyName = tx.thirdPartyName;
+  if (tx.personalAmount !== undefined && tx.personalAmount !== null) meta.personalAmount = tx.personalAmount;
+  if (tx.linkedReceivableId) meta.linkedReceivableId = tx.linkedReceivableId;
+  if (tx.isSplitChild !== undefined && tx.isSplitChild !== null) meta.isSplitChild = tx.isSplitChild;
+  if (tx.linkedSplitParentId) meta.linkedSplitParentId = tx.linkedSplitParentId;
+  if (tx.debtor) meta.debtor = tx.debtor;
+
+  // Veículos e telemetria
+  if (tx.km !== undefined && tx.km !== null) meta.km = tx.km;
+  if (tx.liters !== undefined && tx.liters !== null) meta.liters = tx.liters;
+  if (tx.fuelType) meta.fuelType = tx.fuelType;
+  if (tx.fullTank !== undefined && tx.fullTank !== null) meta.fullTank = tx.fullTank;
+
+  // Outros
+  if (tx.wishlistId) meta.wishlistId = tx.wishlistId;
+  if (tx.iconUrl) meta.iconUrl = tx.iconUrl;
+  if (tx.notes) meta.notes = tx.notes;
+  if (tx.indexer) meta.indexer = tx.indexer;
+  if (tx.cdiPercentage !== undefined && tx.cdiPercentage !== null) meta.cdiPercentage = tx.cdiPercentage;
+  if (tx.rev !== undefined && tx.rev !== null) meta.rev = tx.rev;
+  if (tx.updatedAt) meta.updatedAt = tx.updatedAt;
+
+  if (Object.keys(meta).length === 0) {
+    return { cleanDescription, enrichedDescription: cleanDescription, meta };
+  }
+
+  const enrichedDescription = `${cleanDescription}${TX_METADATA_DELIMITER}${safeBase64Encode(JSON.stringify(meta))}`;
+  return { cleanDescription, enrichedDescription, meta };
+}
+
+/**
+ * Desempacota transparentemente os metadados do túnel de descrição vindo do Supabase,
+ * garantindo que a UI receba a descrição limpa e todos os campos reconstruídos.
+ */
+export function decodeTxFromSupabase(row: Record<string, unknown>): Transaction {
+  const rawDesc = String(row.description ?? "");
+  let cleanDescription = rawDesc;
+  let meta: Record<string, unknown> = {};
+
+  const delimiterIndex = rawDesc.indexOf(TX_METADATA_DELIMITER);
+  if (delimiterIndex >= 0) {
+    cleanDescription = rawDesc.slice(0, delimiterIndex).trim();
+    const b64 = rawDesc.slice(delimiterIndex + TX_METADATA_DELIMITER.length).trim();
+    try {
+      meta = JSON.parse(safeBase64Decode(b64));
+    } catch (e) {
+      console.warn("[coindex-supabase] Erro ao decodificar metadados de transação:", e);
+    }
+  }
+
+  const tx: Transaction = {
+    id: String(row.id),
+    date: String(row.tx_date ?? row.date ?? ""),
+    description: cleanDescription,
+    amount: Number(row.amount ?? 0),
+    category: String(row.category ?? "Outros"),
+    costType: (row.cost_type as CostType) ?? "Variável",
+    paymentMethod: String(row.payment_method ?? "PIX"),
+    cardUsed: (row.card_used ? String(row.card_used) : undefined) ?? (meta.cardUsed as string | undefined),
+    cardName: (row.card_used ? String(row.card_used) : undefined) ?? (meta.cardName as string | undefined),
+    bankAccount: (row.bank_account ? String(row.bank_account) : undefined) ?? (meta.bankAccount as string | undefined),
+    bankId: (row.bank_id ? String(row.bank_id) : undefined) ?? (meta.bankId as string | undefined),
+    status: normalizeStatus(String(row.status ?? "Pendente")),
+    km: row.km != null ? Number(row.km) : (meta.km != null ? Number(meta.km) : undefined),
+    liters: row.liters != null ? Number(row.liters) : (meta.liters != null ? Number(meta.liters) : undefined),
+    fuelType: (row.fuel_type ? String(row.fuel_type) as "Gasolina" | "Etanol" : undefined) ?? (meta.fuelType as "Gasolina" | "Etanol" | undefined),
+    fullTank: row.full_tank != null ? Boolean(row.full_tank) : (meta.fullTank != null ? Boolean(meta.fullTank) : undefined),
+    debtor: (row.debtor ? String(row.debtor) : undefined) ?? (meta.debtor as string | undefined),
+    paidAmount: row.paid_amount != null ? Number(row.paid_amount) : (meta.paidAmount != null ? Number(meta.paidAmount) : 0),
+    installmentInfo: (row.installment_info ? String(row.installment_info) : undefined) ?? (meta.installmentInfo as string | undefined),
+    installmentGroupId: (row.installment_group_id ? String(row.installment_group_id) : undefined) ?? (meta.installmentGroupId as string | undefined),
+    installmentSeriesId: (row.installment_series_id ? String(row.installment_series_id) : undefined) ?? (meta.installmentSeriesId as string | undefined),
+    invoiceMonth: (row.invoice_month ? String(row.invoice_month) : undefined) ?? (meta.invoiceMonth as string | undefined),
+    invoiceCompetence: (row.invoice_competence ? String(row.invoice_competence) : undefined) ?? (meta.invoiceCompetence as string | undefined) ?? (row.invoice_month ? String(row.invoice_month) : undefined),
+    cashMonth: (row.cash_month ? String(row.cash_month) : undefined) ?? (meta.cashMonth as string | undefined),
+    flowType: (row.flow_type as FlowType | undefined) ?? (meta.flowType as FlowType | undefined),
+    isSplit: row.is_split != null ? Boolean(row.is_split) : (meta.isSplit != null ? Boolean(meta.isSplit) : undefined),
+    thirdPartyAmount: row.third_party_amount != null ? Number(row.third_party_amount) : (meta.thirdPartyAmount != null ? Number(meta.thirdPartyAmount) : undefined),
+    thirdPartyName: (row.third_party_name ? String(row.third_party_name) : undefined) ?? (meta.thirdPartyName as string | undefined),
+    personalAmount: row.personal_amount != null ? Number(row.personal_amount) : (meta.personalAmount != null ? Number(meta.personalAmount) : undefined),
+    linkedReceivableId: (row.linked_receivable_id ? String(row.linked_receivable_id) : undefined) ?? (meta.linkedReceivableId as string | undefined),
+    isSplitChild: row.is_split_child != null ? Boolean(row.is_split_child) : (meta.isSplitChild != null ? Boolean(meta.isSplitChild) : undefined),
+    linkedSplitParentId: (row.linked_split_parent_id ? String(row.linked_split_parent_id) : undefined) ?? (meta.linkedSplitParentId as string | undefined),
+    wishlistId: (row.wishlist_id ? String(row.wishlist_id) : undefined) ?? (meta.wishlistId as string | undefined),
+    iconUrl: (row.icon_url ? String(row.icon_url) : undefined) ?? (meta.iconUrl as string | undefined),
+    notes: (row.notes ? String(row.notes) : undefined) ?? (meta.notes as string | undefined),
+    indexer: (row.indexer ? String(row.indexer) : undefined) ?? (meta.indexer as string | undefined),
+    cdiPercentage: row.cdi_percentage != null ? Number(row.cdi_percentage) : (meta.cdiPercentage != null ? Number(meta.cdiPercentage) : undefined),
+    investmentBucket: ((row.investment_bucket as any) ?? meta.investmentBucket) as any,
+    assetTicker: (row.asset_ticker ? String(row.asset_ticker) : undefined) ?? (meta.assetTicker as string | undefined),
+    entryQuotePrice: row.entry_quote_price != null ? Number(row.entry_quote_price) : (meta.entryQuotePrice != null ? Number(meta.entryQuotePrice) : undefined),
+    manualYieldPct: row.manual_yield_pct != null ? Number(row.manual_yield_pct) : (meta.manualYieldPct != null ? Number(meta.manualYieldPct) : undefined),
+    updatedAt: (row.updated_at ? String(row.updated_at) : undefined) ?? (meta.updatedAt as string | undefined) ?? new Date().toISOString(),
+    deletedAt: (row.deleted_at ? String(row.deleted_at) : undefined) ?? (meta.deletedAt as string | undefined),
+    rev: row.rev != null ? Number(row.rev) : (meta.rev != null ? Number(meta.rev) : undefined)
+  };
+
+  return tx;
+}
+
 const WISH_META_PREFIX = "<!--__COINDEX_WISH_META__:";
 const WISH_META_SUFFIX = "-->";
 
@@ -67,6 +249,30 @@ export function decodeWishMetadata(content: string): { cleanContent: string; met
   }
 }
 
+export interface CoindexCloudVaultState {
+  version: string;
+  syncedAt: string;
+  investmentState?: {
+    realBalanceOverride?: number;
+    yieldMode?: "bruto" | "liquido" | "aportes";
+    visibleMarketCharts?: string[];
+    simulatorMonthlyContribution?: number;
+    bucketCalibrations?: Record<string, unknown>;
+    b3Holdings?: Record<string, unknown>;
+  };
+  banks?: BankItem[];
+  cards?: CreditCardItem[];
+  notes?: BrainNote[];
+  staticStatus?: StaticStatusItem[];
+  autoInmetroConfig?: unknown;
+  uiSettings?: {
+    themeMode?: ThemeMode;
+    bgFxMode?: string;
+    cupertinoTheme?: boolean;
+  };
+  tombstones?: string[];
+}
+
 export interface UserSettingsPayload {
   username?: string;
   avatarUrl?: string;
@@ -104,6 +310,7 @@ export interface FullCoindexSnapshot {
   paymentMethods: string[];
   systemLogs: SystemLogEntry[];
   settings: UserSettingsPayload;
+  cloudVault?: CoindexCloudVaultState;
 }
 
 async function getActiveUserId(): Promise<string | null> {
@@ -120,6 +327,65 @@ function toMethodSlug(name: string): string {
 function toCategorySlug(name: string): string {
   const clean = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
   return clean ? `cat-${clean}` : `cat-${Date.now()}`;
+}
+
+export async function saveCloudVaultInDb(
+  partialState: Partial<CoindexCloudVaultState>,
+  explicitUserId?: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = createClient();
+    const userId = explicitUserId || (await getActiveUserId());
+    if (!userId) return { ok: false, error: "Utilizador não autenticado." };
+
+    const vaultId = getVaultRowId(userId);
+
+    const payload: CoindexCloudVaultState = {
+      version: "0.45.0",
+      syncedAt: new Date().toISOString(),
+      ...partialState
+    };
+
+    const encodedVaultDesc = `${VAULT_DESC_PREFIX}${safeBase64Encode(JSON.stringify(payload))}`;
+
+    const vaultRow: Record<string, unknown> = {
+      id: vaultId,
+      user_id: userId,
+      tx_date: "2099-12-31",
+      description: encodedVaultDesc,
+      amount: 0,
+      category: VAULT_CATEGORY,
+      cost_type: "Fixo",
+      payment_method: "Sistema",
+      status: "Pago",
+      updated_at: new Date().toISOString()
+    };
+
+    const res = await supabase.from("transactions").upsert(vaultRow, { onConflict: "id,user_id" });
+    if (res.error) {
+      const minimalRow = {
+        id: vaultId,
+        user_id: userId,
+        tx_date: "2099-12-31",
+        description: encodedVaultDesc,
+        amount: 0,
+        category: VAULT_CATEGORY,
+        cost_type: "Fixo",
+        payment_method: "Sistema",
+        status: "Pago"
+      };
+      const fbRes = await supabase.from("transactions").upsert(minimalRow, { onConflict: "id,user_id" });
+      if (fbRes.error) {
+        console.warn("[coindex-supabase] Erro no fallback ao salvar Cofre Mestre:", fbRes.error.message);
+        return { ok: false, error: fbRes.error.message };
+      }
+    }
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro desconhecido ao salvar Cofre Mestre";
+    console.error("[coindex-supabase] Falha na rede ao salvar Cofre Mestre:", msg);
+    return { ok: false, error: msg };
+  }
 }
 
 export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
@@ -200,6 +466,29 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       }
     }
 
+    // SPRINT 58: Extração e Desacoplamento do Cofre Mestre Cloud Vault
+    const vaultId = getVaultRowId(userId);
+    const isVaultRow = (r: Record<string, unknown>): boolean => {
+      const rId = String(r.id || "");
+      const rCat = String(r.category || "");
+      const rDesc = String(r.description || "");
+      return rId === vaultId || rCat === VAULT_CATEGORY || rDesc.startsWith(VAULT_DESC_PREFIX);
+    };
+
+    const vaultRow = txRows.find(isVaultRow);
+    const pureTxRows = txRows.filter((r) => !isVaultRow(r));
+
+    let cloudVault: CoindexCloudVaultState | undefined;
+    if (vaultRow) {
+      const desc = String(vaultRow.description || "");
+      const b64 = desc.startsWith(VAULT_DESC_PREFIX) ? desc.slice(VAULT_DESC_PREFIX.length).trim() : desc;
+      try {
+        cloudVault = JSON.parse(safeBase64Decode(b64));
+      } catch (e) {
+        console.warn("[coindex-supabase] Erro ao decodificar cofre mestre:", e);
+      }
+    }
+
     const cardRows = (cardsRes.data ?? []) as Array<Record<string, unknown>>;
     const catRows = (catsRes.data ?? []) as Array<Record<string, unknown>>;
 
@@ -209,53 +498,12 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       return false;
     };
 
-    const isEmpty = txRows.length === 0 && cardRows.length === 0 && catRows.length === 0;
+    const isEmpty = pureTxRows.length === 0 && cardRows.length === 0 && catRows.length === 0;
 
-    const transactions: Transaction[] = txRows
+    // SPRINT 58: Decodificação universal com suporte ao túnel de metadados
+    const transactions: Transaction[] = pureTxRows
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
-      .map((r) => ({
-        id: String(r.id),
-        date: String(r.tx_date),
-        description: String(r.description),
-        amount: Number(r.amount ?? 0),
-        category: String(r.category),
-        costType: (r.cost_type as CostType) ?? "Variável",
-        paymentMethod: String(r.payment_method ?? "PIX"),
-        cardUsed: r.card_used ? String(r.card_used) : undefined,
-        cardName: r.card_used ? String(r.card_used) : undefined,
-        bankAccount: (r as any).bank_account
-          ? String((r as any).bank_account)
-          : (String(r.payment_method) !== "Cartão de Crédito" && r.card_used ? String(r.card_used) : undefined),
-        status: normalizeStatus(String(r.status ?? "Pendente")),
-        km: r.km != null ? Number(r.km) : undefined,
-        liters: r.liters != null ? Number(r.liters) : undefined,
-        fuelType: (r as any).fuel_type ? (String((r as any).fuel_type) as "Gasolina" | "Etanol") : undefined,
-        fullTank: (r as any).full_tank != null ? Boolean((r as any).full_tank) : undefined,
-        debtor: r.debtor ? String(r.debtor) : undefined,
-        paidAmount: r.paid_amount != null ? Number(r.paid_amount) : 0,
-        installmentInfo: r.installment_info ? String(r.installment_info) : undefined,
-        installmentGroupId: r.installment_group_id ? String(r.installment_group_id) : undefined,
-        installmentSeriesId: (r as any).installment_series_id ? String((r as any).installment_series_id) : undefined,
-        invoiceMonth: (r as any).invoice_month ? String((r as any).invoice_month) : undefined,
-        invoiceCompetence: (r as any).invoice_competence ?? ((r as any).invoice_month ? String((r as any).invoice_month) : undefined),
-        cashMonth: (r as any).cash_month ? String((r as any).cash_month) : undefined,
-        flowType: (r as any).flow_type ? ((r as any).flow_type as FlowType) : undefined,
-        isSplit: (r as any).is_split != null ? Boolean((r as any).is_split) : undefined,
-        thirdPartyAmount: (r as any).third_party_amount != null ? Number((r as any).third_party_amount) : undefined,
-        thirdPartyName: (r as any).third_party_name ? String((r as any).third_party_name) : undefined,
-        personalAmount: (r as any).personal_amount != null ? Number((r as any).personal_amount) : undefined,
-        linkedReceivableId: (r as any).linked_receivable_id ? String((r as any).linked_receivable_id) : undefined,
-        isSplitChild: (r as any).is_split_child != null ? Boolean((r as any).is_split_child) : undefined,
-        linkedSplitParentId: (r as any).linked_split_parent_id ? String((r as any).linked_split_parent_id) : undefined,
-        wishlistId: r.wishlist_id ? String(r.wishlist_id) : undefined,
-        iconUrl: r.icon_url ? String(r.icon_url) : undefined,
-        notes: (r as any).notes ? String((r as any).notes) : undefined,
-        indexer: (r as any).indexer ? String((r as any).indexer) : undefined,
-        cdiPercentage: (r as any).cdi_percentage != null ? Number((r as any).cdi_percentage) : undefined,
-        updatedAt: r.updated_at ? String(r.updated_at) : new Date().toISOString(),
-        deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
-        rev: r.rev != null ? Number(r.rev) : undefined
-      }));
+      .map((r) => decodeTxFromSupabase(r));
 
     const rawCloudBackup = (settingsRes.data as any)?.cloud_backup_state;
 
@@ -276,8 +524,12 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         rev: r.rev != null ? Number(r.rev) : undefined
       }));
 
-    if (cards.length === 0 && Array.isArray(rawCloudBackup?.cards) && rawCloudBackup.cards.length > 0) {
-      cards = rawCloudBackup.cards;
+    if (cards.length === 0) {
+      if (cloudVault?.cards && cloudVault.cards.length > 0) {
+        cards = cloudVault.cards;
+      } else if (Array.isArray(rawCloudBackup?.cards) && rawCloudBackup.cards.length > 0) {
+        cards = rawCloudBackup.cards;
+      }
     }
 
     const bankRows = ((banksRes as any)?.data ?? []) as Array<Record<string, unknown>>;
@@ -296,11 +548,15 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         rev: r.rev != null ? Number(r.rev) : undefined
       }));
 
-    if (banks.length === 0 && Array.isArray(rawCloudBackup?.banks) && rawCloudBackup.banks.length > 0) {
-      banks = rawCloudBackup.banks;
+    if (banks.length === 0) {
+      if (cloudVault?.banks && cloudVault.banks.length > 0) {
+        banks = cloudVault.banks;
+      } else if (Array.isArray(rawCloudBackup?.banks) && rawCloudBackup.banks.length > 0) {
+        banks = rawCloudBackup.banks;
+      }
     }
 
-    const staticStatus: StaticStatusItem[] = ((statusRes.data ?? []) as Array<Record<string, unknown>>)
+    let staticStatus: StaticStatusItem[] = ((statusRes.data ?? []) as Array<Record<string, unknown>>)
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
       .map((r) => ({
         id: String(r.id),
@@ -312,6 +568,10 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         deletedAt: r.deleted_at ? String(r.deleted_at) : undefined,
         rev: r.rev != null ? Number(r.rev) : undefined
       }));
+
+    if (staticStatus.length === 0 && cloudVault?.staticStatus && cloudVault.staticStatus.length > 0) {
+      staticStatus = cloudVault.staticStatus;
+    }
 
     const wishlist: WishlistItem[] = ((wishRes.data ?? []) as Array<Record<string, unknown>>)
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
@@ -383,8 +643,12 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         };
       });
 
-    if (notes.length === 0 && Array.isArray(rawCloudBackup?.brainNotes) && rawCloudBackup.brainNotes.length > 0) {
-      notes = rawCloudBackup.brainNotes;
+    if (notes.length === 0) {
+      if (cloudVault?.notes && cloudVault.notes.length > 0) {
+        notes = cloudVault.notes;
+      } else if (Array.isArray(rawCloudBackup?.brainNotes) && rawCloudBackup.brainNotes.length > 0) {
+        notes = rawCloudBackup.brainNotes;
+      }
     }
 
     const alertRules: CustomAlertRule[] = ((alertsRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
@@ -467,6 +731,7 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
     return {
       ok: true,
       isEmpty,
+      userId,
       data: {
         transactions,
         cards,
@@ -481,7 +746,8 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         categoryColors,
         paymentMethods,
         systemLogs,
-        settings
+        settings,
+        cloudVault
       }
     };
   } catch (err: unknown) {
@@ -566,35 +832,57 @@ export async function migrateAllStateToSupabase(
     }
 
     if (snapshot.transactions.length > 0) {
-      const txPayload = snapshot.transactions.map((t) => ({
-        id: t.id,
-        user_id: userId,
-        tx_date: t.date,
-        description: t.description,
-        amount: t.amount,
-        category: t.category,
-        cost_type: t.costType,
-        payment_method: t.paymentMethod,
-        card_used: t.cardUsed ?? t.bankAccount ?? null,
-        bank_account: t.bankAccount ?? null,
-        status: t.status,
-        km: t.km ?? null,
-        liters: t.liters ?? null,
-        fuel_type: t.fuelType ?? null,
-        full_tank: t.fullTank ?? null,
-        flow_type: t.flowType ?? null,
-        invoice_month: t.invoiceMonth ?? t.invoiceCompetence ?? null,
-        cash_month: t.cashMonth ?? null,
-        debtor: t.debtor ?? (debtorMap ? debtorMap[t.id] : null) ?? null,
-        paid_amount: t.paidAmount ?? (t.status === "Pago" ? t.amount : 0),
-        installment_info: t.installmentInfo ?? null,
-        installment_group_id: t.installmentGroupId ?? null,
-        wishlist_id: t.wishlistId ?? null,
-        icon_url: t.iconUrl ?? null,
-        rev: (t.rev ?? 0) + 1,
-        updated_at: t.updatedAt ?? new Date().toISOString()
-      }));
-      await supabase.from("transactions").upsert(txPayload, { onConflict: "id,user_id" });
+      const txPayload = snapshot.transactions.map((t) => {
+        const { enrichedDescription } = encodeTxForSupabase(t);
+        return {
+          id: t.id,
+          user_id: userId,
+          tx_date: t.date,
+          description: enrichedDescription,
+          amount: t.amount,
+          category: t.category,
+          cost_type: t.costType,
+          payment_method: t.paymentMethod,
+          card_used: t.cardUsed ?? t.bankAccount ?? null,
+          bank_account: t.bankAccount ?? null,
+          status: t.status,
+          km: t.km ?? null,
+          liters: t.liters ?? null,
+          fuel_type: t.fuelType ?? null,
+          full_tank: t.fullTank ?? null,
+          flow_type: t.flowType ?? null,
+          invoice_month: t.invoiceMonth ?? t.invoiceCompetence ?? null,
+          cash_month: t.cashMonth ?? null,
+          debtor: t.debtor ?? (debtorMap ? debtorMap[t.id] : null) ?? null,
+          paid_amount: t.paidAmount ?? (t.status === "Pago" ? t.amount : 0),
+          installment_info: t.installmentInfo ?? null,
+          installment_group_id: t.installmentGroupId ?? null,
+          wishlist_id: t.wishlistId ?? null,
+          icon_url: t.iconUrl ?? null,
+          investment_bucket: t.investmentBucket ?? null,
+          asset_ticker: t.assetTicker ?? null,
+          entry_quote_price: t.entryQuotePrice ?? null,
+          manual_yield_pct: t.manualYieldPct ?? null,
+          rev: (t.rev ?? 0) + 1,
+          updated_at: t.updatedAt ?? new Date().toISOString()
+        };
+      });
+      const { error: txErr } = await supabase.from("transactions").upsert(txPayload, { onConflict: "id,user_id" });
+      if (txErr) {
+        const safePayload = snapshot.transactions.map((t) => ({
+          id: t.id,
+          user_id: userId,
+          tx_date: t.date,
+          description: encodeTxForSupabase(t).enrichedDescription,
+          amount: t.amount,
+          category: t.category,
+          cost_type: t.costType,
+          payment_method: t.paymentMethod,
+          card_used: t.cardUsed ?? t.bankAccount ?? null,
+          status: t.status
+        }));
+        await supabase.from("transactions").upsert(safePayload, { onConflict: "id,user_id" });
+      }
     }
 
     if (snapshot.staticStatus.length > 0) {
@@ -667,6 +955,24 @@ export async function migrateAllStateToSupabase(
       }
     }
 
+    // Persiste Cofre Mestre de Nuvem (SSOT Total)
+    await saveCloudVaultInDb(
+      {
+        version: "0.45.0",
+        syncedAt: new Date().toISOString(),
+        investmentState: {
+          realBalanceOverride: snapshot.settings.initialPatrimony,
+          visibleMarketCharts: ["BTC", "BNB", "ETH", "USD", "CDI", "IBOV"],
+          simulatorMonthlyContribution: 500
+        },
+        cards: snapshot.cards,
+        banks: snapshot.banks,
+        notes: snapshot.notes,
+        staticStatus: snapshot.staticStatus
+      },
+      userId
+    );
+
     // Persiste Cloud Backup State (SSOT de Emergência) em user_settings
     try {
       await supabase.from("user_settings").upsert({
@@ -696,7 +1002,7 @@ export async function migrateAllStateToSupabase(
 
     return {
       ok: true,
-      message: `Sincronizado com o Supabase (${snapshot.transactions.length} lançamentos, ${snapshot.cards.length} cartões e módulos guardados).`
+      message: `Sincronizado com o Supabase (${snapshot.transactions.length} lançamentos, ${snapshot.cards.length} cartões e Cofre Mestre guardados).`
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Erro ao migrar dados para o Supabase.";
@@ -712,36 +1018,74 @@ export async function upsertTransactionsInDb(txs: Transaction[], debtorMap?: Rec
   const userId = await getActiveUserId();
   if (!userId || txs.length === 0) return;
 
-  const payload = txs.map((t) => ({
-    id: t.id,
-    user_id: userId,
-    tx_date: t.date,
-    description: t.description,
-    amount: t.amount,
-    category: t.category,
-    cost_type: t.costType,
-    payment_method: t.paymentMethod,
-    card_used: t.cardUsed ?? t.bankAccount ?? null,
-    bank_account: t.bankAccount ?? null,
-    status: t.status,
-    km: t.km ?? null,
-    liters: t.liters ?? null,
-    fuel_type: t.fuelType ?? null,
-    full_tank: t.fullTank ?? null,
-    flow_type: t.flowType ?? null,
-    invoice_month: t.invoiceMonth ?? t.invoiceCompetence ?? null,
-    cash_month: t.cashMonth ?? null,
-    debtor: t.debtor ?? (debtorMap ? debtorMap[t.id] : null) ?? null,
-    paid_amount: t.paidAmount ?? (t.status === "Pago" ? t.amount : 0),
-    installment_info: t.installmentInfo ?? null,
-    installment_group_id: t.installmentGroupId ?? null,
-    wishlist_id: t.wishlistId ?? null,
-    icon_url: t.iconUrl ?? null,
-    rev: (t.rev ?? 0) + 1,
-    updated_at: t.updatedAt ?? new Date().toISOString()
-  }));
+  const payloads = txs.map((t) => {
+    const { enrichedDescription } = encodeTxForSupabase(t);
+    return {
+      id: t.id,
+      user_id: userId,
+      tx_date: t.date,
+      description: enrichedDescription,
+      amount: t.amount,
+      category: t.category,
+      cost_type: t.costType,
+      payment_method: t.paymentMethod,
+      card_used: t.cardUsed ?? t.bankAccount ?? null,
+      bank_account: t.bankAccount ?? null,
+      status: t.status,
+      km: t.km ?? null,
+      liters: t.liters ?? null,
+      fuel_type: t.fuelType ?? null,
+      full_tank: t.fullTank ?? null,
+      flow_type: t.flowType ?? null,
+      invoice_month: t.invoiceMonth ?? t.invoiceCompetence ?? null,
+      cash_month: t.cashMonth ?? null,
+      debtor: t.debtor ?? (debtorMap ? debtorMap[t.id] : null) ?? null,
+      paid_amount: t.paidAmount ?? (t.status === "Pago" ? t.amount : 0),
+      installment_info: t.installmentInfo ?? null,
+      installment_group_id: t.installmentGroupId ?? null,
+      wishlist_id: t.wishlistId ?? null,
+      icon_url: t.iconUrl ?? null,
+      investment_bucket: t.investmentBucket ?? null,
+      asset_ticker: t.assetTicker ?? null,
+      entry_quote_price: t.entryQuotePrice ?? null,
+      manual_yield_pct: t.manualYieldPct ?? null,
+      rev: (t.rev ?? 0) + 1,
+      updated_at: t.updatedAt ?? new Date().toISOString()
+    };
+  });
 
-  await supabase.from("transactions").upsert(payload, { onConflict: "id,user_id" });
+  const res = await supabase.from("transactions").upsert(payloads, { onConflict: "id,user_id" });
+  if (res.error) {
+    // Se o banco remoto não tiver as colunas estendidas, faz fallback para as colunas base.
+    // Todos os metadados continuam 100% salvos através do túnel enrichedDescription!
+    if (res.error.code === "PGRST204" || res.error.code === "42703" || res.error.message?.includes("column")) {
+      console.warn(
+        "[coindex-supabase] Schema fallback ativado para transactions (metadados preservados no túnel):",
+        res.error.message
+      );
+      const minimalPayloads = txs.map((t) => {
+        const { enrichedDescription } = encodeTxForSupabase(t);
+        return {
+          id: t.id,
+          user_id: userId,
+          tx_date: t.date,
+          description: enrichedDescription,
+          amount: t.amount,
+          category: t.category,
+          cost_type: t.costType,
+          payment_method: t.paymentMethod,
+          card_used: t.cardUsed ?? t.bankAccount ?? null,
+          status: t.status
+        };
+      });
+      const fbRes = await supabase.from("transactions").upsert(minimalPayloads, { onConflict: "id,user_id" });
+      if (fbRes.error) {
+        console.error("[coindex-supabase] Fallback básico de transactions falhou:", fbRes.error);
+      }
+    } else {
+      console.error("[coindex-supabase] Erro ao sincronizar transações:", res.error);
+    }
+  }
 }
 
 export async function deleteTransactionInDb(id: string) {
@@ -781,7 +1125,6 @@ export async function upsertCardInDb(card: CreditCardItem): Promise<{ ok: boolea
 
     const res = await supabase.from("credit_cards").upsert(fullPayload, { onConflict: "id,user_id" });
     if (res.error) {
-      // Se falhar por incompatibilidade de schema/coluna (PGRST204 ou 42703)
       if (res.error.code === "PGRST204" || res.error.code === "42703" || res.error.message?.includes("column")) {
         console.warn("[coindex-supabase] Schema fallback para credit_cards:", res.error.message);
         const minimalPayload = {
@@ -897,7 +1240,7 @@ export async function upsertBankInDb(bank: BankItem): Promise<{ ok: boolean; err
           return { ok: false, error: fbRes.error.message };
         }
       } else if (res.error.code === "42P01" || res.error.code === "PGRST205") {
-        console.info("[coindex-supabase] Tabela 'banks' inexistente no Supabase; persistência garantida no vault local.");
+        console.info("[coindex-supabase] Tabela 'banks' inexistente no Supabase; persistência garantida no cofre mestre.");
         return { ok: true };
       } else {
         return { ok: false, error: res.error.message };

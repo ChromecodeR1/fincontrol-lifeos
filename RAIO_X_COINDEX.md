@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.44.1`  
-> **Última Atualização:** 8 de Novembro de 2026 (Pós-Sprint 57 — Correção Cirúrgica de Motion na Logo Principal 144Hz e Reforma Cinemática da Página Sobre com Manifesto Editorial Aprofundado)  
+> **Versão da Aplicação:** `0.45.0`  
+> **Última Atualização:** 9 de Novembro de 2026 (Pós-Sprint 58 — Persistência Absoluta Multi-Device via Túnel de Metadados Universal e Cofre Mestre Cloud Vault na Tabela Transactions do Supabase)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1137,6 +1137,27 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - **Seção 4 (Linha do Tempo de Evolução & Engenharia):** Trilha visual interativa pelas 6 Grandes Eras de Engenharia da plataforma (Gênese Contábil, Expansão de Domínios, Engenharia 144Hz, Mercado Ao Vivo, Soberania Cloud-First e The Equilibrium Era).
       - **Seção 5 (Os 5 Valores Fundamentais):** Cards com micro-motions táteis de elevação (`hover:-translate-y-2`) destacando Precisão no Centavo, Fluidez como Respeito, Design que Acalma, Soberania na Nuvem e Patrimônio + Saúde.
       - **Seção 6 (Rodapé Técnico Executivo):** 4 odômetros numéricos vivos a 144Hz (`AnimatedNumber144`), especificação completa da stack técnica e créditos de arquitetura de software.
+
+
+  - **Sprint 58 (Novembro de 2026 — Persistência Absoluta Multi-Device via Túnel de Metadados Universal e Cofre Mestre Cloud Vault na Tabela Transactions do Supabase):**
+    - **Passo 1 — Túnel de Metadados Universal na Descrição (`app/lib/services/coindex-supabase.ts`):**
+      - Diagnóstico e resolução da causa raiz de divergência entre múltiplos computadores: ausência de novas colunas no schema remoto do Supabase PostgreSQL (`investment_bucket`, `asset_ticker`, `entry_quote_price`, `manual_yield_pct`, etc.).
+      - Implementação dos codificadores e decodificadores universais `encodeTxForSupabase(tx)` e `decodeTxFromSupabase(row)` com codificação UTF-8 Base64 universal (`safeBase64Encode` e `safeBase64Decode`) anexando o pacote delimitado ` ||__CXM__:<base64>` à coluna nativa `description` existente desde a Sprint 1.
+      - Decodificação transparente na recuperação de lançamentos: strip da tag para que a interface exiba apenas o texto limpo da descrição, com hidratação imediata de 100% dos campos estendidos de investimentos, cartões, bancos e rateios.
+      - Fallback de schema em `upsertTransactionsInDb`: persistência resiliente mesmo que o banco de dados remoto rejeite novas colunas, garantindo zero perda de dados.
+    - **Passo 2 — Cofre Mestre de Nuvem (`__COINDEX_CLOUD_VAULT__`):**
+      - Criação de uma linha determinística dedicada na própria tabela `transactions` (`id: 00000000-0000-4000-8000-<cleanUserId>`, categoria `__COINDEX_CLOUD_VAULT__`, valor 0, data `2099-12-31`).
+      - Armazenamento em nuvem do estado global da aplicação: Calibração de Saldo Real (`realBalanceOverride`), modo de rendimento (`yieldMode`), seleção de gráficos ao vivo (`visibleMarketCharts`), slider de aportes (`simulatorMonthlyContribution`), cartões, bancos, notas e tombstones.
+      - Filtro de isolamento estrito: a linha do cofre mestre é separada das transações normais, nunca sendo exibida na listagem contábil nem somada nos totais de receitas ou despesas.
+    - **Passo 3 — Centralização e Propagação no Módulo de Investimentos (`app/components/InvestmentsTab.tsx` e `app/SecondaryTabs.tsx`):**
+      - Elevação dos estados de calibração patrimonial e preferências da carteira de investimentos para `app/page.tsx`, repassados via props para `SecondaryTabs` e `InvestmentsTab`.
+      - Integração do ajuste de saldo real (`realBalanceOverride`) ao somatório do valor total investido (*The Wealth Core*), com badge visual e gaveta de calibração rápida inline no card Hero.
+      - Salvamento instantâneo em nuvem no cofre mestre ao alterar gráficos visíveis de mercado ou valor de aporte no simulador de marcos patrimoniais.
+    - **Passo 4 — Sincronização Manual 1-Clique na Topbar (`app/page.tsx`):**
+      - Transformação do badge de status de sincronização da Topbar (`🟢 Sincronizado`) em botão interativo (`handleManualForceCloudSync`).
+      - Permite forçar o envio imediato de todas as transações locais e do cofre mestre com notificação toast de sucesso instantânea (`☁️ Sincronização Concluída: 100% dos dados salvos no Cofre Nuvem Supabase!`).
+    - **Passo 5 — Garantia Zero Migration:**
+      - Eliminação definitiva da necessidade de executar scripts SQL de migração DDL manuais no painel do Supabase; o sistema opera imediatamente em qualquer computador ou navegador a partir do primeiro login.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

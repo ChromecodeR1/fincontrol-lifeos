@@ -116,6 +116,7 @@ import {
   SystemLogEntry,
   CHANGELOG_HISTORY,
   APP_VERSION,
+  COINDEX_APP_VERSION,
   sanitizeText,
   normalizeStatus,
   formatBRL,
@@ -206,6 +207,7 @@ import {
 } from "./schemas";
 import {
   fetchAllCoindexData,
+  saveCloudVaultInDb,
   migrateAllStateToSupabase,
   upsertTransactionsInDb,
   deleteTransactionInDb,
@@ -1144,6 +1146,8 @@ export default function CoindexApp() {
   const [yieldMode, setYieldMode] = useState<"bruto" | "liquido" | "aportes">("bruto");
   const [manualAdjustment, setManualAdjustment] = useState<number>(0);
   const [showAdjustmentInput, setShowAdjustmentInput] = useState<boolean>(false);
+  const [visibleMarketCharts, setVisibleMarketCharts] = useState<string[]>(["BTC", "BNB", "ETH", "USD", "CDI", "IBOV"]);
+  const [simulatorMonthlyContribution, setSimulatorMonthlyContribution] = useState<number>(500);
 
   // SPRINT 29: Dashboard 2.0 States (Multi-View Patrimônio, Drill-Down Donut e Radar)
   const [patrimonyCardView, setPatrimonyCardView] = useState<"patrimony" | "pace" | "forecast">("patrimony");
@@ -1932,6 +1936,18 @@ export default function CoindexApp() {
         if (sAdj) setManualAdjustment(parseFloat(sAdj) || 0);
         const sYMode = localStorage.getItem("coindex_patrimony_yield_mode") as "bruto" | "liquido" | "aportes" | null;
         if (sYMode && ["bruto", "liquido", "aportes"].includes(sYMode)) setYieldMode(sYMode);
+        const sSavedCharts = localStorage.getItem("coindex_visible_market_charts");
+        if (sSavedCharts) {
+          try {
+            const parsedCharts = JSON.parse(sSavedCharts);
+            if (Array.isArray(parsedCharts) && parsedCharts.length > 0) setVisibleMarketCharts(parsedCharts);
+          } catch {}
+        }
+        const sSavedSim = localStorage.getItem("coindex_simulator_monthly_contribution");
+        if (sSavedSim) {
+          const parsedSim = parseFloat(sSavedSim);
+          if (!isNaN(parsedSim) && parsedSim > 0) setSimulatorMonthlyContribution(parsedSim);
+        }
       } catch (e) {
         console.error("Erro ao ler cache local:", e);
       }
@@ -2264,6 +2280,47 @@ export default function CoindexApp() {
           if (d.settings.stravaConfig && d.settings.stravaConfig.athleteId) setStravaConfig(d.settings.stravaConfig);
           if (d.settings.stravaStats && d.settings.stravaStats.ytdKm != null) setStravaStats(d.settings.stravaStats);
 
+          // SPRINT 58: Hidratação e Reconciliação do Cofre Mestre de Nuvem (Cloud Vault)
+          if (d.cloudVault?.investmentState) {
+            const invSt = d.cloudVault.investmentState;
+            if (invSt.realBalanceOverride !== undefined && invSt.realBalanceOverride !== null) {
+              setManualAdjustment(invSt.realBalanceOverride);
+              localStorage.setItem("coindex_patrimony_real_adjustment", String(invSt.realBalanceOverride));
+              setUserItem("coindex_patrimony_real_adjustment", String(invSt.realBalanceOverride), targetUserId);
+            }
+            if (invSt.yieldMode && ["bruto", "liquido", "aportes"].includes(invSt.yieldMode)) {
+              setYieldMode(invSt.yieldMode);
+              localStorage.setItem("coindex_patrimony_yield_mode", invSt.yieldMode);
+            }
+            if (Array.isArray(invSt.visibleMarketCharts) && invSt.visibleMarketCharts.length > 0) {
+              setVisibleMarketCharts(invSt.visibleMarketCharts);
+              localStorage.setItem("coindex_visible_market_charts", JSON.stringify(invSt.visibleMarketCharts));
+            }
+            if (invSt.simulatorMonthlyContribution !== undefined && invSt.simulatorMonthlyContribution > 0) {
+              setSimulatorMonthlyContribution(invSt.simulatorMonthlyContribution);
+              localStorage.setItem("coindex_simulator_monthly_contribution", String(invSt.simulatorMonthlyContribution));
+            }
+          } else {
+            // Backup inicial proativo do cofre para garantir persistência imediata
+            void saveCloudVaultInDb(
+              {
+                version: COINDEX_APP_VERSION,
+                syncedAt: new Date().toISOString(),
+                investmentState: {
+                  realBalanceOverride: manualAdjustment,
+                  yieldMode,
+                  visibleMarketCharts,
+                  simulatorMonthlyContribution
+                },
+                cards: mergedCards,
+                banks: mergedBanks,
+                notes: mergedNotes,
+                staticStatus: d.staticStatus
+              },
+              targetUserId || undefined
+            );
+          }
+
           setSheetsSyncStatus({
             state: "success",
             message: `Conectado ao Supabase PostgreSQL (${d.transactions.length} lançamentos sincronizados).`,
@@ -2428,12 +2485,69 @@ export default function CoindexApp() {
   const handleSetYieldMode = (mode: "bruto" | "liquido" | "aportes") => {
     setYieldMode(mode);
     localStorage.setItem("coindex_patrimony_yield_mode", mode);
+    void saveCloudVaultInDb(
+      {
+        investmentState: {
+          realBalanceOverride: manualAdjustment,
+          yieldMode: mode,
+          visibleMarketCharts,
+          simulatorMonthlyContribution
+        }
+      },
+      currentUserId || undefined
+    );
   };
 
   const handleSaveManualAdjustment = (val: number) => {
     setManualAdjustment(val);
     localStorage.setItem("coindex_patrimony_real_adjustment", String(val));
-    notify("Ajuste de Saldo Salvo", `Ajuste patrimonial de ${formatBRL(val)} calibrado com sucesso.`, "success");
+    if (currentUser) {
+      setUserItem("coindex_patrimony_real_adjustment", String(val), currentUserId);
+    }
+    void saveCloudVaultInDb(
+      {
+        investmentState: {
+          realBalanceOverride: val,
+          yieldMode,
+          visibleMarketCharts,
+          simulatorMonthlyContribution
+        }
+      },
+      currentUserId || undefined
+    );
+    notify("Ajuste de Saldo Salvo", `Ajuste patrimonial de ${formatBRL(val)} calibrado e sincronizado na nuvem.`, "success");
+  };
+
+  const handleUpdateVisibleMarketCharts = (charts: string[]) => {
+    setVisibleMarketCharts(charts);
+    localStorage.setItem("coindex_visible_market_charts", JSON.stringify(charts));
+    void saveCloudVaultInDb(
+      {
+        investmentState: {
+          realBalanceOverride: manualAdjustment,
+          yieldMode,
+          visibleMarketCharts: charts,
+          simulatorMonthlyContribution
+        }
+      },
+      currentUserId || undefined
+    );
+  };
+
+  const handleUpdateSimulatorMonthlyContribution = (amount: number) => {
+    setSimulatorMonthlyContribution(amount);
+    localStorage.setItem("coindex_simulator_monthly_contribution", String(amount));
+    void saveCloudVaultInDb(
+      {
+        investmentState: {
+          realBalanceOverride: manualAdjustment,
+          yieldMode,
+          visibleMarketCharts,
+          simulatorMonthlyContribution: amount
+        }
+      },
+      currentUserId || undefined
+    );
   };
 
   const changeThemeMode = (m: ThemeMode) => {
@@ -5292,6 +5406,17 @@ export default function CoindexApp() {
 
       try {
         await upsertTransactionsInDb([fullTx], debtorMap);
+        void saveCloudVaultInDb(
+          {
+            investmentState: {
+              realBalanceOverride: manualAdjustment,
+              yieldMode,
+              visibleMarketCharts,
+              simulatorMonthlyContribution
+            }
+          },
+          currentUserId
+        );
       } catch (err) {
         console.error("Erro ao sincronizar investimento com Supabase", err);
       }
@@ -7027,6 +7152,52 @@ export default function CoindexApp() {
     };
   }, [isSyncing, sheetsSyncStatus, currentUser]);
 
+  const handleManualForceCloudSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await upsertTransactionsInDb(transactions, debtorMap);
+      await saveCloudVaultInDb(
+        {
+          version: COINDEX_APP_VERSION,
+          syncedAt: new Date().toISOString(),
+          investmentState: {
+            realBalanceOverride: manualAdjustment,
+            yieldMode,
+            visibleMarketCharts,
+            simulatorMonthlyContribution
+          },
+          cards,
+          banks,
+          notes,
+          staticStatus,
+          tombstones: Array.from(getTombstones(currentUserId))
+        },
+        currentUserId || undefined
+      );
+      setSheetsSyncStatus({
+        state: "success",
+        message: "Sincronizado",
+        timestamp: new Date().toLocaleTimeString("pt-BR")
+      });
+      notify(
+        "☁️ Sincronização Concluída",
+        "100% dos dados, investimentos e preferências salvos com sucesso no Cofre Nuvem Supabase!",
+        "success",
+        "CONFIG"
+      );
+    } catch (err) {
+      setSheetsSyncStatus({
+        state: "error",
+        message: "Erro ao sincronizar",
+        timestamp: new Date().toLocaleTimeString("pt-BR")
+      });
+      notify("Erro de Sincronização", "Não foi possível sincronizar com o Supabase.", "error", "CONFIG");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleSeedPatrimonioHistory = handleSyncOfficialPatrimonioData;
 
   if (!isHydrated) {
@@ -7501,13 +7672,15 @@ export default function CoindexApp() {
             </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
-                {/* Indicador de Sincronização em Tempo Real (Sprint 22 & 46) */}
-                <div
-                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono font-medium backdrop-blur-md transition-all duration-300 ${syncIndicator.color}`}
+                {/* Indicador de Sincronização em Tempo Real (Sprint 22, 46 & 58) */}
+                <button
+                  type="button"
+                  onClick={handleManualForceCloudSync}
+                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono font-medium backdrop-blur-md transition-all duration-300 cursor-pointer hover:brightness-110 active:scale-95 ${syncIndicator.color}`}
                   title={
                     syncIndicator.timestamp
-                      ? `${syncIndicator.label} — Última sync: ${syncIndicator.timestamp}`
-                      : syncIndicator.label
+                      ? `${syncIndicator.label} — Última sync: ${syncIndicator.timestamp}. Clique para forçar sincronização total com o Supabase agora.`
+                      : `${syncIndicator.label} — Clique para forçar sincronização total com o Supabase agora.`
                   }
                 >
                   {syncIndicator.icon}
@@ -7515,7 +7688,7 @@ export default function CoindexApp() {
                   {syncIndicator.timestamp && (
                     <span className="text-[10px] opacity-70">({syncIndicator.timestamp})</span>
                   )}
-                </div>
+                </button>
 
                 {/* SININHO DE NOTIFICAÇÕES */}
                 <div className={`relative ${showBellDropdown ? "z-[9999]" : "z-40"}`}>
@@ -9711,6 +9884,12 @@ export default function CoindexApp() {
               handleOpenNewTxModal={handleOpenNewTxModal}
               onAddTransaction={handleUnifiedAddFuel}
               onSaveInvestmentTx={handleSaveInvestmentTx}
+              realBalanceOverride={manualAdjustment}
+              onSaveRealBalanceOverride={handleSaveManualAdjustment}
+              visibleMarketCharts={visibleMarketCharts}
+              onUpdateVisibleMarketCharts={handleUpdateVisibleMarketCharts}
+              simulatorMonthlyContribution={simulatorMonthlyContribution}
+              onUpdateSimulatorMonthlyContribution={handleUpdateSimulatorMonthlyContribution}
               onBatchImportTransactions={handleBatchImportTransactions}
               dailyQuotaInfo={dailyQuotaInfo}
               cdiAnnualRate={marketRates.cdiAnnualRate}

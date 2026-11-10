@@ -400,13 +400,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.44.1";
-export const PREVIOUS_VERSION = "0.44.0";
-export const COINDEX_APP_VERSION = "0.44.1";
+export const APP_VERSION = "0.45.0";
+export const PREVIOUS_VERSION = "0.44.1";
+export const COINDEX_APP_VERSION = "0.45.0";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.45.0",
+    date: "Nov/2026",
+    title: "Sprint 58: Persistência Absoluta Multi-Device via Túnel de Metadados Universal e Cofre Mestre Cloud Vault na Tabela Transactions do Supabase",
+    highlights: [
+      "Túnel Universal de Metadados (coindex-supabase): Codificação e decodificação transparente Base64 UTF-8 (encodeTxForSupabase/decodeTxFromSupabase) anexada à coluna 'description' das transações (||__CXM__:base64), blindando 100% dos dados de investimentos (gavetas BTC/CDI/LCI/STOCKS/PAPEL, preço de entrada, tickers, taxas CDI, bancos vinculados e rateios) contra divergências ou ausência de colunas remotas no PostgreSQL.",
+      "Cofre Mestre Cloud Vault (__COINDEX_CLOUD_VAULT__): Registro determinístico e resiliente na tabela transactions que armazena em nuvem o estado global da conta — Calibração de Saldo Real (realBalanceOverride), modo de rendimento, seleção de gráficos de mercado ao vivo, slider do simulador de metas, cartões, bancos, notas e desejos.",
+      "Sincronização Bidirecional & Auto-Heal: Hidratação inteligente no carregamento inicial unindo dados locais e da nuvem sem sobrescrita destrutiva; botão interativo na Topbar para sincronização manual imediata com feedback tátil de sucesso.",
+      "Garantia Zero Migration: Funcionamento universal e imediato em qualquer ambiente ou computador sem necessidade de executar comandos manuais de migração DDL no banco de dados."
+    ]
+  },
   {
     version: "0.44.1",
     date: "Nov/2026",

@@ -218,6 +218,12 @@ export interface SecondaryTabsProps {
   setStravaActivities?: React.Dispatch<React.SetStateAction<StravaActivity[]>>;
   stravaScopeMode?: "detailed" | "read_only" | null;
   stravaOauthUrl?: string;
+  realBalanceOverride?: number;
+  onSaveRealBalanceOverride?: (val: number) => void;
+  visibleMarketCharts?: string[];
+  onUpdateVisibleMarketCharts?: (charts: string[]) => void;
+  simulatorMonthlyContribution?: number;
+  onUpdateSimulatorMonthlyContribution?: (amount: number) => void;
   isSyncingStrava: boolean;
   syncStravaFromApi: () => void;
   bioLogs: BioLog[];
@@ -786,7 +792,10 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     monthlyInvestmentGoal, patrimonyTarget, annualRunGoalKm, setPersonalBudgetLimit,
     setMonthlyInvestmentGoal, setPatrimonyTarget, setAnnualRunGoalKm, updateGoalsStorage,
     alertRules, saveAlertRules, newAlert, setNewAlert, handleAddAlertRule, systemLogs,
-    setSystemLogs, logFilter, setLogFilter
+    setSystemLogs, logFilter, setLogFilter,
+    realBalanceOverride, onSaveRealBalanceOverride,
+    visibleMarketCharts, onUpdateVisibleMarketCharts,
+    simulatorMonthlyContribution, onUpdateSimulatorMonthlyContribution
   } = props;
 
   const [partialInputs, setPartialInputs] = useState<Record<string, string>>({});
@@ -2743,6 +2752,12 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
         onSaveTransaction={onSaveInvestmentTx || ((tx) => { if (onAddTransaction && tx.id) void onAddTransaction(tx as Transaction); })}
         onDeleteTransaction={handleDeleteTransaction}
         notify={notify}
+        realBalanceOverride={realBalanceOverride}
+        onSaveRealBalanceOverride={onSaveRealBalanceOverride}
+        visibleMarketCharts={visibleMarketCharts}
+        onUpdateVisibleMarketCharts={onUpdateVisibleMarketCharts}
+        simulatorMonthlyContribution={simulatorMonthlyContribution}
+        onUpdateSimulatorMonthlyContribution={onUpdateSimulatorMonthlyContribution}
       />
     );
   }

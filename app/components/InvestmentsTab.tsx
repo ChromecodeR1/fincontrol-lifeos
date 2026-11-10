@@ -29,7 +29,8 @@ import {
   Zap,
   Award,
   Trophy,
-  Calculator
+  Calculator,
+  SlidersHorizontal
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -58,6 +59,12 @@ export interface InvestmentsTabProps {
   onSaveTransaction: (tx: Partial<Transaction>, isEdit?: boolean) => void;
   onDeleteTransaction?: (id: string) => void;
   notify?: (title: string, message: string, type?: "success" | "warning" | "error" | "info") => void;
+  realBalanceOverride?: number;
+  onSaveRealBalanceOverride?: (val: number) => void;
+  visibleMarketCharts?: string[];
+  onUpdateVisibleMarketCharts?: (charts: string[]) => void;
+  simulatorMonthlyContribution?: number;
+  onUpdateSimulatorMonthlyContribution?: (amount: number) => void;
 }
 
 const BUCKET_CONFIG: Record<
@@ -131,8 +138,16 @@ export function InvestmentsTab({
   moneyBlur = "",
   onSaveTransaction,
   onDeleteTransaction,
-  notify
+  notify,
+  realBalanceOverride = 0,
+  onSaveRealBalanceOverride,
+  visibleMarketCharts: externalVisibleMarketCharts,
+  onUpdateVisibleMarketCharts,
+  simulatorMonthlyContribution: externalSimulatorContribution,
+  onUpdateSimulatorMonthlyContribution
 }: InvestmentsTabProps) {
+  const [showRealBalanceInput, setShowRealBalanceInput] = useState<boolean>(false);
+  const [tempRealBalanceVal, setTempRealBalanceVal] = useState<string>(String(realBalanceOverride || ""));
   // Sub-visões: Carteira de Investimentos vs Simulador de Papel
   const [subView, setSubView] = useState<"portfolio" | "paper">("portfolio");
 
@@ -161,11 +176,28 @@ export function InvestmentsTab({
   const [modalEntryQuote, setModalEntryQuote] = useState<string>("");
   const [flashingRowId, setFlashingRowId] = useState<string | null>(null);
 
-  // Carrega preferências salvas do localStorage
+  // SPRINT 58: Sincronização de preferências vindas do Cofre Mestre Supabase
+  useEffect(() => {
+    if (externalVisibleMarketCharts && externalVisibleMarketCharts.length > 0) {
+      setVisibleCharts(externalVisibleMarketCharts);
+    }
+  }, [externalVisibleMarketCharts]);
+
+  useEffect(() => {
+    if (externalSimulatorContribution !== undefined && externalSimulatorContribution > 0) {
+      setSimulatorMonthlyContribution(externalSimulatorContribution);
+    }
+  }, [externalSimulatorContribution]);
+
+  useEffect(() => {
+    setTempRealBalanceVal(realBalanceOverride ? String(realBalanceOverride) : "");
+  }, [realBalanceOverride]);
+
+  // Carrega preferências salvas do localStorage como fallback inicial
   useEffect(() => {
     try {
       const savedCharts = localStorage.getItem("coindex_visible_market_charts");
-      if (savedCharts) {
+      if (savedCharts && (!externalVisibleMarketCharts || externalVisibleMarketCharts.length === 0)) {
         const parsed = JSON.parse(savedCharts);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setVisibleCharts(parsed);
@@ -174,7 +206,7 @@ export function InvestmentsTab({
     } catch {
       // Ignora erro
     }
-  }, []);
+  }, [externalVisibleMarketCharts]);
 
   // SPRINT 54: Busca cotações de mercado da rota /api/market-pulse (sem cache)
   const fetchMarketPulse = async () => {
@@ -381,8 +413,9 @@ export function InvestmentsTab({
   }, [bucketSummaries]);
 
   const totalCurrentInvested = useMemo(() => {
-    return Object.values(bucketSummaries).reduce((acc, b) => acc + b.currentValue, 0);
-  }, [bucketSummaries]);
+    const rawSum = Object.values(bucketSummaries).reduce((acc, b) => acc + b.currentValue, 0);
+    return rawSum + (realBalanceOverride || 0);
+  }, [bucketSummaries, realBalanceOverride]);
 
   const totalProfitBRL = totalCurrentInvested - totalNetDeposited;
   const totalProfitPct = totalNetDeposited > 0 ? (totalProfitBRL / totalNetDeposited) * 100 : 0;
@@ -476,6 +509,7 @@ export function InvestmentsTab({
     }
     setVisibleCharts(next);
     localStorage.setItem("coindex_visible_market_charts", JSON.stringify(next));
+    onUpdateVisibleMarketCharts?.(next);
   };
 
   // Transações exibidas na lista sincronizada (com suporte a filtro por foco)
@@ -596,6 +630,23 @@ export function InvestmentsTab({
                     {totalProfitBRL >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                     <span>{totalProfitBRL >= 0 ? "+" : ""}{formatBRL(totalProfitBRL)} ({totalProfitPct >= 0 ? "+" : ""}{totalProfitPct.toFixed(2)}%)</span>
                   </div>
+
+                  {realBalanceOverride !== 0 && (
+                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono font-semibold bg-[#0A84FF]/10 text-[#0A84FF] border border-[#0A84FF]/30">
+                      <span>Ajuste Real: {realBalanceOverride > 0 ? "+" : ""}{formatBRL(realBalanceOverride)}</span>
+                    </div>
+                  )}
+
+                  {onSaveRealBalanceOverride && (
+                    <button
+                      type="button"
+                      onClick={() => setShowRealBalanceInput((prev) => !prev)}
+                      className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white transition cursor-pointer"
+                      title="Calibrar Ajuste de Saldo Real do App (Nubank/BTG)"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -615,6 +666,45 @@ export function InvestmentsTab({
                 </div>
               </div>
             </div>
+
+            {showRealBalanceInput && (
+              <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-slate-900/90 border border-[#0A84FF]/30 text-xs animate-cupertino-in">
+                <span className="text-slate-200 font-semibold text-xs">
+                  Calibração de Saldo Real (Nubank/BTG):
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 0.00 ou -15.50"
+                  value={tempRealBalanceVal}
+                  onChange={(e) => setTempRealBalanceVal(e.target.value)}
+                  className="w-32 px-2.5 py-1 rounded-lg bg-black/60 border border-white/15 text-white font-mono text-xs outline-none focus:border-[#0A84FF]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const parsed = parseFloat(tempRealBalanceVal) || 0;
+                    onSaveRealBalanceOverride?.(parsed);
+                    setShowRealBalanceInput(false);
+                    notify?.(
+                      "Saldo Real Calibrado",
+                      `Ajuste patrimonial de ${formatBRL(parsed)} salvo e sincronizado na nuvem.`,
+                      "success"
+                    );
+                  }}
+                  className="px-3 py-1 rounded-lg bg-[#0A84FF] text-white hover:bg-[#0071E3] font-semibold cursor-pointer text-xs shadow-sm"
+                >
+                  Salvar no Cofre
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRealBalanceInput(false)}
+                  className="px-2 py-1 text-slate-400 hover:text-white text-xs cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
 
             {/* Barra Multi-Segmentada de Alocação com Animação Fluida */}
             <div className="space-y-2">
@@ -1079,7 +1169,11 @@ export function InvestmentsTab({
                   max="5000"
                   step="50"
                   value={simulatorMonthlyContribution}
-                  onChange={(e) => setSimulatorMonthlyContribution(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setSimulatorMonthlyContribution(val);
+                    onUpdateSimulatorMonthlyContribution?.(val);
+                  }}
                   className="w-full h-2 rounded-lg bg-slate-800 accent-[#0A84FF] cursor-pointer"
                 />
                 <span className="text-[10px] font-mono text-slate-400">R$ 5.000</span>
