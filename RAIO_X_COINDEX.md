@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.47.0`  
-> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 62 — Arquitetura Cloud-First Definitiva no Supabase, UUIDs Determinísticos RFC 4122 v4, Cofre Mestre V3 e Inspetor Cloud)  
+> **Versão da Aplicação:** `0.48.0`  
+> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 63 — Upgrade Cinematográfico do Motor de Fundo Cupertino Ambient FX 2.0 com Poeira Estelar 3D, Ondas de Seda Harmônicas e Aurora Camaleão Contextual)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1233,6 +1233,23 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Resumo de telemetria dos 9 módulos com contadores em tempo real.
       - Ação explícita `⬆️ Enviar Tudo Deste Computador para a Nuvem Agora (Push)` com verificação de leitura no banco.
       - Ação explícita `⬇️ Baixar da Nuvem e Substituir Este Computador (Pull)` com restauração completa de 100% dos dados.
+
+  - **Sprint 63 (Novembro de 2026 — Upgrade Cinematográfico do Motor de Fundo Cupertino Ambient FX 2.0 v0.48.0):**
+    - **Pilar 1 — Poeira Estelar 3D em 3 Camadas com Difração Óptica de 4 Pontas (`app/components/AmbientBackgroundFX.tsx`):**
+      - Criação de 115 micropartículas em órbita estelar com distribuição de profundidade: Camada 1 (Deep Space, 65%, velocidade lenta e raio 0.4–0.9px), Camada 2 (Crisp Starlight, 25%, cruzes de difração óptica de 4 pontas desenhadas via `stroke` fino de 0.65px) e Camada 3 (Foreground Bokeh Orbs, 10%, discos translúcidos com desfoque e velocidade de paralaxe aumentada).
+    - **Pilar 2 — Interatividade Física com Cursor e Brisa Elástica (`app/components/AmbientBackgroundFX.tsx`):**
+      - Interação cinemática repulsora em raio de 135px ao redor do cursor do mouse, com velocidade angular derivada e amortecimento inercial (`damping = 0.94`).
+      - Ganho de brilho e escala (`flareBoost` de até +45%) nas partículas próximas ao cursor.
+    - **Pilar 3 — Estrelas Cadentes Cinematográficas (Shooting Stars):**
+      - Disparo periódico de meteoros a cada 11–17 segundos no terço superior da tela com trajetória diagonal hiperbólica, gradiente linear e duração de 900ms.
+    - **Pilar 4 — Ondas de Seda Harmônicas (Silk Contour Waves):**
+      - Três feixes principais compostos por 5 fitas curvas ultrafinas com equação senoidal dupla harmônica (`y = sin(x*f1 + t) + sin(x*f2 - t*0.7)`), renderizadas com gradiente horizontal da paleta ativa e reflexo especular na passagem do cursor.
+    - **Pilar 5 — Aurora Camaleão Contextual por Aba & Suporte Modo Claro:**
+      - Sistema de transição suave LERP contínua (0.035/frame) entre 6 paletas de humor cromático de acordo com a aba ativa (`activeTab`): Dashboard (Indigo/Cyan), Transações (Emerald/Teal), Investimentos (Violet/Fuchsia), Cartões (Sky/Cyan), Bio & Strava (Sunset Rose) e Veículos (Amber/Orange).
+      - Modo Claro adaptativo com fundo `#F2F4F8`, partículas e ondas em tons pastéis suaves sem perda de contraste do conteúdo.
+    - **Pilar 6 — Performance Estrita a 144Hz e Blindagem Arquitetural:**
+      - Container raiz estritamente fixo (`fixed inset-0 pointer-events-none z-0 overflow-hidden select-none`) com `style={{ transform: "none" }}` para erradicar qualquer conflito de containing block em modais e popovers renderizados via `createPortal`.
+      - Supressão de processamento e congelamento de `requestAnimationFrame` quando `document.hidden === true`.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

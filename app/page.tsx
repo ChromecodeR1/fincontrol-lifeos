@@ -7343,8 +7343,8 @@ export default function CoindexApp() {
 
   return (
     <div className="min-h-screen flex text-slate-100 bg-transparent dashboard-root-wrapper relative">
-      {/* SPRINT 45: Motor de Efeitos Especiais de Background "Cupertino Ambient FX" */}
-      <AmbientBackgroundFX mode={bgFxMode} />
+      {/* SPRINT 45 / SPRINT 63: Motor de Efeitos Especiais de Background "Cupertino Ambient FX 2.0" */}
+      <AmbientBackgroundFX mode={bgFxMode} activeTab={activeTab} />
       <style jsx global>{`
         .glass-card {
           backdrop-filter: blur(18px);

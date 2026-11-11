@@ -400,13 +400,27 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.47.0";
-export const PREVIOUS_VERSION = "0.46.1";
-export const COINDEX_APP_VERSION = "0.47.0";
+export const APP_VERSION = "0.48.0";
+export const PREVIOUS_VERSION = "0.47.0";
+export const COINDEX_APP_VERSION = "0.48.0";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.48.0",
+    date: "Nov/2026",
+    title: "Sprint 63: Upgrade Cinematográfico do Motor de Fundo Cupertino Ambient FX 2.0 (Poeira Estelar 3D com Difração de 4 Pontas, Ondas de Seda Harmônicas e Aurora Camaleão Contextual por Aba)",
+    highlights: [
+      "Poeira Estelar 3D em 3 Camadas de Profundidade: 115 micropartículas em órbita flutuante (Deep Space 65%, Crisp Starlight 25% com cruz de difração de 4 pontas ópticas e Foreground Bokeh Orbs 10%).",
+      "Interatividade Física com Cursor (Mouse Breeze & Flare Boost): Brisa repulsora elástica num raio de 135px e brilho de flare amplificado em até +45% com amortecimento inercial.",
+      "Estrelas Cadentes Cinematográficas (Shooting Stars): Rastro hiperbólico luminoso cruzando o terço superior do céu a cada 11–17s com desvanecimento suave.",
+      "Ondas de Seda Harmônicas (Silk Contour Waves): 3 feixes com 5 fitas senoidais duplas ultrafinas (0.65px), gradiente horizontal cromático da paleta ativa e reflexo especular de luz na passagem do mouse.",
+      "Aurora Camaleão Contextual por Aba: Transição contínua via interpolação LERP (0.035/frame) entre 6 paletas de humor cromático (Dashboard Indigo/Cyan, Transações Emerald, Investimentos Violet, Cartões Cyan/Sky, Bio Sunset Rose, Veículos Amber/Orange).",
+      "Suporte Nativo ao Modo Claro (Cupertino Light Adaptive): Adaptação automática com fundo #F2F4F8, partículas em tons pastel suaves e opacidade calibrada para legibilidade máxima.",
+      "Performance Extrema 144Hz GPU e Economia de Energia: Renderização direta via HTML5 Canvas 2D sem CSS transforms intrusivos (evita bugs de contêiner em modais via Portal) e congelamento automático de rAF em abas em segundo plano (document.hidden)."
+    ]
+  },
   {
     version: "0.47.0",
     date: "Nov/2026",
