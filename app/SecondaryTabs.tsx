@@ -9,7 +9,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronRight, Check, X, RotateCcw,
   SlidersHorizontal, Settings, Fuel, Gauge, DollarSign, Award, Info, Landmark, PiggyBank,
   Sparkles, ExternalLink, ShoppingBag, Circle, Footprints, Lock, Timer, Heart, Calendar, MapPin,
-  Sun, Moon
+  Sun, Moon, Cloud, Database, Server, ShieldCheck
 } from "lucide-react";
 import {
   ResponsiveContainer, Tooltip, Legend, XAxis, YAxis, CartesianGrid,
@@ -45,6 +45,7 @@ import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroun
 import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
 import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
 import { triggerAuraBurst } from "./components/MotionEngine144";
+import { verifyLiveCloudSyncStatus, LiveCloudSyncAuditResult } from "./lib/services/coindex-supabase";
 
 /**
  * Formata ritmo/pace esportivo exato em min:seg /km (AUD-15).
@@ -258,6 +259,10 @@ export interface SecondaryTabsProps {
   handleSyncOfficialPatrimonioData?: () => void;
   sheetsSyncStatus?: { state: "idle" | "success" | "error"; message: string; timestamp?: string };
   setSheetsSyncStatus?: (st: { state: "idle" | "success" | "error"; message: string; timestamp?: string }) => void;
+  currentUserId?: string | null;
+  pushFullStateToCloud?: (options?: { showToast?: boolean }) => Promise<{ ok: boolean; count?: number; error?: string }>;
+  handleManualForceCloudSync?: () => Promise<void>;
+  syncStatus?: "idle" | "success" | "error";
   stravaConfig: { athleteId: string; clientId: string; clientSecret: string; refreshToken: string };
   setStravaConfig: (cfg: any) => void;
   stravaSyncStatus?: { state: "idle" | "success" | "error"; message: string; timestamp?: string };
@@ -795,8 +800,32 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     setSystemLogs, logFilter, setLogFilter,
     realBalanceOverride, onSaveRealBalanceOverride,
     visibleMarketCharts, onUpdateVisibleMarketCharts,
-    simulatorMonthlyContribution, onUpdateSimulatorMonthlyContribution
+    simulatorMonthlyContribution, onUpdateSimulatorMonthlyContribution,
+    currentUserId, pushFullStateToCloud, handleManualForceCloudSync, syncStatus = "idle"
   } = props;
+
+  // SPRINT 64: Estado da Auditoria Verídica de Nuvem (Henrique Montenegro)
+  const [cloudAudit, setCloudAudit] = useState<LiveCloudSyncAuditResult | null>(null);
+  const [isAuditingCloud, setIsAuditingCloud] = useState<boolean>(false);
+
+  const runCloudAudit = React.useCallback(async () => {
+    if (!currentUserId) return;
+    setIsAuditingCloud(true);
+    try {
+      const res = await verifyLiveCloudSyncStatus(currentUserId, transactions.length, cards.length);
+      setCloudAudit(res);
+    } catch (err) {
+      console.error("[cloud-audit] Erro:", err);
+    } finally {
+      setIsAuditingCloud(false);
+    }
+  }, [currentUserId, transactions.length, cards.length]);
+
+  useEffect(() => {
+    if (activeTab === "settings" && currentUserId && !cloudAudit && !isAuditingCloud) {
+      void runCloudAudit();
+    }
+  }, [activeTab, currentUserId, cloudAudit, isAuditingCloud, runCloudAudit]);
 
   const [partialInputs, setPartialInputs] = useState<Record<string, string>>({});
   const [partialBank, setPartialBank] = useState<Record<string, string>>({});
@@ -4922,6 +4951,193 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               <Camera className="w-3.5 h-3.5" /> Foto de Perfil
               <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpdateProfileAvatar(f); }} />
             </label>
+          </div>
+        </div>
+
+        {/* SPRINT 64: CARD OFICIAL DE DIAGNÓSTICO DE COMPUTAÇÃO EM NUVEM (Henrique Montenegro) */}
+        <div className="glass-card p-6 rounded-3xl border border-sky-500/30 bg-gradient-to-br from-sky-950/20 via-slate-900/60 to-indigo-950/20 shadow-2xl space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2.5 rounded-2xl bg-sky-500/10 text-sky-400 border border-sky-500/20 shadow-sm">
+                  <Cloud className="w-5 h-5 text-sky-400" />
+                </span>
+                <div>
+                  <h3 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+                    ☁️ Verificação Oficial de Computação em Nuvem (Supabase PostgreSQL)
+                  </h3>
+                  <p className="text-[11px] font-mono text-sky-300">
+                    Arquitetura 100% Nuvem Estrita • Assinado por Henrique Montenegro (Principal Cloud Architect & DBA)
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 max-w-2xl leading-relaxed mt-1">
+                Auditoria matemática em tempo real conectada diretamente ao servidor Supabase PostgreSQL. Todos os dados operam sob Soberania Estrita da Nuvem sem depender de cache local (<code className="text-sky-300">localStorage</code> zero-cache).
+              </p>
+            </div>
+
+            {/* Indicador Principal 2 — Sincronizado com a Nuvem (SIM / NÃO) */}
+            <div className="flex flex-col sm:items-end gap-1.5">
+              <span className="text-[11px] font-semibold text-slate-400">Integridade Multi-Device:</span>
+              {cloudAudit ? (
+                cloudAudit.isFullySynced && cloudAudit.isOnline && syncStatus !== "error" ? (
+                  <div className="px-4 py-2 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-[#30D158] font-black text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(48,209,88,0.25)]">
+                    <CheckCircle2 className="w-5 h-5 text-[#30D158]" />
+                    <span>Sincronizado com a Nuvem: SIM ✅</span>
+                  </div>
+                ) : (
+                  <div className="px-4 py-2 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-[#FF453A] font-black text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(255,69,58,0.25)]">
+                    <AlertTriangle className="w-5 h-5 text-[#FF453A]" />
+                    <span>Sincronizado com a Nuvem: NÃO ⚠️</span>
+                  </div>
+                )
+              ) : (
+                <div className="px-4 py-2 rounded-2xl bg-slate-800/80 border border-white/10 text-slate-300 font-bold text-xs flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-sky-400" />
+                  <span>Auditando Nuvem...</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Grid de 4 Indicadores Verídicos */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+            {/* Indicador Principal 1 — Status do Servidor */}
+            <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
+                <Server className="w-3.5 h-3.5 text-sky-400" /> Status do Servidor
+              </span>
+              <div className="mt-2 flex items-baseline gap-2">
+                {cloudAudit?.isOnline ? (
+                  <>
+                    <span className="text-sm font-extrabold text-[#30D158] flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#30D158] animate-pulse" />
+                      🟢 ONLINE
+                    </span>
+                    <span className="text-xs font-mono text-slate-400">({cloudAudit.latencyMs} ms)</span>
+                  </>
+                ) : (
+                  <span className="text-sm font-extrabold text-[#FF453A] flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#FF453A]" />
+                    🔴 OFFLINE
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Prova Real de Lançamentos */}
+            <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
+                <Table2 className="w-3.5 h-3.5 text-indigo-400" /> Lançamentos
+              </span>
+              <div className="mt-2">
+                <div className="text-sm font-extrabold text-white">
+                  Nuvem: <span className="text-indigo-400">{cloudAudit ? cloudAudit.cloudTxCount : "..."}</span>
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Na tela: <span className="font-semibold text-slate-200">{transactions.length}</span>
+                  {cloudAudit && cloudAudit.cloudTxCount === transactions.length ? (
+                    <span className="ml-1 text-emerald-400 font-bold">✓ Bate 100%</span>
+                  ) : cloudAudit ? (
+                    <span className="ml-1 text-amber-400 font-bold">≠ Divergente</span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {/* Prova Real de Cartões */}
+            <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-cyan-400" /> Cartões no Cofre
+              </span>
+              <div className="mt-2">
+                <div className="text-sm font-extrabold text-white">
+                  Nuvem: <span className="text-cyan-400">{cloudAudit ? cloudAudit.cloudCardsCount : "..."}</span>
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Na tela: <span className="font-semibold text-slate-200">{cards.length}</span>
+                  {cloudAudit && cloudAudit.cloudCardsCount === cards.length ? (
+                    <span className="ml-1 text-emerald-400 font-bold">✓ Bate 100%</span>
+                  ) : cloudAudit ? (
+                    <span className="ml-1 text-amber-400 font-bold">≠ Divergente</span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {/* Modo de Armazenamento e Hora */}
+            <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-col justify-between">
+              <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Modo de Armazenamento
+              </span>
+              <div className="mt-2">
+                <div className="text-[11px] font-bold text-emerald-300">
+                  100% Nuvem Estrito
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                  Verificado: {cloudAudit?.checkedAt || "Aguardando teste..."}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Botões de Ação Rápida no Card */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/5">
+            <div className="text-[11px] text-slate-400">
+              {cloudAudit?.hasCloudVault ? (
+                <span className="text-emerald-400 font-medium">
+                  ✓ Registro mestre __COINDEX_CLOUD_VAULT_V3__ verificado e ativo no PostgreSQL.
+                </span>
+              ) : cloudAudit ? (
+                <span className="text-amber-400 font-medium">
+                  ⚠️ Cofre V3 não detectado. Clique em &quot;Forçar Gravação na Nuvem&quot; para criá-lo.
+                </span>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={runCloudAudit}
+                disabled={isAuditingCloud}
+                className="px-3.5 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-xs font-bold text-sky-300 flex items-center gap-2 transition cursor-pointer disabled:opacity-50 shadow-sm"
+              >
+                {isAuditingCloud ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Search className="w-3.5 h-3.5" />
+                )}
+                🔍 Testar e Verificar Nuvem Agora
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (pushFullStateToCloud) {
+                    await pushFullStateToCloud({ showToast: true });
+                    void runCloudAudit();
+                  }
+                }}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-xs font-bold text-emerald-300 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                ⬆️ Forçar Gravação na Nuvem
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (handleManualForceCloudSync) {
+                    await handleManualForceCloudSync();
+                    void runCloudAudit();
+                  }
+                }}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-xs font-bold text-indigo-300 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+              >
+                <Download className="w-3.5 h-3.5" />
+                ⬇️ Recarregar Dados da Nuvem
+              </button>
+            </div>
           </div>
         </div>
 

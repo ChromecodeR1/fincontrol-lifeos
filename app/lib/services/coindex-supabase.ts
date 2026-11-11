@@ -1802,3 +1802,147 @@ export async function clearSystemLogsInDb() {
   if (!userId) return;
   await supabase.from("system_logs").delete().eq("user_id", userId);
 }
+
+/**
+ * SPRINT 64: Resultado da auditoria em tempo real da sincronização na nuvem (Supabase PostgreSQL).
+ */
+export interface LiveCloudSyncAuditResult {
+  isOnline: boolean;
+  isFullySynced: boolean;
+  latencyMs: number;
+  cloudTxCount: number;
+  localTxCount: number;
+  cloudCardsCount: number;
+  localCardsCount: number;
+  checkedAt: string;
+  hasCloudVault: boolean;
+  errorMessage?: string;
+}
+
+/**
+ * SPRINT 64: Auditoria Verídica de Nuvem (Henrique Montenegro).
+ * Consulta diretamente o Supabase PostgreSQL em tempo real, mede latência física,
+ * compara contagens exatas de lançamentos e cartões entre a tela e o servidor,
+ * e atesta a presença do Cofre Mestre V3.
+ */
+export async function verifyLiveCloudSyncStatus(
+  userId: string,
+  localTxCount: number,
+  localCardsCount: number
+): Promise<LiveCloudSyncAuditResult> {
+  const t0 = performance.now();
+  const checkedAt = new Date().toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+
+  if (!userId) {
+    return {
+      isOnline: false,
+      isFullySynced: false,
+      latencyMs: 0,
+      cloudTxCount: 0,
+      localTxCount,
+      cloudCardsCount: 0,
+      localCardsCount,
+      checkedAt,
+      hasCloudVault: false,
+      errorMessage: "Usuário não autenticado."
+    };
+  }
+
+  try {
+    const supabase = createClient();
+    const { data, error, count } = await supabase
+      .from("transactions")
+      .select("id, description", { count: "exact" })
+      .eq("user_id", userId);
+
+    const latencyMs = Math.max(1, Math.round(performance.now() - t0));
+
+    if (error) {
+      return {
+        isOnline: false,
+        isFullySynced: false,
+        latencyMs,
+        cloudTxCount: 0,
+        localTxCount,
+        cloudCardsCount: 0,
+        localCardsCount,
+        checkedAt,
+        hasCloudVault: false,
+        errorMessage: error.message
+      };
+    }
+
+    let hasCloudVault = false;
+    let cloudCardsCount = 0;
+    let vaultRowCount = 0;
+
+    if (data && Array.isArray(data)) {
+      for (const row of data) {
+        if (isCloudVaultRow(row, userId)) {
+          hasCloudVault = true;
+          vaultRowCount++;
+          const desc = String(row.description || "");
+          let stateJson: string | null = null;
+          if (desc.startsWith(VAULT_DESC_PREFIX_V3)) {
+            stateJson = safeBase64Decode(desc.slice(VAULT_DESC_PREFIX_V3.length));
+          } else if (desc.startsWith(VAULT_DESC_PREFIX_V2)) {
+            stateJson = safeBase64Decode(desc.slice(VAULT_DESC_PREFIX_V2.length));
+          } else if (desc.startsWith(VAULT_LEGACY_PREFIX)) {
+            stateJson = desc.slice(VAULT_LEGACY_PREFIX.length);
+          }
+          if (stateJson) {
+            try {
+              const parsed = JSON.parse(stateJson);
+              if (parsed && Array.isArray(parsed.cards)) {
+                cloudCardsCount = parsed.cards.length;
+              }
+            } catch {
+              // ignore json parse error
+            }
+          }
+        }
+      }
+    }
+
+    const totalRows = count ?? (data ? data.length : 0);
+    const cloudTxCount = Math.max(0, totalRows - vaultRowCount);
+
+    // Determinação matemática estrita:
+    // Está 100% sincronizado quando está online, possui o cofre mestre gravado
+    // e o número de lançamentos e cartões na nuvem bate com o exibido na tela.
+    const isFullySynced =
+      hasCloudVault &&
+      cloudTxCount === localTxCount &&
+      cloudCardsCount === localCardsCount;
+
+    return {
+      isOnline: true,
+      isFullySynced,
+      latencyMs,
+      cloudTxCount,
+      localTxCount,
+      cloudCardsCount,
+      localCardsCount,
+      checkedAt,
+      hasCloudVault
+    };
+  } catch (err: unknown) {
+    const latencyMs = Math.max(1, Math.round(performance.now() - t0));
+    return {
+      isOnline: false,
+      isFullySynced: false,
+      latencyMs,
+      cloudTxCount: 0,
+      localTxCount,
+      cloudCardsCount: 0,
+      localCardsCount,
+      checkedAt,
+      hasCloudVault: false,
+      errorMessage: err instanceof Error ? err.message : String(err)
+    };
+  }
+}

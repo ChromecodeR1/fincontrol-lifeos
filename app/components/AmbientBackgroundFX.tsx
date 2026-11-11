@@ -258,9 +258,9 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
 
     window.addEventListener("resize", handleResize);
 
-    // Inicializa as 115 partículas nas 3 camadas
+    // SPRINT 64: Partículas calibradas para efeito super sutil (opacidade base 0.04 a 0.16)
     const particles: StardustParticle[] = [];
-    // Camada 1: 75 partículas (65%) — Deep Space
+    // Camada 1: 75 partículas (65%) — Deep Space micro-suaves
     for (let i = 0; i < 75; i++) {
       particles.push({
         x: Math.random() * width,
@@ -268,16 +268,16 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
         vx: (Math.random() - 0.5) * 0.06,
         vy: -0.08 - Math.random() * 0.10,
         baseVy: -0.08 - Math.random() * 0.10,
-        radius: 0.7 + Math.random() * 0.6,
+        radius: 0.5 + Math.random() * 0.5,
         depth: 0.25,
         layer: 1,
         twinkleSpeed: 0.0015 + Math.random() * 0.002,
         phase: Math.random() * Math.PI * 2,
-        baseAlpha: 0.25 + Math.random() * 0.35
+        baseAlpha: 0.05 + Math.random() * 0.08
       });
     }
 
-    // Camada 2: 28 partículas (25%) — Crisp Starlight com Difração de 4 Pontas
+    // Camada 2: 28 partículas (25%) — Crisp Starlight com Difração de 4 Pontas Micro-Sutil (raio máx 1.3px)
     for (let i = 0; i < 28; i++) {
       particles.push({
         x: Math.random() * width,
@@ -285,16 +285,16 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
         vx: (Math.random() - 0.5) * 0.08,
         vy: -0.12 - Math.random() * 0.16,
         baseVy: -0.12 - Math.random() * 0.16,
-        radius: 1.4 + Math.random() * 0.8,
+        radius: 0.7 + Math.random() * 0.6, // Teto estrito de 1.3px
         depth: 0.6,
         layer: 2,
-        twinkleSpeed: 0.002 + Math.random() * 0.003,
+        twinkleSpeed: 0.002 + Math.random() * 0.0025,
         phase: Math.random() * Math.PI * 2,
-        baseAlpha: 0.55 + Math.random() * 0.40
+        baseAlpha: 0.08 + Math.random() * 0.08 // Faixa sutil 0.08 a 0.16
       });
     }
 
-    // Camada 3: 12 partículas (10%) — Foreground Bokeh Orbs
+    // Camada 3: 12 partículas (10%) — Foreground Bokeh Orbs suaves
     for (let i = 0; i < 12; i++) {
       particles.push({
         x: Math.random() * width,
@@ -302,12 +302,12 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
         vx: (Math.random() - 0.5) * 0.10,
         vy: -0.18 - Math.random() * 0.18,
         baseVy: -0.18 - Math.random() * 0.18,
-        radius: 3.2 + Math.random() * 2.6,
+        radius: 2.5 + Math.random() * 2.0,
         depth: 1.0,
         layer: 3,
         twinkleSpeed: 0.001 + Math.random() * 0.0015,
         phase: Math.random() * Math.PI * 2,
-        baseAlpha: 0.06 + Math.random() * 0.08
+        baseAlpha: 0.04 + Math.random() * 0.05
       });
     }
     particlesRef.current = particles;
@@ -468,7 +468,8 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
             const angle = Math.atan2(p.y - smoothMouse.current.y, p.x - smoothMouse.current.x);
             p.vx += Math.cos(angle) * force * p.depth;
             p.vy += Math.sin(angle) * force * p.depth;
-            flareBoost = 1 + normDist * 0.45; // até +45% de brilho e tamanho de cruz
+            // SPRINT 64: Ganho de luminosidade perto do cursor calibrado para no máximo +5% (sem estouro)
+            flareBoost = 1 + normDist * 0.05;
           }
 
           // Damping e Atualização Física
@@ -486,30 +487,31 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
           if (p.x < -20) p.x = width + 15;
           if (p.x > width + 20) p.x = -15;
 
-          const twinkle = 0.4 + 0.6 * Math.sin(timestamp * p.twinkleSpeed + p.phase);
-          const effectiveAlpha = Math.min(1, p.baseAlpha * twinkle * flareBoost * (isLight ? 0.75 : 1));
+          const twinkle = 0.5 + 0.5 * Math.sin(timestamp * p.twinkleSpeed + p.phase);
+          // SPRINT 64: Teto absoluto de opacidade <= 0.22 mesmo no pico de brilho
+          const effectiveAlpha = Math.min(0.22, p.baseAlpha * twinkle * flareBoost * (isLight ? 0.75 : 1));
 
           // ------------------------------------------------------------------
-          // CAMADA 1 — Deep Space (Partículas pontuais clássicas)
+          // CAMADA 1 — Deep Space (Partículas pontuais micro-suaves)
           // ------------------------------------------------------------------
           if (p.layer === 1) {
             ctx.fillStyle = isLight
               ? `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${effectiveAlpha * 0.6})`
-              : `rgba(255, 255, 255, ${effectiveAlpha})`;
+              : `rgba(235, 242, 255, ${effectiveAlpha})`;
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
             ctx.fill();
           }
 
           // ------------------------------------------------------------------
-          // CAMADA 2 — Crisp Starlight com Difração de 4 Pontas (Star Flare)
+          // CAMADA 2 — Crisp Starlight com Difração de 4 Pontas (Star Flare Micro-Sutil)
           // ------------------------------------------------------------------
           else if (p.layer === 2) {
-            // Micro-halo radial tingido com a cor primária/acento
-            const haloRadius = p.radius * 3.6 * flareBoost;
+            // SPRINT 64: Micro-halo radial calibrado para no máximo 0.06 de opacidade
+            const haloRadius = p.radius * 2.2 * flareBoost;
             const haloGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, haloRadius);
-            haloGrad.addColorStop(0, `rgba(255, 255, 255, ${effectiveAlpha})`);
-            haloGrad.addColorStop(0.35, `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${effectiveAlpha * 0.45})`);
+            haloGrad.addColorStop(0, `rgba(255, 255, 255, ${Math.min(0.06, effectiveAlpha * 0.4)})`);
+            haloGrad.addColorStop(0.4, `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${Math.min(0.04, effectiveAlpha * 0.25)})`);
             haloGrad.addColorStop(1, `rgba(${ca[0]}, ${ca[1]}, ${ca[2]}, 0)`);
 
             ctx.fillStyle = haloGrad;
@@ -517,20 +519,21 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
             ctx.arc(p.x, p.y, haloRadius, 0, Math.PI * 2);
             ctx.fill();
 
-            // Ponto central brilhante
+            // Ponto central translúcido suave (sem branco estourado puro)
             ctx.fillStyle = isLight
-              ? `rgba(10, 132, 255, ${effectiveAlpha * 0.95})`
-              : `rgba(255, 255, 255, ${effectiveAlpha})`;
+              ? `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${Math.min(0.20, effectiveAlpha)})`
+              : `rgba(235, 242, 255, ${Math.min(0.18, effectiveAlpha)})`;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.radius * 0.85, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, Math.min(1.1, p.radius * 0.8), 0, Math.PI * 2);
             ctx.fill();
 
-            // Brilho Estelar de 4 Pontas (Cross Flare Finíssimo lineWidth 0.65)
-            const flareLen = (5 + twinkle * 6) * flareBoost;
-            ctx.lineWidth = 0.65;
+            // SPRINT 64: Brilho Estelar de 4 Pontas Micro-Sutil (2.5px a 4.5px, opacidade máx 0.10)
+            const flareLen = (2.2 + twinkle * 2.0) * flareBoost;
+            ctx.lineWidth = 0.55;
+            const crossAlpha = Math.min(0.10, effectiveAlpha * 0.55);
             ctx.strokeStyle = isLight
-              ? `rgba(10, 132, 255, ${effectiveAlpha * 0.65})`
-              : `rgba(255, 255, 255, ${effectiveAlpha * 0.85})`;
+              ? `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${crossAlpha})`
+              : `rgba(225, 235, 255, ${crossAlpha})`;
 
             // Linha horizontal
             ctx.beginPath();
@@ -553,8 +556,8 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
             bokehGrad.addColorStop(
               0,
               isLight
-                ? `rgba(${cs[0]}, ${cs[1]}, ${cs[2]}, ${effectiveAlpha * 0.8})`
-                : `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${effectiveAlpha})`
+                ? `rgba(${cs[0]}, ${cs[1]}, ${cs[2]}, ${effectiveAlpha * 0.6})`
+                : `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${effectiveAlpha * 0.8})`
             );
             bokehGrad.addColorStop(1, "transparent");
 
@@ -599,21 +602,22 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
             const tailY = headY - Math.sin(star.angle) * star.len * (1 - prog);
 
             const starGrad = ctx.createLinearGradient(headX, headY, tailX, tailY);
-            starGrad.addColorStop(0, `rgba(255, 255, 255, ${0.75 * (1 - prog)})`);
-            starGrad.addColorStop(0.3, `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${0.45 * (1 - prog)})`);
+            // SPRINT 64: Opacidade máxima reduzida para 0.16 para efeito ultra-elegante e sutil
+            starGrad.addColorStop(0, `rgba(245, 250, 255, ${0.16 * (1 - prog)})`);
+            starGrad.addColorStop(0.35, `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${0.09 * (1 - prog)})`);
             starGrad.addColorStop(1, "transparent");
 
             ctx.beginPath();
             ctx.moveTo(headX, headY);
             ctx.lineTo(tailX, tailY);
             ctx.strokeStyle = starGrad;
-            ctx.lineWidth = 1.3 * (1 - prog);
+            ctx.lineWidth = 0.85 * (1 - prog);
             ctx.stroke();
 
-            // Ponto central de impacto
-            ctx.fillStyle = `rgba(255, 255, 255, ${0.85 * (1 - prog)})`;
+            // Ponto central de impacto sutil
+            ctx.fillStyle = `rgba(245, 250, 255, ${0.16 * (1 - prog)})`;
             ctx.beginPath();
-            ctx.arc(headX, headY, 1.4 * (1 - prog), 0, Math.PI * 2);
+            ctx.arc(headX, headY, 0.9 * (1 - prog), 0, Math.PI * 2);
             ctx.fill();
           }
         });

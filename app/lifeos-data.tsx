@@ -400,13 +400,25 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.48.0";
-export const PREVIOUS_VERSION = "0.47.0";
-export const COINDEX_APP_VERSION = "0.48.0";
+export const APP_VERSION = "0.49.0";
+export const PREVIOUS_VERSION = "0.48.0";
+export const COINDEX_APP_VERSION = "0.49.0";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.49.0",
+    date: "Nov/2026",
+    title: "Sprint 64: Arquitetura 100% Nuvem Estrita (Zero LocalStorage), Cross-PC Live Sync no Foco da Janela, Suavização Micro-Sutil da Poeira Estelar e Painel Verídico de Verificação Cloud",
+    highlights: [
+      "Suavização da Poeira Estelar (Ambient Background FX): Redução da opacidade base para faixa super discreta (0.04 a 0.16) com teto estrito de 0.22, halos de difração limitados a 0.06 e estrelas cadentes elegantes (0.16 máx), preservando integralmente a Aurora Camaleão e as Ondas de Seda.",
+      "Arquitetura 100% Nuvem Estrita (Zero LocalStorage): Erradicação definitiva da hidratação local para Lançamentos, Cartões, Bancos, Investimentos, Veículos e Notas; purga proativa de chaves legadas e garantia de dados idênticos em múltiplos computadores.",
+      "Cross-PC Live Sync no Foco da Janela: Listeners globais de window focus e visibilitychange com throttle seguro de 15s que consultam o Supabase em segundo plano ao alternar abas sem necessidade de recarregar a página (F5).",
+      "Painel Oficial de Verificação Cloud nas Configurações: Diagnóstico verídico em tempo real assinado por Henrique Montenegro com status do servidor (ONLINE/OFFLINE), latência em ms, pílula de integridade 'Sincronizado com a Nuvem: SIM / NÃO' e auditoria de contagem tela vs. nuvem.",
+      "Botões de Ação Imediata: Auditoria ao vivo sob demanda ('Testar e Verificar Nuvem Agora'), envio forçado ('Forçar Gravação na Nuvem') e download completo ('Recarregar Dados da Nuvem')."
+    ]
+  },
   {
     version: "0.48.0",
     date: "Nov/2026",
@@ -875,7 +887,8 @@ export {
   removeTombstones,
   getTombstones,
   isTombstoned,
-  clearUserSessionStorage
+  clearUserSessionStorage,
+  purgeAllEntityLocalCaches
 } from "./lib/domain/user-storage";
 
 export function addMonthsToDate(dateStr: string, monthsToAdd: number): string {

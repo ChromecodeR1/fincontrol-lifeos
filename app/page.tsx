@@ -195,6 +195,7 @@ import {
   getTombstones,
   isTombstoned,
   clearUserSessionStorage,
+  purgeAllEntityLocalCaches,
   normalizeSearchText,
   evaluateMathExpression
 } from "./lifeos-data";
@@ -1613,128 +1614,36 @@ export default function CoindexApp() {
         const savedReadNotifs = localStorage.getItem("lifeos_read_notifications_v1");
         if (savedReadNotifs) setReadNotificationIds(JSON.parse(savedReadNotifs));
 
-        const tombstonesOnStart = getTombstones(currentUserId);
-        const sTxs = getUserItem("lifeos_txs_v8");
-        let initialTxs: Transaction[] = [];
-        if (sTxs) {
-          const parsedTxs: Transaction[] = JSON.parse(sTxs);
-          // Migração de categorias legadas (Sprint 19)
-          const migratedTxs = parsedTxs.map((t) => ({
-            ...t,
-            category: migrateLegacyCategory(t.category, t.description)
-          }));
-          // SPRINT 50: Reconciliação Contábil Bidirecional no Carregamento Inicial
-          const { transactions: reconciledTxs, purgedIds } = reconcileReceivablesAndCashbook(
-            migratedTxs,
-            tombstonesOnStart
-          );
-          if (purgedIds.length > 0) {
-            recordTombstones(purgedIds, currentUserId);
-          }
-          initialTxs = reconciledTxs;
-          setTransactions(reconciledTxs);
-          setUserItem("lifeos_txs_v8", JSON.stringify(reconciledTxs), currentUserId);
-          localStorage.setItem("lifeos_txs_v8", JSON.stringify(reconciledTxs));
-        }
-        const sDebtors = localStorage.getItem("lifeos_debtors_v8");
-        if (sDebtors) setDebtorMap(JSON.parse(sDebtors));
+        // SPRINT 64: Arquitetura 100% Nuvem Estrita (Henrique Montenegro & Davi Kroner)
+        // O Coindex NUNCA hidrata Lançamentos, Cartões, Bancos, Investimentos, Veículos ou Notas
+        // a partir de localStorage. Purga proativamente resquícios de caches locais de entidades.
+        purgeAllEntityLocalCaches(currentUserId);
 
-        // SPRINT 60: Limpeza proativa de chaves legadas e carregamento limpo
-        const staleLegacyKeys = [
-          "lifeos_banks_v1",
-          "coindex_vault_cards_backup",
-          "coindex_vault_banks_backup"
-        ];
-        staleLegacyKeys.forEach((k) => {
-          try {
-            localStorage.removeItem(k);
-          } catch {}
-        });
+        // Inicializa entidades em memória como vazias enquanto o Supabase responde
+        setTransactions([]);
+        setCards([]);
+        setBanks([]);
+        setStaticStatus([]);
+        setWishlist([]);
+        setBioLogs([]);
+        setNotes([]);
+        setOkrs([]);
 
-        // Carregamento de bancos e cartões respeitando tombstones
-        let initialCards = INITIAL_CARDS;
-        const sCards = getUserItem("lifeos_cards_v8", currentUserId) || localStorage.getItem("lifeos_cards_v8");
-        if (sCards) {
-          try {
-            initialCards = JSON.parse(sCards);
-          } catch {}
-        }
-        setCards(initialCards.filter((c: CreditCardItem) => !tombstonesOnStart.has(c.id)));
-
-        let initialBanks = INITIAL_BANKS;
-        const sBanks = getUserItem("lifeos_banks_v8", currentUserId) || localStorage.getItem("lifeos_banks_v8");
-        if (sBanks) {
-          try {
-            initialBanks = JSON.parse(sBanks);
-          } catch {}
-        }
-        setBanks(initialBanks.filter((b: BankItem) => !tombstonesOnStart.has(b.id)));
-        const sStatus = localStorage.getItem("lifeos_status_v8");
-        if (sStatus) setStaticStatus(JSON.parse(sStatus));
-        const sWish = localStorage.getItem("lifeos_wish_v8");
-        if (sWish) {
-          const parsedWish: WishlistItem[] = JSON.parse(sWish);
-          const caixinha = parsedWish.find((w) => w.title.toLowerCase().includes("caixinha"));
-          if (caixinha && caixinha.savedAmount !== 2616.61) {
-            caixinha.savedAmount = 2616.61;
-            caixinha.title = "Caixinha Turbo (115% CDI)";
-            caixinha.institution = "Nubank";
-            setWishlist([...parsedWish]);
-            localStorage.setItem("lifeos_wish_v8", JSON.stringify(parsedWish));
-          } else {
-            setWishlist(parsedWish);
-          }
-        }
-        const sBio = localStorage.getItem("lifeos_bio_v8");
-        if (sBio) setBioLogs(JSON.parse(sBio));
-        const sNotes = localStorage.getItem("lifeos_notes_v8");
-        if (sNotes) setNotes(JSON.parse(sNotes));
-        const sOkrs = localStorage.getItem("lifeos_okrs_v8");
-        if (sOkrs) setOkrs(JSON.parse(sOkrs));
-        const sAlerts = localStorage.getItem("lifeos_alerts_v8");
-        if (sAlerts) setAlertRules(JSON.parse(sAlerts));
-        const sLogs = localStorage.getItem("lifeos_system_logs_v8");
-        if (sLogs) setSystemLogsState(JSON.parse(sLogs));
-
+        // Carrega apenas preferências visuais de interface e layout do dashboard
         const sTheme = localStorage.getItem("lifeos_theme_mode") as ThemeMode | null;
         if (sTheme) setThemeMode(sTheme);
         const sUrl = localStorage.getItem("lifeos_sheets_url");
         if (sUrl) setSheetApiUrl(sUrl);
-        const sStrava = localStorage.getItem("lifeos_strava_config");
-        if (sStrava) setStravaConfig(JSON.parse(sStrava));
-        const sStravaStats = localStorage.getItem("lifeos_strava_stats");
-        if (sStravaStats) setStravaStats(JSON.parse(sStravaStats));
-        const sStravaAct = localStorage.getItem("lifeos_strava_activities");
-        if (sStravaAct) setStravaActivities(JSON.parse(sStravaAct));
         const sLayout = localStorage.getItem("coindex_dashboard_layout_v3") || localStorage.getItem("lifeos_dash_layout_v1");
         if (sLayout) setDashboardLayout(normalizeDashboardLayout(JSON.parse(sLayout)));
         const sChartConfigs = localStorage.getItem("lifeos_chart_configs_v1");
         if (sChartConfigs) setChartConfigs(JSON.parse(sChartConfigs));
-        const sAutoInmetro = localStorage.getItem("lifeos_auto_inmetro_v1");
-        if (sAutoInmetro) setAutoInmetroConfig(JSON.parse(sAutoInmetro));
         const sAutoLayout = localStorage.getItem("lifeos_auto_dash_layout_v1");
         if (sAutoLayout) setAutoDashboardLayout(JSON.parse(sAutoLayout));
         const sAutoWidgetConfigs = localStorage.getItem("lifeos_auto_widget_configs_v1");
         if (sAutoWidgetConfigs) setAutoWidgetConfigs(JSON.parse(sAutoWidgetConfigs));
-
-        const sAdj = localStorage.getItem("coindex_patrimony_real_adjustment");
-        if (sAdj) setManualAdjustment(parseFloat(sAdj) || 0);
-        const sYMode = localStorage.getItem("coindex_patrimony_yield_mode") as "bruto" | "liquido" | "aportes" | null;
-        if (sYMode && ["bruto", "liquido", "aportes"].includes(sYMode)) setYieldMode(sYMode);
-        const sSavedCharts = localStorage.getItem("coindex_visible_market_charts");
-        if (sSavedCharts) {
-          try {
-            const parsedCharts = JSON.parse(sSavedCharts);
-            if (Array.isArray(parsedCharts) && parsedCharts.length > 0) setVisibleMarketCharts(parsedCharts);
-          } catch {}
-        }
-        const sSavedSim = localStorage.getItem("coindex_simulator_monthly_contribution");
-        if (sSavedSim) {
-          const parsedSim = parseFloat(sSavedSim);
-          if (!isNaN(parsedSim) && parsedSim > 0) setSimulatorMonthlyContribution(parsedSim);
-        }
       } catch (e) {
-        console.error("Erro ao ler cache local:", e);
+        console.error("Erro na inicialização de sessão:", e);
       }
 
       try {
@@ -1835,55 +1744,13 @@ export default function CoindexApp() {
           const targetUserId = res.userId || currentUserId;
           const currentTombstones = getTombstones(targetUserId);
 
-          // Safe merge Last-Write-Wins (LWW) entre o Supabase e o estado local (Sprint 44)
-          let localTxs: Transaction[] = [];
-          try {
-            const rawLocal = getUserItem("lifeos_txs_v8", targetUserId) || localStorage.getItem("lifeos_txs_v8");
-            if (rawLocal) {
-              localTxs = JSON.parse(rawLocal);
-            }
-          } catch (e) {
-            console.error("Erro ao ler transações locais para LWW", e);
-          }
+          // SPRINT 64: Soberania Estrita da Nuvem (Zero LocalStorage LWW Merge)
+          // As transações vêm 100% do Supabase PostgreSQL. Nenhuma fusão com cache local.
+          const activeCloudTxs = finalTxs.filter((t) => !currentTombstones.has(t.id));
 
-          const remoteMap = new Map<string, Transaction>();
-          finalTxs.forEach((t) => {
-            if (!currentTombstones.has(t.id)) {
-              remoteMap.set(t.id, t);
-            }
-          });
-
-          const localNewerToSync: Transaction[] = [];
-          const mergedMap = new Map<string, Transaction>(remoteMap);
-
-          const isLocalNewer = (local: Transaction, remote: Transaction): boolean => {
-            const localTime = local.updatedAt ? new Date(local.updatedAt).getTime() : 0;
-            const remoteTime = remote.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
-            if (localTime !== remoteTime) {
-              return localTime > remoteTime;
-            }
-            const localRev = local.rev ?? 0;
-            const remoteRev = remote.rev ?? 0;
-            return localRev > remoteRev;
-          };
-
-          localTxs.forEach((pt) => {
-            if (currentTombstones.has(pt.id)) return;
-            const remote = remoteMap.get(pt.id);
-            if (!remote) {
-              mergedMap.set(pt.id, pt);
-              localNewerToSync.push(pt);
-            } else if (isLocalNewer(pt, remote)) {
-              mergedMap.set(pt.id, pt);
-              localNewerToSync.push(pt);
-            }
-          });
-
-          const rawMerged = Array.from(mergedMap.values()).sort((a, b) => compareDatesBR(b.date, a.date));
-
-          // SPRINT 50: Reconciliação Contábil Bidirecional Central (SSOT) no Supabase Merge
+          // SPRINT 50: Reconciliação Contábil Bidirecional Central (SSOT) no Supabase
           const { transactions: reconciledMerged, purgedIds, updatedTxs } = reconcileReceivablesAndCashbook(
-            rawMerged,
+            activeCloudTxs,
             currentTombstones
           );
 
@@ -1905,73 +1772,44 @@ export default function CoindexApp() {
           }
 
           const merged = reconciledMerged.sort((a, b) => compareDatesBR(b.date, a.date));
-
           setTransactions(merged);
-          setUserItem("lifeos_txs_v8", JSON.stringify(merged), targetUserId);
-          localStorage.setItem("lifeos_txs_v8", JSON.stringify(merged));
 
-          if (localNewerToSync.length > 0) {
-            try {
-              await upsertTransactionsInDb(localNewerToSync, debtorMap);
-            } catch (err) {
-              console.error("Erro ao reenviar transações locais mais recentes ao Supabase:", err);
-            }
-          }
-
-          // SPRINT 60: Soberania Estrita da Nuvem (Supabase SSOT)
-          // 1. CARDS
+          // SPRINT 64: CARDS (100% Nuvem)
           const cloudCards = (d.cards && d.cards.length > 0)
             ? d.cards.filter((c) => !currentTombstones.has(c.id))
             : (d.cloudVault?.cards && d.cloudVault.cards.length > 0)
             ? d.cloudVault.cards.filter((c) => !currentTombstones.has(c.id))
             : [];
+          setCards(cloudCards);
 
-          if (cloudCards.length > 0 || (d.cards && d.cards.length === 0 && d.cloudVault?.cards && d.cloudVault.cards.length === 0)) {
-            setCards(cloudCards);
-            setUserItem("lifeos_cards_v8", JSON.stringify(cloudCards), targetUserId);
-            localStorage.setItem("lifeos_cards_v8", JSON.stringify(cloudCards));
-          }
-
-          // 2. BANKS
+          // SPRINT 64: BANKS (100% Nuvem)
           const cloudBanks = (d.banks && d.banks.length > 0)
             ? d.banks.filter((b) => !currentTombstones.has(b.id))
             : (d.cloudVault?.banks && d.cloudVault.banks.length > 0)
             ? d.cloudVault.banks.filter((b) => !currentTombstones.has(b.id))
             : [];
-
-          if (cloudBanks.length > 0 || (d.banks && d.banks.length === 0 && d.cloudVault?.banks && d.cloudVault.banks.length === 0)) {
-            setBanks(cloudBanks);
-            setUserItem("lifeos_banks_v8", JSON.stringify(cloudBanks), targetUserId);
-            localStorage.setItem("lifeos_banks_v8", JSON.stringify(cloudBanks));
-          }
+          setBanks(cloudBanks);
 
           if (d.staticStatus && d.staticStatus.length > 0) {
             setStaticStatus(d.staticStatus);
-            localStorage.setItem("lifeos_status_v8", JSON.stringify(d.staticStatus));
           }
           if (d.wishlist && d.wishlist.length > 0) {
             setWishlist(d.wishlist);
-            localStorage.setItem("lifeos_wish_v8", JSON.stringify(d.wishlist));
           }
           if (d.bioLogs && d.bioLogs.length > 0) {
             setBioLogs(d.bioLogs);
-            localStorage.setItem("lifeos_bio_v8", JSON.stringify(d.bioLogs));
           }
 
-          // 3. BRAIN NOTES & DESEJOS DE COMPRA (Soberania Cloud SSOT)
+          // SPRINT 64: BRAIN NOTES (100% Nuvem)
           const cloudNotes = (d.notes && d.notes.length > 0)
             ? d.notes.filter((n) => !currentTombstones.has(n.id))
             : (d.cloudVault?.notes && d.cloudVault.notes.length > 0)
             ? d.cloudVault.notes.filter((n) => !currentTombstones.has(n.id))
             : [];
-          if (cloudNotes.length > 0) {
-            setNotes(cloudNotes);
-            setUserItem("lifeos_notes_v8", JSON.stringify(cloudNotes), targetUserId);
-            localStorage.setItem("lifeos_notes_v8", JSON.stringify(cloudNotes));
-          }
-          if (d.okrs.length > 0) {
+          setNotes(cloudNotes);
+
+          if (d.okrs && d.okrs.length > 0) {
             setOkrs(d.okrs);
-            localStorage.setItem("lifeos_okrs_v8", JSON.stringify(d.okrs));
           }
           if (d.alertRules.length > 0) {
             setAlertRules(d.alertRules);
@@ -2010,46 +1848,27 @@ export default function CoindexApp() {
           if (d.settings.stravaConfig && d.settings.stravaConfig.athleteId) setStravaConfig(d.settings.stravaConfig);
           if (d.settings.stravaStats && d.settings.stravaStats.ytdKm != null) setStravaStats(d.settings.stravaStats);
 
-          // SPRINT 58: Hidratação e Reconciliação do Cofre Mestre de Nuvem (Cloud Vault)
+          // SPRINT 58 & 64: Hidratação do Cofre Mestre de Nuvem (Cloud Vault)
           if (d.cloudVault?.investmentState) {
             const invSt = d.cloudVault.investmentState;
             if (invSt.realBalanceOverride !== undefined && invSt.realBalanceOverride !== null) {
               setManualAdjustment(invSt.realBalanceOverride);
-              localStorage.setItem("coindex_patrimony_real_adjustment", String(invSt.realBalanceOverride));
-              setUserItem("coindex_patrimony_real_adjustment", String(invSt.realBalanceOverride), targetUserId);
             }
             if (invSt.yieldMode && ["bruto", "liquido", "aportes"].includes(invSt.yieldMode)) {
               setYieldMode(invSt.yieldMode);
-              localStorage.setItem("coindex_patrimony_yield_mode", invSt.yieldMode);
             }
             if (Array.isArray(invSt.visibleMarketCharts) && invSt.visibleMarketCharts.length > 0) {
               setVisibleMarketCharts(invSt.visibleMarketCharts);
-              localStorage.setItem("coindex_visible_market_charts", JSON.stringify(invSt.visibleMarketCharts));
             }
             if (invSt.simulatorMonthlyContribution !== undefined && invSt.simulatorMonthlyContribution > 0) {
               setSimulatorMonthlyContribution(invSt.simulatorMonthlyContribution);
-              localStorage.setItem("coindex_simulator_monthly_contribution", String(invSt.simulatorMonthlyContribution));
             }
           }
 
-          // SPRINT 62: Hidratação e Reconciliação Total de Veículos e Garagem do Cofre Mestre
-          if (d.cloudVault?.vehicleMaintenance) {
-            try {
-              if (d.cloudVault.vehicleMaintenance.customItems) {
-                localStorage.setItem("lifeos_vehicle_maintenance_items_v2", JSON.stringify(d.cloudVault.vehicleMaintenance.customItems));
-              }
-              if (d.cloudVault.vehicleMaintenance.history) {
-                localStorage.setItem("lifeos_vehicle_maintenance_v1", JSON.stringify(d.cloudVault.vehicleMaintenance.history));
-              }
-            } catch {}
-          }
-          if (d.cloudVault?.vehiclesState?.refuels && Array.isArray(d.cloudVault.vehiclesState.refuels)) {
-            try {
-              localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify(d.cloudVault.vehiclesState.refuels));
-            } catch {}
-          }
+          // SPRINT 64: Purga final de qualquer cache de entidades remanescente
+          purgeAllEntityLocalCaches(targetUserId);
 
-          // SPRINT 62: Marca hidratação inicial concluída para desbloquear o auto-sync reativo
+          // SPRINT 62 & 64: Marca hidratação inicial concluída para desbloquear o auto-sync reativo
           isInitialCloudHydrationCompleteRef.current = true;
 
           setSheetsSyncStatus({
@@ -7022,6 +6841,9 @@ export default function CoindexApp() {
           );
         }
 
+        // SPRINT 64: Purga proativa de entidades locais no push
+        purgeAllEntityLocalCaches(targetUserId);
+
         return { ok: true, count: activeTxs.length };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Erro desconhecido ao salvar na nuvem";
@@ -7191,8 +7013,6 @@ export default function CoindexApp() {
         // Hidratação 100% pura da nuvem para transações
         if (d.transactions) {
           setTransactions(d.transactions);
-          setUserItem("lifeos_txs_v8", JSON.stringify(d.transactions), currentUserId);
-          localStorage.setItem("lifeos_txs_v8", JSON.stringify(d.transactions));
         }
 
         // Cartões puros da nuvem
@@ -7202,8 +7022,6 @@ export default function CoindexApp() {
           ? d.cloudVault.cards.filter((c) => !tombstonesOnSync.has(c.id))
           : [];
         setCards(cloudCards);
-        setUserItem("lifeos_cards_v8", JSON.stringify(cloudCards), currentUserId);
-        localStorage.setItem("lifeos_cards_v8", JSON.stringify(cloudCards));
 
         // Bancos puros da nuvem
         const cloudBanks = (d.banks && d.banks.length > 0)
@@ -7212,33 +7030,26 @@ export default function CoindexApp() {
           ? d.cloudVault.banks.filter((b) => !tombstonesOnSync.has(b.id))
           : [];
         setBanks(cloudBanks);
-        setUserItem("lifeos_banks_v8", JSON.stringify(cloudBanks), currentUserId);
-        localStorage.setItem("lifeos_banks_v8", JSON.stringify(cloudBanks));
 
         // Notas / Desejos puros da nuvem
         if (d.notes) {
           const cloudNotes = d.notes.filter((n) => !tombstonesOnSync.has(n.id));
           setNotes(cloudNotes);
-          setUserItem("lifeos_notes_v8", JSON.stringify(cloudNotes), currentUserId);
-          localStorage.setItem("lifeos_notes_v8", JSON.stringify(cloudNotes));
         }
 
         // Desejos (Wishlist) puros da nuvem
         if (d.wishlist) {
           setWishlist(d.wishlist);
-          localStorage.setItem("lifeos_wish_v8", JSON.stringify(d.wishlist));
         }
 
         // BioLogs puros da nuvem
         if (d.bioLogs) {
           setBioLogs(d.bioLogs);
-          localStorage.setItem("lifeos_bio_v8", JSON.stringify(d.bioLogs));
         }
 
         // Status puros da nuvem
         if (d.staticStatus) {
           setStaticStatus(d.staticStatus);
-          localStorage.setItem("lifeos_status_v8", JSON.stringify(d.staticStatus));
         }
 
         // Investimentos & Calibração do Cofre Mestre
@@ -7246,39 +7057,20 @@ export default function CoindexApp() {
           const invSt = d.cloudVault.investmentState;
           if (invSt.realBalanceOverride !== undefined && invSt.realBalanceOverride !== null) {
             setManualAdjustment(invSt.realBalanceOverride);
-            localStorage.setItem("coindex_patrimony_real_adjustment", String(invSt.realBalanceOverride));
-            setUserItem("coindex_patrimony_real_adjustment", String(invSt.realBalanceOverride), currentUserId);
           }
           if (invSt.yieldMode && ["bruto", "liquido", "aportes"].includes(invSt.yieldMode)) {
             setYieldMode(invSt.yieldMode);
-            localStorage.setItem("coindex_patrimony_yield_mode", invSt.yieldMode);
           }
           if (Array.isArray(invSt.visibleMarketCharts) && invSt.visibleMarketCharts.length > 0) {
             setVisibleMarketCharts(invSt.visibleMarketCharts);
-            localStorage.setItem("coindex_visible_market_charts", JSON.stringify(invSt.visibleMarketCharts));
           }
           if (invSt.simulatorMonthlyContribution !== undefined && invSt.simulatorMonthlyContribution > 0) {
             setSimulatorMonthlyContribution(invSt.simulatorMonthlyContribution);
-            localStorage.setItem("coindex_simulator_monthly_contribution", String(invSt.simulatorMonthlyContribution));
           }
         }
 
-        // Veículos & Garagem do Cofre Mestre
-        if (d.cloudVault?.vehicleMaintenance) {
-          try {
-            if (d.cloudVault.vehicleMaintenance.customItems) {
-              localStorage.setItem("lifeos_vehicle_maintenance_items_v2", JSON.stringify(d.cloudVault.vehicleMaintenance.customItems));
-            }
-            if (d.cloudVault.vehicleMaintenance.history) {
-              localStorage.setItem("lifeos_vehicle_maintenance_v1", JSON.stringify(d.cloudVault.vehicleMaintenance.history));
-            }
-          } catch {}
-        }
-        if (d.cloudVault?.vehiclesState?.refuels && Array.isArray(d.cloudVault.vehiclesState.refuels)) {
-          try {
-            localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify(d.cloudVault.vehiclesState.refuels));
-          } catch {}
-        }
+        // SPRINT 64: Purga completa de resquícios locais de entidades
+        purgeAllEntityLocalCaches(currentUserId);
 
         setSheetsSyncStatus({
           state: "success",
@@ -7307,6 +7099,83 @@ export default function CoindexApp() {
       setIsSyncing(false);
     }
   };
+
+  // SPRINT 64: Cross-PC Live Sync no Foco da Janela e Mudança de Visibilidade
+  // Consulta o Supabase silenciosamente quando o usuário volta para a aba do Coindex em outro PC.
+  const lastFocusPullTimestampRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!currentUser || !currentUserId) return;
+
+    const handleWindowFocusOrVisibility = () => {
+      const now = Date.now();
+      // Throttle seguro de 15 segundos entre checagens em segundo plano
+      if (now - lastFocusPullTimestampRef.current < 15000) return;
+      if (!isInitialCloudHydrationCompleteRef.current) return;
+      if (isSyncing) return;
+
+      lastFocusPullTimestampRef.current = now;
+
+      const tombstonesOnSync = getTombstones(currentUserId);
+      void fetchAllCoindexData(tombstonesOnSync).then((res) => {
+        if (res.ok && res.data) {
+          const d = res.data;
+          const currentTombstones = getTombstones(currentUserId);
+
+          if (d.transactions) {
+            const activeTxs = d.transactions.filter((t) => !currentTombstones.has(t.id));
+            setTransactions(activeTxs);
+          }
+
+          const cloudCards =
+            d.cards && d.cards.length > 0
+              ? d.cards.filter((c) => !currentTombstones.has(c.id))
+              : d.cloudVault?.cards && d.cloudVault.cards.length > 0
+              ? d.cloudVault.cards.filter((c) => !currentTombstones.has(c.id))
+              : [];
+          if (cloudCards.length > 0) setCards(cloudCards);
+
+          const cloudBanks =
+            d.banks && d.banks.length > 0
+              ? d.banks.filter((b) => !currentTombstones.has(b.id))
+              : d.cloudVault?.banks && d.cloudVault.banks.length > 0
+              ? d.cloudVault.banks.filter((b) => !currentTombstones.has(b.id))
+              : [];
+          if (cloudBanks.length > 0) setBanks(cloudBanks);
+
+          if (d.notes) {
+            const cloudNotes = d.notes.filter((n) => !currentTombstones.has(n.id));
+            setNotes(cloudNotes);
+          }
+
+          if (d.wishlist && d.wishlist.length > 0) setWishlist(d.wishlist);
+          if (d.staticStatus && d.staticStatus.length > 0) setStaticStatus(d.staticStatus);
+          if (d.bioLogs && d.bioLogs.length > 0) setBioLogs(d.bioLogs);
+
+          purgeAllEntityLocalCaches(currentUserId);
+
+          setSheetsSyncStatus({
+            state: "success",
+            message: `Sincronizado da Nuvem (${d.transactions.length} lançamentos)`,
+            timestamp: new Date().toLocaleTimeString("pt-BR")
+          });
+        }
+      });
+    };
+
+    window.addEventListener("focus", handleWindowFocusOrVisibility);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        handleWindowFocusOrVisibility();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleWindowFocusOrVisibility);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [currentUser, currentUserId, isSyncing]);
 
   const handleSeedPatrimonioHistory = handleSyncOfficialPatrimonioData;
 
@@ -9970,6 +9839,10 @@ export default function CoindexApp() {
               moneyBlur={moneyBlur}
               currentUser={currentUser}
               currentUserAvatar={currentUserAvatar}
+              currentUserId={currentUserId}
+              pushFullStateToCloud={pushFullStateToCloud}
+              handleManualForceCloudSync={handleManualForceCloudSync}
+              syncStatus={sheetsSyncStatus.state}
               themeMode={themeMode}
               changeThemeMode={changeThemeMode}
               bgFxMode={bgFxMode}

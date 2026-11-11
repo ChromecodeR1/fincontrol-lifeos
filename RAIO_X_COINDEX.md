@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.48.0`  
-> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 63 — Upgrade Cinematográfico do Motor de Fundo Cupertino Ambient FX 2.0 com Poeira Estelar 3D, Ondas de Seda Harmônicas e Aurora Camaleão Contextual)  
+> **Versão da Aplicação:** `0.49.0`  
+> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 64 — Arquitetura 100% Nuvem Estrita Zero-LocalStorage, Cross-PC Live Sync, Painel Verídico de Verificação Cloud e Suavização Micro-Sutil de Estrelas)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1250,6 +1250,28 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Pilar 6 — Performance Estrita a 144Hz e Blindagem Arquitetural:**
       - Container raiz estritamente fixo (`fixed inset-0 pointer-events-none z-0 overflow-hidden select-none`) com `style={{ transform: "none" }}` para erradicar qualquer conflito de containing block em modais e popovers renderizados via `createPortal`.
       - Supressão de processamento e congelamento de `requestAnimationFrame` quando `document.hidden === true`.
+
+  - **Sprint 64 (Novembro de 2026 — Arquitetura 100% Nuvem Estrita Zero-LocalStorage, Cross-PC Live Sync e Painel Verídico de Verificação Cloud assinada por Henrique Montenegro, Clara Vance e Davi Kroner v0.49.0):**
+    - **Pilar 1 — Suavização da Poeira Estelar Micro-Sutil (`app/components/AmbientBackgroundFX.tsx`):**
+      - Calibração da opacidade base (`baseAlpha`) de todas as 115 micropartículas para uma faixa super discreta entre `0.04` e `0.16` com teto absoluto estrito de `0.22` mesmo no ápice de cintilação (`twinkle`).
+      - Redução do raio máximo da Camada 2 para `1.3px`, opacidade máxima de halo para `0.06` e micro-feixes em cruz de 4 pontas reduzidos para `2.5px` a `4.5px` com opacidade máxima de `0.10` sem branco estourado.
+      - Efeito `Mouse Breeze` mantendo o deslocamento elástico mas com ampliação de luminosidade próxima ao cursor limitada a no máximo `+5%`.
+      - Estrelas cadentes (Shooting Stars) calibradas com opacidade máxima de `0.16`, garantindo sofisticação ultra-elegante.
+      - Preservação 100% intacta da Aurora Camaleão (`TAB_MOOD_PALETTES`) e das Ondas de Seda Harmônicas (`Silk Contour Waves`).
+    - **Pilar 2 — Arquitetura 100% Nuvem Estrita (Zero LocalStorage para Entidades de Dados):**
+      - Erradicação definitiva da leitura de dados de entidades a partir do navegador (`localStorage`) ao inicializar a sessão (`initCoindex`): Lançamentos, Cartões, Bancos, Investimentos, Orçamento Fixo, Veículos, Notas e Desejos passam a vir 100% do Supabase PostgreSQL.
+      - Implementação da função `purgeAllEntityLocalCaches` em `app/lib/domain/user-storage.ts` para expurgo proativo de quaisquer caches legados (`lifeos_txs_v8`, `lifeos_cards_v8`, `lifeos_banks_v8`, `lifeos_status_v8`, `lifeos_notes_v8`, `coindex_vault_*`).
+      - Eliminação de fusões aditivas (LWW) locais na inicialização: a carga remota da nuvem (`fetchAllCoindexData`) atua como autoridade suprema e única.
+    - **Pilar 3 — Cross-PC Live Sync no Foco da Janela e Visibilidade (`app/page.tsx`):**
+      - Adição de listeners globais para `window.focus` e `document.visibilitychange` com throttle de 15 segundos: ao alternar de aba no PC de casa ou do trabalho, o Coindex consulta o Supabase silenciosamente em segundo plano e atualiza a tela com o estado mais fresco sem necessidade de recarregar a página (F5).
+    - **Pilar 4 — Auditoria Verídica de Nuvem e Função `verifyLiveCloudSyncStatus` (`app/lib/services/coindex-supabase.ts`):**
+      - Criação da função de telemetria em tempo real que consulta o Supabase PostgreSQL, afere latência em ms via `performance.now()`, confere o número exato de lançamentos salvos no banco vs. exibidos na tela, atesta a existência do registro `__COINDEX_CLOUD_VAULT_V3__` e a quantidade de cartões salvos nele.
+    - **Pilar 5 — Painel Oficial de Verificação Cloud nas Configurações (`app/SecondaryTabs.tsx`):**
+      - Posicionado com destaque no topo da aba Configurações:
+        1. Indicador Principal 1: Status do Servidor (`🟢 ONLINE` com latência em ms ou `🔴 OFFLINE`).
+        2. Indicador Principal 2: Pílula grande `Sincronizado com a Nuvem: SIM ✅` (#30D158) ou `Sincronizado com a Nuvem: NÃO ⚠️` (#FF453A).
+        3. Prova Real de Contagem lado a lado (Lançamentos na nuvem vs. na tela, Cartões na nuvem vs. na tela, Modo 100% Nuvem Estrito e timestamp da verificação).
+        4. Botões de ação rápida: `🔍 Testar e Verificar Nuvem Agora`, `⬆️ Forçar Gravação na Nuvem` e `⬇️ Recarregar Dados da Nuvem`.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida
