@@ -301,6 +301,199 @@ export function decodeTxFromSupabase(row: Record<string, unknown>): Transaction 
   return tx;
 }
 
+/**
+ * SPRINT 65 (Henrique Montenegro): Pontuação heurística de qualidade para desempate entre clones.
+ * Prioriza registros com metadados mais ricos (investimentos, parcelamentos, telemetria)
+ * e formato canônico UUID v4 válido gerado na Sprint 62.
+ */
+function scoreTransactionQuality(tx: Transaction): number {
+  let score = 0;
+  if (tx.investmentBucket) score += 10;
+  if (tx.assetTicker) score += 8;
+  if (tx.entryQuotePrice != null) score += 5;
+  if (tx.manualYieldPct != null) score += 5;
+  if (tx.cardUsed || tx.cardName || tx.cardId) score += 5;
+  if (tx.bankAccount || tx.bankId) score += 5;
+  if (tx.debtor) score += 5;
+  if (tx.installmentInfo) score += 4;
+  if (tx.installmentGroupId || tx.installmentSeriesId) score += 4;
+  if (tx.invoiceMonth || tx.cashMonth) score += 3;
+  if (tx.km != null || tx.liters != null) score += 5;
+  if (tx.isSplit || tx.thirdPartyAmount != null) score += 5;
+  if (tx.notes) score += 2;
+  if (tx.wishlistId) score += 3;
+  if (tx.rev && tx.rev > 1) score += Math.min(tx.rev, 10);
+  if (UUID_REGEX.test(tx.id)) score += 10;
+  if (tx.updatedAt) {
+    const time = new Date(tx.updatedAt).getTime();
+    if (!isNaN(time) && time > 0) {
+      score += Math.min(Math.floor(time / 1000000000), 20);
+    }
+  }
+  return score;
+}
+
+/**
+ * SPRINT 65: Normaliza a descrição da transação para comparação estrita de conteúdo semântico.
+ */
+function normalizeTxDescription(desc: string): string {
+  return (desc || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * SPRINT 65 (Henrique Montenegro): Deduplicação Automática e Inteligente de Transações Clonadas.
+ * Detecta duplicatas originadas durante a migração de IDs legados para UUID determinístico.
+ * Agrupa transações com assinaturas idênticas (data, descrição normalizada, valor em centavos,
+ * categoria, parcelamento, forma de pagamento) ou IDs equivalentes, elegendo o registro de maior
+ * qualidade (mais metadados) e coletando os IDs obsoletos para purga física no PostgreSQL.
+ */
+export function deduplicateCloudTransactions(txs: Transaction[]): {
+  deduplicatedTxs: Transaction[];
+  duplicateIdsToDelete: string[];
+} {
+  if (!txs || txs.length === 0) {
+    return { deduplicatedTxs: [], duplicateIdsToDelete: [] };
+  }
+
+  // 1. Agrupamento preliminar por ID canônico determinístico
+  const idToGroupMap = new Map<string, Transaction[]>();
+  for (const tx of txs) {
+    const canonicalKey = ensureValidUuid(tx.id);
+    const existing = idToGroupMap.get(canonicalKey);
+    if (existing) {
+      existing.push(tx);
+    } else {
+      idToGroupMap.set(canonicalKey, [tx]);
+    }
+  }
+
+  const pass1Winners: Transaction[] = [];
+  const duplicateIdsToDelete: string[] = [];
+
+  for (const group of idToGroupMap.values()) {
+    if (group.length === 1) {
+      pass1Winners.push(group[0]);
+    } else {
+      group.sort((a, b) => scoreTransactionQuality(b) - scoreTransactionQuality(a));
+      const winner = group[0];
+      pass1Winners.push(winner);
+      for (let i = 1; i < group.length; i++) {
+        duplicateIdsToDelete.push(group[i].id);
+        const uuidOfLoser = ensureValidUuid(group[i].id);
+        if (uuidOfLoser !== winner.id && uuidOfLoser !== ensureValidUuid(winner.id)) {
+          duplicateIdsToDelete.push(uuidOfLoser);
+        }
+      }
+    }
+  }
+
+  // 2. Agrupamento por assinatura semântica de conteúdo
+  // (Identifica clones onde o registro legado sem metadados e o novo coexistem no banco)
+  const sigMap = new Map<string, Transaction[]>();
+
+  for (const tx of pass1Winners) {
+    const dateStr = String(tx.date || "").trim();
+    const cleanDesc = normalizeTxDescription(tx.description);
+    const amountCents = Math.round(Number(tx.amount || 0) * 100);
+    const category = (tx.category || "").trim().toLowerCase();
+    const inst = (tx.installmentInfo || "").trim().toLowerCase();
+    const cost = (tx.costType || "").trim().toLowerCase();
+    const pm = (tx.paymentMethod || "").trim().toLowerCase();
+
+    const signature = `${dateStr}::${cleanDesc}::${amountCents}::${category}::${inst}::${cost}::${pm}`;
+    const existing = sigMap.get(signature);
+    if (existing) {
+      existing.push(tx);
+    } else {
+      sigMap.set(signature, [tx]);
+    }
+  }
+
+  const deduplicatedTxs: Transaction[] = [];
+
+  for (const group of sigMap.values()) {
+    if (group.length === 1) {
+      deduplicatedTxs.push(group[0]);
+    } else {
+      group.sort((a, b) => scoreTransactionQuality(b) - scoreTransactionQuality(a));
+      const winner = group[0];
+      deduplicatedTxs.push(winner);
+      for (let i = 1; i < group.length; i++) {
+        duplicateIdsToDelete.push(group[i].id);
+        const uuidOfLoser = ensureValidUuid(group[i].id);
+        if (uuidOfLoser !== winner.id && uuidOfLoser !== ensureValidUuid(winner.id)) {
+          duplicateIdsToDelete.push(uuidOfLoser);
+        }
+      }
+    }
+  }
+
+  return {
+    deduplicatedTxs,
+    duplicateIdsToDelete: Array.from(new Set(duplicateIdsToDelete))
+  };
+}
+
+/**
+ * SPRINT 65 (Henrique Montenegro): Purga física e segura de transações duplicadas no Supabase PostgreSQL.
+ * Processa em lotes de 50 registros por requisição para evitar timeouts de rede.
+ * Protege estritamente o registro do Cofre Mestre V3 contra deleção acidental.
+ */
+export async function purgeDuplicateTransactionsInDb(
+  userId: string,
+  idsToDelete: string[]
+): Promise<{ ok: boolean; deletedCount: number; error?: string }> {
+  if (!userId || !idsToDelete || idsToDelete.length === 0) {
+    return { ok: true, deletedCount: 0 };
+  }
+  try {
+    const supabase = createClient();
+    const vaultId = getCloudVaultRowId(userId);
+
+    // Filtra IDs inválidos e garante proteção absoluta do Cofre Mestre V3
+    const uniqueIds = Array.from(new Set(idsToDelete))
+      .filter((id) => id && id !== vaultId && id !== "00000000-0000-4000-8000-000000000000");
+
+    if (uniqueIds.length === 0) return { ok: true, deletedCount: 0 };
+
+    const CHUNK_SIZE = 50;
+    let deletedCount = 0;
+
+    for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+      const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
+      const targetUuids = Array.from(new Set(chunk.flatMap((id) => [id, ensureValidUuid(id)])))
+        .filter((id) => id !== vaultId);
+
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .in("id", targetUuids)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.warn("[coindex-supabase] Aviso ao purgar lote de duplicatas:", error.message);
+      } else {
+        deletedCount += chunk.length;
+      }
+    }
+
+    if (deletedCount > 0) {
+      console.log(`[coindex-supabase] Purgadas ${deletedCount} transações duplicadas do PostgreSQL com sucesso.`);
+    }
+    return { ok: true, deletedCount };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro desconhecido ao purgar duplicatas";
+    console.error("[coindex-supabase] Falha na purga de duplicatas:", msg);
+    return { ok: false, deletedCount: 0, error: msg };
+  }
+}
+
 const WISH_META_PREFIX = "<!--__COINDEX_WISH_META__:";
 const WISH_META_SUFFIX = "-->";
 
@@ -709,10 +902,17 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
 
     const isEmpty = pureTxRows.length === 0 && cardRows.length === 0 && catRows.length === 0;
 
-    // SPRINT 58: Decodificação universal com suporte ao túnel de metadados
-    const transactions: Transaction[] = pureTxRows
+    // SPRINT 58 & 65: Decodificação universal com túnel de metadados e deduplicação automática
+    const rawTransactions: Transaction[] = pureTxRows
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
       .map((r) => decodeTxFromSupabase(r));
+
+    const { deduplicatedTxs: transactions, duplicateIdsToDelete } = deduplicateCloudTransactions(rawTransactions);
+
+    // SPRINT 65: Purga assíncrona em background das duplicatas no PostgreSQL
+    if (duplicateIdsToDelete.length > 0 && userId) {
+      void purgeDuplicateTransactionsInDb(userId, duplicateIdsToDelete);
+    }
 
     const rawCloudBackup = (settingsRes.data as any)?.cloud_backup_state;
 
@@ -1275,44 +1475,94 @@ export async function upsertTransactionsInDb(
       };
     });
 
-    const res = await supabase.from("transactions").upsert(payloads, { onConflict: "id,user_id" });
-    if (res.error) {
-      // Se o banco remoto não tiver as colunas estendidas, faz fallback para as colunas base.
-      // Todos os metadados continuam 100% salvos através do túnel enrichedDescription!
-      if (res.error.code === "PGRST204" || res.error.code === "42703" || res.error.message?.includes("column")) {
-        console.warn(
-          "[coindex-supabase] Schema fallback ativado para transactions (metadados preservados no túnel):",
-          res.error.message
-        );
-        const minimalPayloads = txs.map((t) => {
-          const { enrichedDescription } = encodeTxForSupabase(t);
-          return {
-            id: ensureValidUuid(t.id),
-            user_id: userId,
-            tx_date: t.date,
-            description: enrichedDescription,
-            amount: t.amount,
-            category: t.category,
-            cost_type: t.costType,
-            payment_method: t.paymentMethod,
-            card_used: t.cardUsed ?? t.bankAccount ?? null,
-            status: t.status
-          };
-        });
-        const fbRes = await supabase.from("transactions").upsert(minimalPayloads, { onConflict: "id,user_id" });
-        if (fbRes.error) {
-          console.error("[coindex-supabase] Fallback básico de transactions falhou:", fbRes.error);
-          return { ok: false, error: fbRes.error.message };
+    const CHUNK_SIZE = 100;
+    for (let i = 0; i < payloads.length; i += CHUNK_SIZE) {
+      const chunk = payloads.slice(i, i + CHUNK_SIZE);
+      const res = await supabase.from("transactions").upsert(chunk, { onConflict: "id,user_id" });
+      if (res.error) {
+        // Se o banco remoto não tiver as colunas estendidas, faz fallback para as colunas base.
+        // Todos os metadados continuam 100% salvos através do túnel enrichedDescription!
+        if (res.error.code === "PGRST204" || res.error.code === "42703" || res.error.message?.includes("column")) {
+          console.warn(
+            "[coindex-supabase] Schema fallback ativado para transactions (metadados preservados no túnel):",
+            res.error.message
+          );
+          const chunkTxs = txs.slice(i, i + CHUNK_SIZE);
+          const minimalPayloads = chunkTxs.map((t) => {
+            const { enrichedDescription } = encodeTxForSupabase(t);
+            return {
+              id: ensureValidUuid(t.id),
+              user_id: userId,
+              tx_date: t.date,
+              description: enrichedDescription,
+              amount: t.amount,
+              category: t.category,
+              cost_type: t.costType,
+              payment_method: t.paymentMethod,
+              card_used: t.cardUsed ?? t.bankAccount ?? null,
+              status: t.status
+            };
+          });
+          const fbRes = await supabase.from("transactions").upsert(minimalPayloads, { onConflict: "id,user_id" });
+          if (fbRes.error) {
+            console.error("[coindex-supabase] Fallback básico de transactions falhou:", fbRes.error);
+            return { ok: false, error: fbRes.error.message };
+          }
+        } else {
+          console.error("[coindex-supabase] Erro ao sincronizar lote de transações:", res.error);
+          return { ok: false, error: res.error.message };
         }
-      } else {
-        console.error("[coindex-supabase] Erro ao sincronizar transações:", res.error);
-        return { ok: false, error: res.error.message };
       }
     }
     return { ok: true, count: txs.length };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Erro desconhecido ao salvar transações";
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * SPRINT 65: Salva atomicamente uma única transação no Supabase (Delta Sync ultra-rápido).
+ */
+export async function upsertTransactionInDb(
+  tx: Transaction,
+  debtorMap?: Record<string, string>
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await upsertTransactionsInDb([tx], debtorMap);
+  return { ok: res.ok, error: res.error };
+}
+
+/**
+ * SPRINT 65 (Henrique Montenegro): Medição física e verídica da latência de rede com o PostgreSQL do Supabase.
+ * Executa uma consulta HEAD ultra-leve com performance.now() em vez de rotas de terceiros.
+ */
+export async function pingSupabaseDatabase(userId?: string | null): Promise<{
+  ok: boolean;
+  latencyMs: number;
+  status: string;
+  error?: string;
+}> {
+  const t0 = performance.now();
+  try {
+    const supabase = createClient();
+    let query = supabase.from("transactions").select("id", { count: "exact", head: true }).limit(1);
+    if (userId) {
+      query = query.eq("user_id", userId);
+    }
+    const { error } = await query;
+    const latencyMs = Math.max(1, Math.round(performance.now() - t0));
+    if (error) {
+      return { ok: false, latencyMs, status: "Alerta de Conexão", error: error.message };
+    }
+    return { ok: true, latencyMs, status: "Conectado (Alta Disponibilidade)" };
+  } catch (err: unknown) {
+    const latencyMs = Math.max(1, Math.round(performance.now() - t0));
+    return {
+      ok: false,
+      latencyMs,
+      status: "Falha de Rede",
+      error: err instanceof Error ? err.message : String(err)
+    };
   }
 }
 
@@ -1854,9 +2104,9 @@ export async function verifyLiveCloudSyncStatus(
 
   try {
     const supabase = createClient();
-    const { data, error, count } = await supabase
+    const { data, error } = await supabase
       .from("transactions")
-      .select("id, description", { count: "exact" })
+      .select("*")
       .eq("user_id", userId);
 
     const latencyMs = Math.max(1, Math.round(performance.now() - t0));
@@ -1878,13 +2128,12 @@ export async function verifyLiveCloudSyncStatus(
 
     let hasCloudVault = false;
     let cloudCardsCount = 0;
-    let vaultRowCount = 0;
+    const pureRows: Record<string, unknown>[] = [];
 
     if (data && Array.isArray(data)) {
       for (const row of data) {
         if (isCloudVaultRow(row, userId)) {
           hasCloudVault = true;
-          vaultRowCount++;
           const desc = String(row.description || "");
           let stateJson: string | null = null;
           if (desc.startsWith(VAULT_DESC_PREFIX_V3)) {
@@ -1904,12 +2153,22 @@ export async function verifyLiveCloudSyncStatus(
               // ignore json parse error
             }
           }
+        } else {
+          pureRows.push(row);
         }
       }
     }
 
-    const totalRows = count ?? (data ? data.length : 0);
-    const cloudTxCount = Math.max(0, totalRows - vaultRowCount);
+    // SPRINT 65: Decodificação e deduplicação verídica na nuvem
+    const decodedTxs = pureRows.map((r) => decodeTxFromSupabase(r));
+    const { deduplicatedTxs, duplicateIdsToDelete } = deduplicateCloudTransactions(decodedTxs);
+
+    // Se detectou duplicatas durante o teste de auditoria, purga no banco em background
+    if (duplicateIdsToDelete.length > 0) {
+      void purgeDuplicateTransactionsInDb(userId, duplicateIdsToDelete);
+    }
+
+    const cloudTxCount = deduplicatedTxs.length;
 
     // Determinação matemática estrita:
     // Está 100% sincronizado quando está online, possui o cofre mestre gravado

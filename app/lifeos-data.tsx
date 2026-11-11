@@ -400,13 +400,27 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.49.0";
-export const PREVIOUS_VERSION = "0.48.0";
-export const COINDEX_APP_VERSION = "0.49.0";
+export const APP_VERSION = "0.49.1";
+export const PREVIOUS_VERSION = "0.49.0";
+export const COINDEX_APP_VERSION = "0.49.1";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.49.1",
+    date: "Nov/2026",
+    title: "Sprint 65: Delta Sync Ultra-Rápido (<100ms), Fim do Erro de Sync Travado, Deduplicação Automática de Lançamentos Clonados e Correção de Aportes no Inspetor Cloud",
+    highlights: [
+      "Fim do 'Erro de Sync' Travado na Topbar: Correção da causa raiz onde o debounced auto-sync de 600ms reenviava todas as transações de uma só vez; agora o auto-sync reativo grava SOMENTE o registro do Cofre Mestre V3 em tempo recorde (~40-80ms).",
+      "Delta Sync Ultra-Rápido (<100ms): Lançamentos individuais criados, alterados ou com status alternado no CRUD salvam atomicamente via upsertTransactionInDb, garantindo latência quase imperceptível e alívio do tráfego de rede.",
+      "Deduplicação Automática e Inteligente de Transações Clonadas (deduplicateCloudTransactions): Algoritmo com pontuação de qualidade heurística e clustering por ID determinístico e assinatura semântica (data, descrição normalizada, centavos, categoria, parcelas, pagamento) que elege a transação de maior qualidade e expurga os clones duplicados do banco.",
+      "Purga Física e Segura no PostgreSQL (purgeDuplicateTransactionsInDb): Limpeza em segundo plano em lotes de 50 registros com blindagem absoluta do Cofre Mestre V3, fazendo com que as linhas duplicadas voltem à contagem real idêntica à tela (100% Sincronizado).",
+      "Medição Física de Latência do PostgreSQL (pingSupabaseDatabase): Substituição do ping de rotas de terceiros por uma consulta HEAD direta e ultra-leve no Supabase via performance.now(), exibindo latência real de conexão.",
+      "Correção do Contador de Aportes de Investimentos & B3: Filtro expandido para abranger categorias 'Aporte', 'Aporte / Investimento', 'Investimentos', flowType 'INVESTMENT' e gavetas alocadas (investmentBucket), exibindo o total verídico em vez de '0 aportes'.",
+      "Polimento do Inspetor Cloud: Ajuste de layout em 'Veículos & Revisões:' com espaçamento flexível e shrink-0, além de banner de erro acionável com botão de reenvio atômico imediato ('Reenviar Agora')."
+    ]
+  },
   {
     version: "0.49.0",
     date: "Nov/2026",

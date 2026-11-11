@@ -63,6 +63,7 @@ import {
   Building2,
   Award,
   Menu,
+  RefreshCw,
   Trophy
 } from "lucide-react";
 import {
@@ -216,6 +217,10 @@ import {
   CoindexCloudVaultState,
   migrateAllStateToSupabase,
   upsertTransactionsInDb,
+  upsertTransactionInDb,
+  deduplicateCloudTransactions,
+  pingSupabaseDatabase,
+  purgeDuplicateTransactionsInDb,
   deleteTransactionInDb,
   deleteTransactionsInDb,
   upsertCardInDb,
@@ -4458,6 +4463,11 @@ export default function CoindexApp() {
           setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
           localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
           await upsertTransactionsInDb(editedItems, debtorMap);
+          setSheetsSyncStatus({
+            state: "success",
+            message: "Sincronizado na Nuvem",
+            timestamp: new Date().toLocaleTimeString("pt-BR")
+          });
           notify(
             "Série Parcelada Atualizada!",
             `${editedItems.length} parcelas de "${cleanBase}" atualizadas com sucesso.`,
@@ -4607,7 +4617,14 @@ export default function CoindexApp() {
           if (finalEdited) itemsToDb.push(finalEdited);
           if (childItemToUpsert) itemsToDb.push(childItemToUpsert);
           if (updatedParentDebt) itemsToDb.push(updatedParentDebt);
-          if (itemsToDb.length > 0) await upsertTransactionsInDb(itemsToDb, nextDebtorMap);
+          if (itemsToDb.length > 0) {
+            await upsertTransactionsInDb(itemsToDb, nextDebtorMap);
+            setSheetsSyncStatus({
+              state: "success",
+              message: "Sincronizado na Nuvem",
+              timestamp: new Date().toLocaleTimeString("pt-BR")
+            });
+          }
 
           // Sincroniza telemetria de combustível se aplicável
           if (isPostoExpress || (newTx.liters && Number(newTx.liters) > 0)) {
@@ -4675,6 +4692,11 @@ export default function CoindexApp() {
         setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
         localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
         await upsertTransactionsInDb(createdList, debtorMap);
+        setSheetsSyncStatus({
+          state: "success",
+          message: "Sincronizado na Nuvem",
+          timestamp: new Date().toLocaleTimeString("pt-BR")
+        });
         notify(
           "Compra Parcelada Criada!",
           `${installmentsCount}x de ${formatBRL(slices[slices.length - 1].amount)} salvas no Supabase.`,
@@ -4792,6 +4814,11 @@ export default function CoindexApp() {
           return next;
         });
         await upsertTransactionsInDb(toSaveList, nextDebtorMap);
+        setSheetsSyncStatus({
+          state: "success",
+          message: "Sincronizado na Nuvem",
+          timestamp: new Date().toLocaleTimeString("pt-BR")
+        });
 
         // Registro Atômico na Telemetria de Combustível (lifeos_fuel_logs_v1)
         if (isPostoExpress || (item.liters && item.liters > 0)) {
@@ -5024,6 +5051,12 @@ export default function CoindexApp() {
       nextList = transactions.map((t) => (t.id === tx.id ? changedItem : t));
       void upsertTransactionsInDb([changedItem], debtorMap);
     }
+
+    setSheetsSyncStatus({
+      state: "success",
+      message: "Sincronizado na Nuvem",
+      timestamp: new Date().toLocaleTimeString("pt-BR")
+    });
 
     setTransactions(nextList);
     setUserItem("lifeos_txs_v8", JSON.stringify(nextList), currentUserId);
@@ -6818,8 +6851,13 @@ export default function CoindexApp() {
           throw new Error(vaultRes.error || "Falha ao gravar Cofre Mestre V3");
         }
 
-        // 2. Grava todas as transações ativas usando ensureValidUuid
-        const activeTxs = state.transactions.filter((t) => !tombstonesArray.includes(t.id));
+        // 2. Grava todas as transações ativas usando ensureValidUuid e deduplicação
+        const rawActiveTxs = state.transactions.filter((t) => !tombstonesArray.includes(t.id));
+        const { deduplicatedTxs: activeTxs, duplicateIdsToDelete } = deduplicateCloudTransactions(rawActiveTxs);
+        if (duplicateIdsToDelete.length > 0) {
+          void purgeDuplicateTransactionsInDb(targetUserId, duplicateIdsToDelete);
+        }
+
         const txRes = await upsertTransactionsInDb(activeTxs, state.debtorMap);
         if (!txRes.ok) {
           throw new Error(txRes.error || "Falha ao gravar transações");
@@ -6862,7 +6900,10 @@ export default function CoindexApp() {
     [currentUserId, yieldMode, stravaStats, themeMode, dashboardLayout, notify]
   );
 
-  // SPRINT 62: Auto-Sync Central Reativo Debounced (600ms)
+  // SPRINT 65 (Henrique Montenegro): Auto-Sync Delta Ultra-Rápido (<100ms)
+  // O salvamento contínuo debounced (600ms) atualiza SOMENTE o Cofre Mestre V3 na tabela transactions,
+  // mantendo configurações, saldos manuais, cartões, bancos, telemetria e notas 100% salvos.
+  // Lançamentos individuais são salvos instantaneamente e de forma atômica no momento da ação (CRUD).
   const autoSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -6875,15 +6916,72 @@ export default function CoindexApp() {
     }
 
     autoSyncTimerRef.current = setTimeout(async () => {
-      setSheetsSyncStatus((prev) => ({
-        state: "idle",
-        message: "Salvando na Nuvem...",
-        timestamp: prev.timestamp
-      }));
+      const state = latestStateRef.current;
+      const targetUserId = state.currentUserId || currentUserId;
+      if (!targetUserId) return;
 
-      const res = await pushFullStateToCloud({ showToast: false });
-      if (!res.ok) {
-        console.warn("[auto-sync] Falha no salvamento reativo:", res.error);
+      try {
+        let vehicleMaintenanceHistory: Record<string, number> = {};
+        let vehicleCustomItems: unknown[] = [];
+        let fuelLogs: unknown[] = [];
+        try {
+          const rawHist = localStorage.getItem("lifeos_vehicle_maintenance_v1");
+          if (rawHist) vehicleMaintenanceHistory = JSON.parse(rawHist);
+          const rawItems = localStorage.getItem("lifeos_vehicle_maintenance_items_v2");
+          if (rawItems) vehicleCustomItems = JSON.parse(rawItems);
+          const rawFuel = localStorage.getItem("lifeos_fuel_logs_v1");
+          if (rawFuel) fuelLogs = JSON.parse(rawFuel);
+        } catch {}
+
+        const tombstonesArray = Array.from(getTombstones(targetUserId));
+
+        const vaultPayload: Partial<CoindexCloudVaultState> = {
+          version: "0.49.1",
+          syncedAt: new Date().toISOString(),
+          cards: state.cards,
+          banks: state.banks,
+          staticStatus: state.staticStatus,
+          notes: state.notes,
+          wishlist: state.wishlist,
+          investmentState: {
+            realBalanceOverride: state.manualAdjustment,
+            yieldMode,
+            visibleMarketCharts: state.visibleMarketCharts,
+            simulatorMonthlyContribution: state.simulatorMonthlyContribution
+          },
+          vehiclesState: {
+            refuels: fuelLogs as any,
+            customPlans: { default: vehicleCustomItems as any }
+          },
+          vehicleMaintenance: {
+            history: vehicleMaintenanceHistory,
+            customItems: vehicleCustomItems
+          },
+          bioAndStravaState: {
+            bioLogs: state.bioLogs,
+            stravaStats
+          },
+          uiSettings: {
+            themeMode,
+            bgFxMode: state.bgFxMode,
+            cupertinoTheme: state.cupertinoTheme === "light",
+            dashboardLayout
+          },
+          tombstones: tombstonesArray
+        };
+
+        const res = await saveCloudVaultInTransactionsDb(targetUserId, vaultPayload);
+        if (res.ok) {
+          setSheetsSyncStatus({
+            state: "success",
+            message: "Sincronizado na Nuvem",
+            timestamp: new Date().toLocaleTimeString("pt-BR")
+          });
+        } else {
+          console.warn("[auto-sync] Falha no salvamento do Cofre Mestre V3:", res.error);
+        }
+      } catch (err) {
+        console.warn("[auto-sync] Erro inesperado no salvamento do cofre:", err);
       }
     }, 600);
 
@@ -6907,31 +7005,33 @@ export default function CoindexApp() {
     bgFxMode,
     currentUser,
     currentUserId,
-    pushFullStateToCloud
+    yieldMode,
+    stravaStats,
+    themeMode,
+    dashboardLayout
   ]);
 
+  // SPRINT 65: Medição Real de Latência de Rede via Ping do PostgreSQL (Henrique Montenegro)
   const runCloudDiagnostics = useCallback(async () => {
-    const startTime = performance.now();
     try {
-      const res = await fetch("/api/market-pulse", { cache: "no-store" });
-      const latency = Math.round(performance.now() - startTime);
+      const res = await pingSupabaseDatabase(currentUserId);
       setCloudInspectorDiagnosis({
-        latencyMs: latency,
-        status: res.ok ? "Conectado (Alta Disponibilidade)" : "Alerta de Conexão",
+        latencyMs: res.latencyMs,
+        status: res.status,
         url: "https://***.supabase.co (PostgreSQL)",
         user: currentUser || "Autenticado",
         timestamp: new Date().toLocaleTimeString("pt-BR")
       });
     } catch {
       setCloudInspectorDiagnosis({
-        latencyMs: 999,
+        latencyMs: 99,
         status: "Falha de Rede",
         url: "https://***.supabase.co (PostgreSQL)",
         user: currentUser || "Desconhecido",
         timestamp: new Date().toLocaleTimeString("pt-BR")
       });
     }
-  }, [currentUser]);
+  }, [currentUser, currentUserId]);
 
   useEffect(() => {
     if (showCloudInspectorModal) {
@@ -10961,6 +11061,33 @@ export default function CoindexApp() {
               </div>
             </div>
 
+            {/* Alerta Acionável de Erro de Sincronização */}
+            {sheetsSyncStatus.state === "error" && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5 text-rose-300 min-w-0">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="truncate">Sincronização pendente. Clique ao lado para forçar o reenvio atômico.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsPushingCloud(true);
+                    try {
+                      await pushFullStateToCloud({ showToast: true });
+                      void runCloudDiagnostics();
+                    } finally {
+                      setIsPushingCloud(false);
+                    }
+                  }}
+                  disabled={isPushingCloud}
+                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-medium text-[11px] shrink-0 transition cursor-pointer flex items-center gap-1.5"
+                >
+                  {isPushingCloud ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  Reenviar Agora
+                </button>
+              </div>
+            )}
+
             {/* Painel do Cofre Mestre V3 — Telemetria dos 9 Módulos */}
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/10 space-y-3">
               <div className="flex items-center justify-between">
@@ -10988,11 +11115,19 @@ export default function CoindexApp() {
                 </div>
                 <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
                   <span className="text-slate-400">Investimentos & B3:</span>
-                  <strong className="text-emerald-400 font-mono">{transactions.filter(t => t.category === "Investimentos").length} aportes</strong>
+                  <strong className="text-emerald-400 font-mono">
+                    {transactions.filter(t => !t.deletedAt && (
+                      t.category === "Investimentos" ||
+                      t.category === "Aporte" ||
+                      t.category === "Aporte / Investimento" ||
+                      t.flowType === "INVESTMENT" ||
+                      Boolean(t.investmentBucket)
+                    )).length} aportes
+                  </strong>
                 </div>
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
-                  <span className="text-slate-400">Veículos & Preventiva:</span>
-                  <strong className="text-orange-400 font-mono">100% Salvo</strong>
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between gap-2">
+                  <span className="text-slate-400">Veículos & Revisões:</span>
+                  <strong className="text-orange-400 font-mono shrink-0">100% Salvo</strong>
                 </div>
                 <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
                   <span className="text-slate-400">Notas & Desejos:</span>

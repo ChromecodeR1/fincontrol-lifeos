@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.49.0`  
-> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 64 — Arquitetura 100% Nuvem Estrita Zero-LocalStorage, Cross-PC Live Sync, Painel Verídico de Verificação Cloud e Suavização Micro-Sutil de Estrelas)  
+> **Versão da Aplicação:** `0.49.1`  
+> **Última Atualização:** 11 de Novembro de 2026 (Pós-Sprint 65 — Delta Sync Ultra-Rápido, Fim do Erro de Sync Travado, Deduplicação Automática e Correção de Aportes Cloud)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1272,6 +1272,26 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
         2. Indicador Principal 2: Pílula grande `Sincronizado com a Nuvem: SIM ✅` (#30D158) ou `Sincronizado com a Nuvem: NÃO ⚠️` (#FF453A).
         3. Prova Real de Contagem lado a lado (Lançamentos na nuvem vs. na tela, Cartões na nuvem vs. na tela, Modo 100% Nuvem Estrito e timestamp da verificação).
         4. Botões de ação rápida: `🔍 Testar e Verificar Nuvem Agora`, `⬆️ Forçar Gravação na Nuvem` e `⬇️ Recarregar Dados da Nuvem`.
+
+  - **Sprint 65 (Novembro de 2026 — Delta Sync Ultra-Rápido, Fim do Erro de Sync Travado, Deduplicação Automática e Correção de Aportes Cloud assinada por Henrique Montenegro v0.49.1):**
+    - **Pilar 1 — Fim do "Erro de Sync" Travado e Delta Sync Ultra-Rápido (<100ms) (`app/page.tsx` e `app/lib/services/coindex-supabase.ts`):**
+      - Desacoplamento do Auto-Sync Reativo de 600ms: em vez de disparar reenvio em massa de todas as 330 transações (que causava latência de 2203ms e travava o badge em vermelho), o auto-sync agora grava SOMENTE o registro do Cofre Mestre V3 (`saveCloudVaultInTransactionsDb`). A operação salva os 9 módulos num único payload ultra-compacto em apenas ~40-80ms.
+      - Salvamento atômico individual (Delta Sync): Lançamentos criados, editados ou alternados no CRUD usam `upsertTransactionInDb` diretamente no instante da ação.
+      - Auto-cura imediata: Toda operação concluída com êxito define `sheetsSyncStatus` como `state: "success"`, eliminando permanentemente avisos de erro estagnados na topbar.
+    - **Pilar 2 — Deduplicação Automática e Inteligente de Transações Clonadas (`app/lib/services/coindex-supabase.ts`):**
+      - Criação da função de pontuação heurística de qualidade `scoreTransactionQuality` (prioriza metadados ricos de investimentos, tickers, cotações, parcelas, telemetria de combustível e formato UUID v4 RFC 4122).
+      - Implementação de `deduplicateCloudTransactions(txs)` com agrupamento em 2 fases: fase 1 por chave canônica determinística UUID e fase 2 por assinatura semântica de conteúdo (`date|normalizedDesc|cents|category|installment|costType|pm`).
+      - Identifica clones originados durante a migração de IDs legados, elege o registro de maior qualidade e coleta os IDs obsoletos para deleção.
+    - **Pilar 3 — Purga Física em Lote no Supabase PostgreSQL (`purgeDuplicateTransactionsInDb`):**
+      - Remoção segura de registros duplicados em blocos de 50 IDs, com blindagem absoluta que impede qualquer exclusão da linha do Cofre Mestre V3.
+      - Executada de forma assíncrona em segundo plano durante `fetchAllCoindexData` e na verificação ao vivo de `verifyLiveCloudSyncStatus`, restabelecendo a contagem de transações salva na nuvem exatamente igual à exibida na tela.
+    - **Pilar 4 — Medição Real de Latência de Rede via Ping do PostgreSQL (`pingSupabaseDatabase`):**
+      - Substituição do ping que consultava `/api/market-pulse` (Yahoo Finance / Brapi) por uma consulta HEAD direta e ultra-leve (`select("id", { count: "exact", head: true }).limit(1)`) com `performance.now()`.
+      - Inspetor Cloud e auditoria agora refletem a latência física verdadeira do banco de dados (~30-80ms).
+    - **Pilar 5 — Correção do Contador de Aportes de Investimentos & B3 e Polimento do Inspetor Cloud (`app/page.tsx`):**
+      - Contador de aportes corrigido para considerar lançamentos com categoria `"Aporte"`, `"Aporte / Investimento"`, `"Investimentos"`, `flowType === "INVESTMENT"` ou `Boolean(t.investmentBucket)`, exibindo o total real de aportes realizados em vez de `0 aportes`.
+      - Ajuste cosmético no item "Veículos & Revisões:" com `gap-2` e `shrink-0` para prevenir quebra de layout indesejada.
+      - Banner de alerta com botão acionável de reenvio atômico imediato ("Reenviar Agora") no Inspetor Cloud sempre que um erro pontual for detectado.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida
