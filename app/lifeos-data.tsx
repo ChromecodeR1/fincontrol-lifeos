@@ -400,13 +400,39 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.46.0";
-export const PREVIOUS_VERSION = "0.45.2";
-export const COINDEX_APP_VERSION = "0.46.1";
+export const APP_VERSION = "0.47.0";
+export const PREVIOUS_VERSION = "0.46.1";
+export const COINDEX_APP_VERSION = "0.47.0";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.47.0",
+    date: "Nov/2026",
+    title: "Sprint 62: Arquitetura Cloud-First Definitiva (Supabase PostgreSQL), UUIDs Determinísticos RFC 4122 v4, Cofre Mestre V3 Multi-Device e Central de Sincronização & Inspetor Cloud",
+    highlights: [
+      "Conversor Determinístico ensureValidUuid (FNV-1a 128-bit RFC 4122 v4) para erradicar rejeições de lote PostgreSQL 22P02 com compatibilidade total de strings arbitrárias.",
+      "Túnel de descrição Base64 ||__CXM__: com preservação e restauração bidirecional transparente do ID original de cada lançamento financeiro.",
+      "Blindagem do Cofre Mestre __COINDEX_CLOUD_VAULT_V3__ na tabela transactions utilizando estritamente as 9 colunas universais com valores padrão à prova de restrições SQL.",
+      "Desacoplamento estrito de linhas do cofre em fetchAllCoindexData: 0% de interferência em métricas financeiras, balanços patrimoniais ou tabelas de lançamentos.",
+      "Expansão total do Cofre Mestre para 100% dos módulos: Cartões, Bancos, Status, Notas, Desejos, Investimentos B3/CDI/BTC, Veículos (Preventiva/Odômetro), Bio & Strava e UI Settings.",
+      "Sincronização Central Reativa (Auto-Sync) com debounce de 600ms e trava de hidratação inicial para evitar sobrescritas ou condições de corrida.",
+      "Central de Sincronização & Inspetor Cloud (Supabase) via Portal: diagnóstico de latência em tempo real, telemetria dos 9 módulos, Envio Completo (Push) e Download com Substituição (Pull)."
+    ]
+  },
+  {
+    version: "0.46.1",
+    date: "Nov/2026",
+    title: "Sprint 61: Popover de Filtro Opaque Portal-Rendered, Scroll Cupertino Suave sem Setas, Busca Rápida de Categorias e Ocultação Estrita de Checkboxes",
+    highlights: [
+      "Filtros de coluna renderizados via createPortal com opacidade 100% (#0F1420 / #FFFFFF) e z-index [99999].",
+      "Classe .cupertino-thin-scroll erradicando botões de setas ▲/▼ nativos do Windows no Chrome e Edge.",
+      "Mini campo de busca em tempo real com auto-foco nos popovers de filtro de categoria.",
+      "Migração em lote de lançamentos com categoria antiga para categorias do catálogo oficial.",
+      "Coluna de checkboxes de seleção estritamente oculta até ativação do modo de seleção."
+    ]
+  },
   {
     version: "0.46.0",
     date: "Nov/2026",

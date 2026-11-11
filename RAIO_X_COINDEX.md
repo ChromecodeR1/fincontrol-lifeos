@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.46.1`  
-> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 61 — Popovers em Portal Opaco, Scrollbar Fina sem Setas e Higienização de Categorias)  
+> **Versão da Aplicação:** `0.47.0`  
+> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 62 — Arquitetura Cloud-First Definitiva no Supabase, UUIDs Determinísticos RFC 4122 v4, Cofre Mestre V3 e Inspetor Cloud)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1211,6 +1211,28 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Desduplicação case-insensitive via `Map` e ordenação alfabética estrita `localeCompare("pt-BR")` em `allUniqueCategories`.
     - **Passo 4 — Ocultação Estrita da Coluna de Checkboxes (`app/TransactionsTableAdvanced.tsx`):**
       - `<th>` e `<td>` da coluna de seleção estritamente omitidos do DOM quando `showCheckboxes === false`, garantindo que "Data" seja sempre a primeira coluna visível.
+
+  - **Sprint 62 (Novembro de 2026 — Reengenharia 100% Cloud-First no Supabase PostgreSQL assinada por Henrique Montenegro v0.47.0):**
+    - **Pilar 1 — Conversor Determinístico `ensureValidUuid` e Erradicação do Erro PostgreSQL 22P02 (`app/lib/services/coindex-supabase.ts`):**
+      - Algoritmo gerador de 128 bits determinísticos baseado em 4 sementes FNV-1a de 32 bits com aplicação de máscara RFC 4122 v4 (`0x40` no byte de versão e `0x80 | 0x3f` no byte de variante).
+      - Converte qualquer ID alfanumérico ou legado (ex: `tx-quick-...`, `tx-123...`) para um UUID v4 estritamente válido antes de qualquer `upsert` ou `delete` no PostgreSQL.
+      - O ID original é preservado dentro do payload de metadados Base64 `||__CXM__:` (`meta.originalId`) e restaurado com 100% de fidelidade em `decodeTxFromSupabase`.
+    - **Pilar 2 — Blindagem do Cofre Mestre V3 contra Restrições SQL e Filtros (`app/lib/services/coindex-supabase.ts`):**
+      - O registro mestre `__COINDEX_CLOUD_VAULT_V3__` passa a ser gravado com UUID determinístico derivado do `userId` (`getCloudVaultRowId`) e utiliza estritamente as 9 colunas universais com valores padrão à prova de falhas: `category: "Outros"`, `cost_type: "Fixo"`, `payment_method: "PIX"`, `status: "Pago"`, `amount: 0`.
+      - Supressão de enums ou categorias especiais (`"__COINDEX_CLOUD_VAULT__"`, `"Sistema"`) que poderiam ser rejeitados por triggers ou check constraints do PostgreSQL.
+      - Detecção de linhas do cofre via `isCloudVaultRow` isolada antes de qualquer parsing contábil ou migração de categoria em `fetchAllCoindexData`; garantia de 0% de interferência em totais de receitas, despesas ou listagens de lançamentos.
+    - **Pilar 3 — Expansão Universal do Cofre Mestre para 100% dos Módulos (`app/lib/services/coindex-supabase.ts` e `app/page.tsx`):**
+      - O payload `CoindexCloudVaultState` agora abrange: Cartões de crédito, Contas bancárias, Status financeiro fixo, Desejos de compra (Wishlist), Notas (BrainNotes), Investimentos (B3, CDI, BTC, calibração de saldo real `realBalanceOverride`, modo de rendimento, aportes no simulador de marcos), Meus Veículos (odômetro, planos de revisão preventiva, histórico e telemetria de combustível), Bio & Strava e UI Settings (tema claro/escuro, modo de efeitos de fundo e layout do dashboard).
+    - **Pilar 4 — Sincronização Central Reativa (Auto-Sync) com Debounce de 600ms (`app/page.tsx`):**
+      - Criação da ref de segurança `isInitialCloudHydrationCompleteRef` para bloquear escritas prematuras antes do término do carregamento inicial.
+      - Ref reativa `latestStateRef` mantendo o snapshot mais fresco de todos os estados sem re-renderizações parasitas.
+      - `useEffect` reativo disparando `pushFullStateToCloud` com debounce de 600ms após qualquer alteração em qualquer módulo, atualizando o badge para `🟡 Salvando na Nuvem...` e, em seguida, para `🟢 Sincronizado` se `ok: true`.
+    - **Pilar 5 — Modal Central de Sincronização & Inspetor Cloud via Portal (`app/page.tsx`):**
+      - Clique no badge da Topbar abre o Inspetor de Nuvem renderizado via `createPortal` com design Cupertino Glassmorphism.
+      - Exibe diagnóstico de rede em tempo real (latência em ms via ping, status PostgreSQL com RLS, usuário autenticado e URL mascarada).
+      - Resumo de telemetria dos 9 módulos com contadores em tempo real.
+      - Ação explícita `⬆️ Enviar Tudo Deste Computador para a Nuvem Agora (Push)` com verificação de leitura no banco.
+      - Ação explícita `⬇️ Baixar da Nuvem e Substituir Este Computador (Pull)` com restauração completa de 100% dos dados.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

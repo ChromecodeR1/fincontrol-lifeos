@@ -58,15 +58,104 @@ export function safeBase64Decode(str: string): string {
 
 export const TX_METADATA_DELIMITER = " ||__CXM__:";
 export const VAULT_CATEGORY = "__COINDEX_CLOUD_VAULT__";
-export const VAULT_DESC_PREFIX = "__COINDEX_CLOUD_VAULT_V2__:";
+export const VAULT_LEGACY_PREFIX = "__COINDEX_CLOUD_VAULT__:";
+export const VAULT_DESC_PREFIX_V2 = "__COINDEX_CLOUD_VAULT_V2__:";
+export const VAULT_DESC_PREFIX_V3 = "__COINDEX_CLOUD_VAULT_V3__:";
+export const VAULT_DESC_PREFIX = VAULT_DESC_PREFIX_V3;
 
 /**
- * Retorna um UUID v4 determinístico válido (RFC 4122) para o registro do cofre mestre do usuário,
- * garantindo compatibilidade estrita caso a coluna 'id' seja do tipo UUID ou TEXT no PostgreSQL.
+ * Expressão regular estrita para validação de UUID v4 (RFC 4122).
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * SPRINT 62: Converte qualquer string arbitrária em um UUID v4 (RFC 4122) válido e determinístico.
+ * Se o ID já for um UUID v4 válido, retorna em minúsculas sem alteração.
+ * Caso contrário, computa 128 bits determinísticos utilizando 4 sementes FNV-1a de 32 bits,
+ * aplicando a versão v4 (0x40) e variante RFC (0x80 | 0x3f). Erradica 100% o erro PostgreSQL 22P02.
+ */
+export function ensureValidUuid(rawId: string): string {
+  if (!rawId || typeof rawId !== "string") {
+    return "00000000-0000-4000-8000-000000000000";
+  }
+  const trimmed = rawId.trim();
+  if (UUID_REGEX.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  // FNV-1a 32-bit hash com semente customizada
+  function fnv1a(str: string, seed: number): number {
+    let h = seed >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+  }
+
+  // Gera 4 números de 32 bits (128 bits no total) usando diferentes sementes
+  const h1 = fnv1a(trimmed, 0x811c9dc5);
+  const h2 = fnv1a(trimmed, 0x9e3779b9);
+  const h3 = fnv1a(trimmed, 0x85ebca6b);
+  const h4 = fnv1a(trimmed, 0xc2b2ae35);
+
+  const hex1 = h1.toString(16).padStart(8, "0");
+  const hex2 = h2.toString(16).padStart(8, "0");
+  const hex3 = h3.toString(16).padStart(8, "0");
+  const hex4 = h4.toString(16).padStart(8, "0");
+
+  const raw128 = (hex1 + hex2 + hex3 + hex4).toLowerCase();
+
+  const part1 = raw128.substring(0, 8);
+  const part2 = raw128.substring(8, 12);
+  const part3 = "4" + raw128.substring(13, 16);
+  const b8Hex = parseInt(raw128.substring(16, 18), 16);
+  const variantByte = ((b8Hex & 0x3f) | 0x80).toString(16).padStart(2, "0");
+  const part4 = variantByte + raw128.substring(18, 20);
+  const part5 = raw128.substring(20, 32);
+
+  return `${part1}-${part2}-${part3}-${part4}-${part5}`;
+}
+
+/**
+ * Retorna o UUID v4 determinístico do Cofre Mestre V3 para o usuário.
+ */
+export function getCloudVaultRowId(userId: string): string {
+  return ensureValidUuid(`coindex_master_vault_v3_${userId || "default"}`);
+}
+
+/**
+ * Compatibilidade legada para getVaultRowId.
  */
 export function getVaultRowId(userId: string): string {
-  const cleanHex = (userId || "").replace(/[^a-fA-F0-9]/g, "").toLowerCase().padEnd(12, "0").slice(0, 12);
-  return `00000000-0000-4000-8000-${cleanHex}`;
+  return getCloudVaultRowId(userId);
+}
+
+/**
+ * SPRINT 62: Identifica se um registro de banco de dados pertence ao Cofre Mestre (Cloud Vault),
+ * isolando-o de transações financeiras normais por ID, categoria e prefixo de descrição.
+ */
+export function isCloudVaultRow(row: Record<string, unknown>, userId?: string): boolean {
+  if (!row) return false;
+  const rId = String(row.id || "");
+  const rCat = String(row.category || "");
+  const rDesc = String(row.description || "");
+
+  if (userId) {
+    const v3Id = getCloudVaultRowId(userId);
+    const legacyId = `00000000-0000-4000-8000-${(userId || "").replace(/[^a-fA-F0-9]/g, "").toLowerCase().padEnd(12, "0").slice(0, 12)}`;
+    if (rId === v3Id || rId === legacyId) return true;
+  }
+  if (rCat === VAULT_CATEGORY) return true;
+  if (
+    rDesc.startsWith(VAULT_DESC_PREFIX_V3) ||
+    rDesc.startsWith(VAULT_DESC_PREFIX_V2) ||
+    rDesc.startsWith(VAULT_LEGACY_PREFIX) ||
+    rDesc.includes("__COINDEX_CLOUD_VAULT__")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -83,6 +172,9 @@ export function encodeTxForSupabase(tx: Transaction): {
   const cleanDescription = delimiterIndex >= 0 ? rawDesc.slice(0, delimiterIndex).trim() : rawDesc;
 
   const meta: Record<string, unknown> = {};
+
+  // SPRINT 62: Preserva o ID original da aplicação para restauração precisa após conversão UUID
+  if (tx.id) meta.originalId = tx.id;
 
   // Metadados estendidos de Investimentos (SPRINT 48 & 58)
   if (tx.investmentBucket) meta.investmentBucket = tx.investmentBucket;
@@ -160,7 +252,7 @@ export function decodeTxFromSupabase(row: Record<string, unknown>): Transaction 
   }
 
   const tx: Transaction = {
-    id: String(row.id),
+    id: (meta.originalId ? String(meta.originalId) : undefined) ?? String(row.id),
     date: String(row.tx_date ?? row.date ?? ""),
     description: cleanDescription,
     amount: Number(row.amount ?? 0),
@@ -253,28 +345,98 @@ export function decodeWishMetadata(content: string): { cleanContent: string; met
 export interface CoindexCloudVaultState {
   version: string;
   syncedAt: string;
+  updatedAt?: string;
+  rev?: number;
+  // 1. Cartões de Crédito
+  cards?: CreditCardItem[];
+  // 2. Contas Bancárias
+  banks?: BankItem[];
+  // 3. Status Fixo / Alertas
+  staticStatus?: StaticStatusItem[];
+  // 4. Lista de Desejos / Wishlist / BrainNotes
+  notes?: BrainNote[];
+  wishlist?: WishlistItem[];
+  // 5. Investimentos
   investmentState?: {
     realBalanceOverride?: number;
     yieldMode?: "bruto" | "liquido" | "aportes";
     visibleMarketCharts?: string[];
     simulatorMonthlyContribution?: number;
-    bucketCalibrations?: Record<string, unknown>;
+    bucketCalibrations?: Record<string, number>;
+    purchases?: Record<string, Array<{
+      date: string;
+      amount: number;
+      quotePrice?: number;
+      quantity?: number;
+      notes?: string;
+    }>>;
+    notes?: Record<string, string>;
+    customGoals?: Record<string, number>;
     b3Holdings?: Record<string, unknown>;
   };
-  banks?: BankItem[];
-  cards?: CreditCardItem[];
-  notes?: BrainNote[];
-  staticStatus?: StaticStatusItem[];
+  // 6. Veículos & Garagem
+  vehiclesState?: {
+    vehicles?: Array<{
+      id: string;
+      name: string;
+      model?: string;
+      plate?: string;
+      currentKm?: number;
+      fuelTankCapacity?: number;
+      color?: string;
+    }>;
+    refuels?: Array<{
+      id: string;
+      vehicleId?: string;
+      date: string;
+      km: number;
+      liters: number;
+      totalCost: number;
+      fuelType?: string;
+      fullTank?: boolean;
+    }>;
+    maintenanceLogs?: Array<{
+      id: string;
+      vehicleId?: string;
+      date: string;
+      km: number;
+      description: string;
+      cost: number;
+      category?: string;
+    }>;
+    customPlans?: Record<string, Array<{
+      id: string;
+      item: string;
+      intervalKm: number;
+      lastDoneKm?: number;
+      notes?: string;
+    }>>;
+    activeVehicleId?: string;
+  };
   autoInmetroConfig?: unknown;
   vehicleMaintenance?: {
     history?: Record<string, number>;
     customItems?: unknown[];
   };
+  // 7. Bio & Strava
+  bioAndStravaState?: {
+    stravaActivities?: unknown[];
+    bioLogs?: BioLog[];
+    athleteProfile?: unknown;
+    stravaStats?: unknown;
+  };
+  // 8. Configurações da UI
   uiSettings?: {
     themeMode?: ThemeMode;
     bgFxMode?: string;
     cupertinoTheme?: boolean;
+    reduceMotion?: boolean;
+    activeTab?: string;
+    chartTheme?: ChartThemeColors;
+    dashboardLayout?: DashboardWidgetConfig[];
+    chartConfigs?: Record<string, ChartWidgetSettings>;
   };
+  // 9. Tombstones
   tombstones?: string[];
 }
 
@@ -334,49 +496,55 @@ function toCategorySlug(name: string): string {
   return clean ? `cat-${clean}` : `cat-${Date.now()}`;
 }
 
-export async function saveCloudVaultInDb(
-  partialState: Partial<CoindexCloudVaultState>,
-  explicitUserId?: string | null
+/**
+ * SPRINT 62: Gravação universal do Cofre Mestre V3 dentro da tabela transactions
+ * utilizando estritamente as 9 colunas com valores que satisfazem 100% de constraints e enums.
+ */
+export async function saveCloudVaultInTransactionsDb(
+  userId: string,
+  vaultPayload: Partial<CoindexCloudVaultState>
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = createClient();
-    const userId = explicitUserId || (await getActiveUserId());
     if (!userId) return { ok: false, error: "Utilizador não autenticado." };
 
-    const vaultId = getVaultRowId(userId);
+    const vaultId = getCloudVaultRowId(userId);
+    const nowIso = new Date().toISOString();
 
     const payload: CoindexCloudVaultState = {
-      version: "0.45.0",
-      syncedAt: new Date().toISOString(),
-      ...partialState
+      version: "0.47.0",
+      syncedAt: nowIso,
+      updatedAt: nowIso,
+      ...vaultPayload
     };
 
-    const encodedVaultDesc = `${VAULT_DESC_PREFIX}${safeBase64Encode(JSON.stringify(payload))}`;
+    const encodedVaultDesc = `${VAULT_DESC_PREFIX_V3}${safeBase64Encode(JSON.stringify(payload))}`;
 
     const vaultRow: Record<string, unknown> = {
       id: vaultId,
       user_id: userId,
-      tx_date: "2099-12-31",
+      tx_date: nowIso.split("T")[0],
       description: encodedVaultDesc,
       amount: 0,
-      category: VAULT_CATEGORY,
+      category: "Outros",
       cost_type: "Fixo",
-      payment_method: "Sistema",
+      payment_method: "PIX",
       status: "Pago",
-      updated_at: new Date().toISOString()
+      updated_at: nowIso
     };
 
     const res = await supabase.from("transactions").upsert(vaultRow, { onConflict: "id,user_id" });
     if (res.error) {
+      // Fallback básico para esquemas que não possuem a coluna updated_at
       const minimalRow = {
         id: vaultId,
         user_id: userId,
-        tx_date: "2099-12-31",
+        tx_date: nowIso.split("T")[0],
         description: encodedVaultDesc,
         amount: 0,
-        category: VAULT_CATEGORY,
+        category: "Outros",
         cost_type: "Fixo",
-        payment_method: "Sistema",
+        payment_method: "PIX",
         status: "Pago"
       };
       const fbRes = await supabase.from("transactions").upsert(minimalRow, { onConflict: "id,user_id" });
@@ -391,6 +559,15 @@ export async function saveCloudVaultInDb(
     console.error("[coindex-supabase] Falha na rede ao salvar Cofre Mestre:", msg);
     return { ok: false, error: msg };
   }
+}
+
+export async function saveCloudVaultInDb(
+  partialState: Partial<CoindexCloudVaultState>,
+  explicitUserId?: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  const userId = explicitUserId || (await getActiveUserId());
+  if (!userId) return { ok: false, error: "Utilizador não autenticado." };
+  return saveCloudVaultInTransactionsDb(userId, partialState);
 }
 
 export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
@@ -471,26 +648,48 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       }
     }
 
-    // SPRINT 58: Extração e Desacoplamento do Cofre Mestre Cloud Vault
-    const vaultId = getVaultRowId(userId);
-    const isVaultRow = (r: Record<string, unknown>): boolean => {
-      const rId = String(r.id || "");
-      const rCat = String(r.category || "");
-      const rDesc = String(r.description || "");
-      return rId === vaultId || rCat === VAULT_CATEGORY || rDesc.startsWith(VAULT_DESC_PREFIX);
-    };
-
-    const vaultRow = txRows.find(isVaultRow);
-    const pureTxRows = txRows.filter((r) => !isVaultRow(r));
+    // SPRINT 58 & 62: Extração e Desacoplamento Estrito do Cofre Mestre Cloud Vault
+    // Isola as linhas do cofre ANTES de qualquer parse de transações financeiras
+    const vaultRows = txRows.filter((r) => isCloudVaultRow(r, userId));
+    const pureTxRows = txRows.filter((r) => !isCloudVaultRow(r, userId));
 
     let cloudVault: CoindexCloudVaultState | undefined;
-    if (vaultRow) {
-      const desc = String(vaultRow.description || "");
-      const b64 = desc.startsWith(VAULT_DESC_PREFIX) ? desc.slice(VAULT_DESC_PREFIX.length).trim() : desc;
-      try {
-        cloudVault = JSON.parse(safeBase64Decode(b64));
-      } catch (e) {
-        console.warn("[coindex-supabase] Erro ao decodificar cofre mestre:", e);
+    if (vaultRows.length > 0) {
+      // Ordena por updated_at descendente para priorizar a revisão mais recente
+      const sortedVaultRows = [...vaultRows].sort((a, b) => {
+        const timeA = a.updated_at ? new Date(String(a.updated_at)).getTime() : 0;
+        const timeB = b.updated_at ? new Date(String(b.updated_at)).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      for (const vRow of sortedVaultRows) {
+        const desc = String(vRow.description || "");
+        let b64 = "";
+        if (desc.startsWith(VAULT_DESC_PREFIX_V3)) {
+          b64 = desc.slice(VAULT_DESC_PREFIX_V3.length).trim();
+        } else if (desc.startsWith(VAULT_DESC_PREFIX_V2)) {
+          b64 = desc.slice(VAULT_DESC_PREFIX_V2.length).trim();
+        } else if (desc.startsWith(VAULT_LEGACY_PREFIX)) {
+          b64 = desc.slice(VAULT_LEGACY_PREFIX.length).trim();
+        } else {
+          const idx = desc.indexOf("__COINDEX_CLOUD_VAULT");
+          if (idx >= 0) {
+            const colonIdx = desc.indexOf(":", idx);
+            if (colonIdx >= 0) b64 = desc.slice(colonIdx + 1).trim();
+          }
+        }
+
+        if (b64) {
+          try {
+            const parsed = JSON.parse(safeBase64Decode(b64));
+            if (parsed && typeof parsed === "object") {
+              cloudVault = parsed;
+              break;
+            }
+          } catch (e) {
+            console.warn("[coindex-supabase] Erro ao decodificar cofre mestre de linha:", e);
+          }
+        }
       }
     }
 
@@ -583,7 +782,7 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       staticStatus = cloudVault.staticStatus;
     }
 
-    const wishlist: WishlistItem[] = ((wishRes.data ?? []) as Array<Record<string, unknown>>)
+    let wishlist: WishlistItem[] = ((wishRes.data ?? []) as Array<Record<string, unknown>>)
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
       .map((r) => ({
         id: String(r.id),
@@ -594,7 +793,11 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         priority: (r.priority as WishlistItem["priority"]) ?? "Média"
       }));
 
-    const bioLogs: BioLog[] = ((bioRes.data ?? []) as Array<Record<string, unknown>>)
+    if (wishlist.length === 0 && cloudVault?.wishlist && cloudVault.wishlist.length > 0) {
+      wishlist = cloudVault.wishlist.filter((w: WishlistItem) => !isExcluded(w.id));
+    }
+
+    let bioLogs: BioLog[] = ((bioRes.data ?? []) as Array<Record<string, unknown>>)
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
       .map((r) => ({
         id: String(r.id),
@@ -602,6 +805,10 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
         weight: Number(r.weight ?? 0),
         bf: r.bf != null ? Number(r.bf) : undefined
       }));
+
+    if (bioLogs.length === 0 && cloudVault?.bioAndStravaState?.bioLogs && cloudVault.bioAndStravaState.bioLogs.length > 0) {
+      bioLogs = cloudVault.bioAndStravaState.bioLogs.filter((b: BioLog) => !isExcluded(b.id));
+    }
 
     const okrs: PersonalOKR[] = ((okrsRes.data ?? []) as Array<Record<string, unknown>>)
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
@@ -845,7 +1052,7 @@ export async function migrateAllStateToSupabase(
       const txPayload = snapshot.transactions.map((t) => {
         const { enrichedDescription } = encodeTxForSupabase(t);
         return {
-          id: t.id,
+          id: ensureValidUuid(t.id),
           user_id: userId,
           tx_date: t.date,
           description: enrichedDescription,
@@ -880,7 +1087,7 @@ export async function migrateAllStateToSupabase(
       const { error: txErr } = await supabase.from("transactions").upsert(txPayload, { onConflict: "id,user_id" });
       if (txErr) {
         const safePayload = snapshot.transactions.map((t) => ({
-          id: t.id,
+          id: ensureValidUuid(t.id),
           user_id: userId,
           tx_date: t.date,
           description: encodeTxForSupabase(t).enrichedDescription,
@@ -1023,93 +1230,120 @@ export async function migrateAllStateToSupabase(
   }
 }
 
-export async function upsertTransactionsInDb(txs: Transaction[], debtorMap?: Record<string, string>) {
-  const supabase = createClient();
-  const userId = await getActiveUserId();
-  if (!userId || txs.length === 0) return;
+export async function upsertTransactionsInDb(
+  txs: Transaction[],
+  debtorMap?: Record<string, string>
+): Promise<{ ok: boolean; count?: number; error?: string }> {
+  try {
+    const supabase = createClient();
+    const userId = await getActiveUserId();
+    if (!userId || txs.length === 0) return { ok: true, count: 0 };
 
-  const payloads = txs.map((t) => {
-    const { enrichedDescription } = encodeTxForSupabase(t);
-    return {
-      id: t.id,
-      user_id: userId,
-      tx_date: t.date,
-      description: enrichedDescription,
-      amount: t.amount,
-      category: t.category,
-      cost_type: t.costType,
-      payment_method: t.paymentMethod,
-      card_used: t.cardUsed ?? t.bankAccount ?? null,
-      bank_account: t.bankAccount ?? null,
-      status: t.status,
-      km: t.km ?? null,
-      liters: t.liters ?? null,
-      fuel_type: t.fuelType ?? null,
-      full_tank: t.fullTank ?? null,
-      flow_type: t.flowType ?? null,
-      invoice_month: t.invoiceMonth ?? t.invoiceCompetence ?? null,
-      cash_month: t.cashMonth ?? null,
-      debtor: t.debtor ?? (debtorMap ? debtorMap[t.id] : null) ?? null,
-      paid_amount: t.paidAmount ?? (t.status === "Pago" ? t.amount : 0),
-      installment_info: t.installmentInfo ?? null,
-      installment_group_id: t.installmentGroupId ?? null,
-      wishlist_id: t.wishlistId ?? null,
-      icon_url: t.iconUrl ?? null,
-      investment_bucket: t.investmentBucket ?? null,
-      asset_ticker: t.assetTicker ?? null,
-      entry_quote_price: t.entryQuotePrice ?? null,
-      manual_yield_pct: t.manualYieldPct ?? null,
-      rev: (t.rev ?? 0) + 1,
-      updated_at: t.updatedAt ?? new Date().toISOString()
-    };
-  });
+    const payloads = txs.map((t) => {
+      const { enrichedDescription } = encodeTxForSupabase(t);
+      return {
+        id: ensureValidUuid(t.id),
+        user_id: userId,
+        tx_date: t.date,
+        description: enrichedDescription,
+        amount: t.amount,
+        category: t.category,
+        cost_type: t.costType,
+        payment_method: t.paymentMethod,
+        card_used: t.cardUsed ?? t.bankAccount ?? null,
+        bank_account: t.bankAccount ?? null,
+        status: t.status,
+        km: t.km ?? null,
+        liters: t.liters ?? null,
+        fuel_type: t.fuelType ?? null,
+        full_tank: t.fullTank ?? null,
+        flow_type: t.flowType ?? null,
+        invoice_month: t.invoiceMonth ?? t.invoiceCompetence ?? null,
+        cash_month: t.cashMonth ?? null,
+        debtor: t.debtor ?? (debtorMap ? debtorMap[t.id] : null) ?? null,
+        paid_amount: t.paidAmount ?? (t.status === "Pago" ? t.amount : 0),
+        installment_info: t.installmentInfo ?? null,
+        installment_group_id: t.installmentGroupId ?? null,
+        wishlist_id: t.wishlistId ?? null,
+        icon_url: t.iconUrl ?? null,
+        investment_bucket: t.investmentBucket ?? null,
+        asset_ticker: t.assetTicker ?? null,
+        entry_quote_price: t.entryQuotePrice ?? null,
+        manual_yield_pct: t.manualYieldPct ?? null,
+        rev: (t.rev ?? 0) + 1,
+        updated_at: t.updatedAt ?? new Date().toISOString()
+      };
+    });
 
-  const res = await supabase.from("transactions").upsert(payloads, { onConflict: "id,user_id" });
-  if (res.error) {
-    // Se o banco remoto não tiver as colunas estendidas, faz fallback para as colunas base.
-    // Todos os metadados continuam 100% salvos através do túnel enrichedDescription!
-    if (res.error.code === "PGRST204" || res.error.code === "42703" || res.error.message?.includes("column")) {
-      console.warn(
-        "[coindex-supabase] Schema fallback ativado para transactions (metadados preservados no túnel):",
-        res.error.message
-      );
-      const minimalPayloads = txs.map((t) => {
-        const { enrichedDescription } = encodeTxForSupabase(t);
-        return {
-          id: t.id,
-          user_id: userId,
-          tx_date: t.date,
-          description: enrichedDescription,
-          amount: t.amount,
-          category: t.category,
-          cost_type: t.costType,
-          payment_method: t.paymentMethod,
-          card_used: t.cardUsed ?? t.bankAccount ?? null,
-          status: t.status
-        };
-      });
-      const fbRes = await supabase.from("transactions").upsert(minimalPayloads, { onConflict: "id,user_id" });
-      if (fbRes.error) {
-        console.error("[coindex-supabase] Fallback básico de transactions falhou:", fbRes.error);
+    const res = await supabase.from("transactions").upsert(payloads, { onConflict: "id,user_id" });
+    if (res.error) {
+      // Se o banco remoto não tiver as colunas estendidas, faz fallback para as colunas base.
+      // Todos os metadados continuam 100% salvos através do túnel enrichedDescription!
+      if (res.error.code === "PGRST204" || res.error.code === "42703" || res.error.message?.includes("column")) {
+        console.warn(
+          "[coindex-supabase] Schema fallback ativado para transactions (metadados preservados no túnel):",
+          res.error.message
+        );
+        const minimalPayloads = txs.map((t) => {
+          const { enrichedDescription } = encodeTxForSupabase(t);
+          return {
+            id: ensureValidUuid(t.id),
+            user_id: userId,
+            tx_date: t.date,
+            description: enrichedDescription,
+            amount: t.amount,
+            category: t.category,
+            cost_type: t.costType,
+            payment_method: t.paymentMethod,
+            card_used: t.cardUsed ?? t.bankAccount ?? null,
+            status: t.status
+          };
+        });
+        const fbRes = await supabase.from("transactions").upsert(minimalPayloads, { onConflict: "id,user_id" });
+        if (fbRes.error) {
+          console.error("[coindex-supabase] Fallback básico de transactions falhou:", fbRes.error);
+          return { ok: false, error: fbRes.error.message };
+        }
+      } else {
+        console.error("[coindex-supabase] Erro ao sincronizar transações:", res.error);
+        return { ok: false, error: res.error.message };
       }
-    } else {
-      console.error("[coindex-supabase] Erro ao sincronizar transações:", res.error);
     }
+    return { ok: true, count: txs.length };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro desconhecido ao salvar transações";
+    return { ok: false, error: msg };
   }
 }
 
-export async function deleteTransactionInDb(id: string) {
-  const supabase = createClient();
-  const userId = await getActiveUserId();
-  if (!userId) return;
-  await supabase.from("transactions").delete().eq("id", id).eq("user_id", userId);
+export async function deleteTransactionInDb(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = createClient();
+    const userId = await getActiveUserId();
+    if (!userId) return { ok: false, error: "Usuário não autenticado" };
+    const targetUuids = Array.from(new Set([id, ensureValidUuid(id)]));
+    const { error } = await supabase.from("transactions").delete().in("id", targetUuids).eq("user_id", userId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro ao excluir transação";
+    return { ok: false, error: msg };
+  }
 }
 
-export async function deleteTransactionsInDb(ids: string[]) {
-  const supabase = createClient();
-  const userId = await getActiveUserId();
-  if (!userId || ids.length === 0) return;
-  await supabase.from("transactions").delete().in("id", ids).eq("user_id", userId);
+export async function deleteTransactionsInDb(ids: string[]): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = createClient();
+    const userId = await getActiveUserId();
+    if (!userId || ids.length === 0) return { ok: true };
+    const allUuids = Array.from(new Set(ids.flatMap((id) => [id, ensureValidUuid(id)])));
+    const { error } = await supabase.from("transactions").delete().in("id", allUuids).eq("user_id", userId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro ao excluir lote de transações";
+    return { ok: false, error: msg };
+  }
 }
 
 export async function upsertCardInDb(card: CreditCardItem): Promise<{ ok: boolean; error?: string }> {
