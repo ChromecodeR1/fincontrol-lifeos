@@ -221,6 +221,7 @@ import {
   deduplicateCloudTransactions,
   pingSupabaseDatabase,
   purgeDuplicateTransactionsInDb,
+  runForensicCloudRecovery,
   deleteTransactionInDb,
   deleteTransactionsInDb,
   upsertCardInDb,
@@ -1619,13 +1620,22 @@ export default function CoindexApp() {
         const savedReadNotifs = localStorage.getItem("lifeos_read_notifications_v1");
         if (savedReadNotifs) setReadNotificationIds(JSON.parse(savedReadNotifs));
 
-        // SPRINT 64: Arquitetura 100% Nuvem Estrita (Henrique Montenegro & Davi Kroner)
-        // O Coindex NUNCA hidrata Lançamentos, Cartões, Bancos, Investimentos, Veículos ou Notas
-        // a partir de localStorage. Purga proativamente resquícios de caches locais de entidades.
-        purgeAllEntityLocalCaches(currentUserId);
+        // SPRINT 66: PROTEÇÃO ABSOLUTA E RESGATE PREVENTIVO (Henrique Montenegro)
+        // Nunca apaga nem esvazia transações às cegas na inicialização.
+        // Lê dados prévios do localStorage para exibição imediata e segurança contra falhas de rede.
+        try {
+          const rawLocal = localStorage.getItem("lifeos_txs_v8") ||
+            (currentUserId ? localStorage.getItem(`coindex_usr_${currentUserId}_lifeos_txs_v8`) : null) ||
+            localStorage.getItem("coindex_guest_lifeos_txs_v8");
+          if (rawLocal) {
+            const parsed = JSON.parse(rawLocal);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setTransactions(parsed);
+            }
+          }
+        } catch {}
 
-        // Inicializa entidades em memória como vazias enquanto o Supabase responde
-        setTransactions([]);
+        // Inicializa entidades auxiliares em memória enquanto o Supabase responde
         setCards([]);
         setBanks([]);
         setStaticStatus([]);
@@ -1745,12 +1755,32 @@ export default function CoindexApp() {
             ...t,
             category: migrateLegacyCategory(t.category, t.description)
           }));
-          const finalTxs = migratedTxs;
+          let finalTxs = migratedTxs;
           const targetUserId = res.userId || currentUserId;
           const currentTombstones = getTombstones(targetUserId);
 
-          // SPRINT 64: Soberania Estrita da Nuvem (Zero LocalStorage LWW Merge)
-          // As transações vêm 100% do Supabase PostgreSQL. Nenhuma fusão com cache local.
+          // SPRINT 66 (Emergência Forense): Se as transações carregadas não contêm dados dos meses recentes
+          // (Setembro, Outubro ou Novembro de 2026), ou a contagem for anormalmente baixa (< 80),
+          // aciona a recuperação forense automática com des-inversão MDY e varredura do cofre / caches.
+          const hasRecentMonths = finalTxs.some((t) => {
+            const p = parseDateParts(t.date);
+            return Boolean(p && p.year === 2026 && (p.month === 9 || p.month === 10 || p.month === 11));
+          });
+          if (targetUserId && (!hasRecentMonths || finalTxs.length < 80)) {
+            console.warn("[SPRINT 66] Detectada ausência de lançamentos de Set/Out/Nov ou contagem reduzida. Executando resgate forense...");
+            try {
+              const recovery = await runForensicCloudRecovery(targetUserId, finalTxs);
+              if (recovery.recoveredCount > 0 && recovery.transactions.length > finalTxs.length) {
+                finalTxs = recovery.transactions;
+                console.log(`[SPRINT 66] Resgate forense automático concluído: +${recovery.recoveredCount} lançamentos resgatados (Total: ${finalTxs.length}).`);
+              }
+            } catch (err) {
+              console.error("[SPRINT 66] Erro durante resgate forense automático:", err);
+            }
+          }
+
+          // SPRINT 64 & 66: Soberania Estrita da Nuvem (Zero LocalStorage LWW Merge)
+          // As transações vêm 100% do Supabase PostgreSQL com metadados fiéis.
           const activeCloudTxs = finalTxs.filter((t) => !currentTombstones.has(t.id));
 
           // SPRINT 50: Reconciliação Contábil Bidirecional Central (SSOT) no Supabase
@@ -1870,8 +1900,8 @@ export default function CoindexApp() {
             }
           }
 
-          // SPRINT 64: Purga final de qualquer cache de entidades remanescente
-          purgeAllEntityLocalCaches(targetUserId);
+          // SPRINT 66: Caches locais de transações são preservados como rede de segurança forense
+          // NUNCA executar purga cega de dados locais.
 
           // SPRINT 62 & 64: Marca hidratação inicial concluída para desbloquear o auto-sync reativo
           isInitialCloudHydrationCompleteRef.current = true;
@@ -6853,10 +6883,8 @@ export default function CoindexApp() {
 
         // 2. Grava todas as transações ativas usando ensureValidUuid e deduplicação
         const rawActiveTxs = state.transactions.filter((t) => !tombstonesArray.includes(t.id));
-        const { deduplicatedTxs: activeTxs, duplicateIdsToDelete } = deduplicateCloudTransactions(rawActiveTxs);
-        if (duplicateIdsToDelete.length > 0) {
-          void purgeDuplicateTransactionsInDb(targetUserId, duplicateIdsToDelete);
-        }
+        const { deduplicatedTxs: activeTxs } = deduplicateCloudTransactions(rawActiveTxs);
+        // SPRINT 66: Proibição absoluta de exclusão cega em background no Supabase
 
         const txRes = await upsertTransactionsInDb(activeTxs, state.debtorMap);
         if (!txRes.ok) {
@@ -6879,8 +6907,8 @@ export default function CoindexApp() {
           );
         }
 
-        // SPRINT 64: Purga proativa de entidades locais no push
-        purgeAllEntityLocalCaches(targetUserId);
+        // SPRINT 66: Preserva cache local como salvaguarda forense contra perda de dados.
+        // NUNCA executar purga cega de dados locais.
 
         return { ok: true, count: activeTxs.length };
       } catch (err: unknown) {
@@ -7110,10 +7138,24 @@ export default function CoindexApp() {
       if (res.ok && res.data) {
         const d = res.data;
 
-        // Hidratação 100% pura da nuvem para transações
-        if (d.transactions) {
-          setTransactions(d.transactions);
+        // Hidratação de transações com verificação de integridade forense
+        let incomingTxs = d.transactions || [];
+        const hasRecentMonths = incomingTxs.some((t) => {
+          const p = parseDateParts(t.date);
+          return Boolean(p && p.year === 2026 && (p.month === 9 || p.month === 10 || p.month === 11));
+        });
+        if (currentUserId && (!hasRecentMonths || incomingTxs.length < 80)) {
+          console.warn("[SPRINT 66] Sincronização manual detectou falta de Set/Out/Nov. Executando resgate forense...");
+          try {
+            const recovery = await runForensicCloudRecovery(currentUserId, incomingTxs);
+            if (recovery.recoveredCount > 0 && recovery.transactions.length > incomingTxs.length) {
+              incomingTxs = recovery.transactions;
+            }
+          } catch (e) {
+            console.error("[SPRINT 66] Erro no resgate forense manual:", e);
+          }
         }
+        setTransactions(incomingTxs);
 
         // Cartões puros da nuvem
         const cloudCards = (d.cards && d.cards.length > 0)
@@ -7169,8 +7211,8 @@ export default function CoindexApp() {
           }
         }
 
-        // SPRINT 64: Purga completa de resquícios locais de entidades
-        purgeAllEntityLocalCaches(currentUserId);
+        // SPRINT 66: Caches locais de transações são preservados como salvaguarda forense
+        // NUNCA executar purga cega de dados locais.
 
         setSheetsSyncStatus({
           state: "success",
@@ -7252,7 +7294,7 @@ export default function CoindexApp() {
           if (d.staticStatus && d.staticStatus.length > 0) setStaticStatus(d.staticStatus);
           if (d.bioLogs && d.bioLogs.length > 0) setBioLogs(d.bioLogs);
 
-          purgeAllEntityLocalCaches(currentUserId);
+          // SPRINT 66: Preserva dados locais contra purga silenciosa
 
           setSheetsSyncStatus({
             state: "success",

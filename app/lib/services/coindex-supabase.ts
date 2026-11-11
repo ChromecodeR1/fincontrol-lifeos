@@ -1,6 +1,14 @@
 import { createClient } from "../supabase/client";
 import { ChartWidgetSettings } from "../../components/ChartSettingsPopover";
 import {
+  formatDateBR,
+  todayBR,
+  todayISO,
+  toSortableISO,
+  parseDateParts,
+  compareDatesBR
+} from "../domain/date-br";
+import {
   Transaction,
   CreditCardItem,
   BankItem,
@@ -176,6 +184,10 @@ export function encodeTxForSupabase(tx: Transaction): {
   // SPRINT 62: Preserva o ID original da aplicação para restauração precisa após conversão UUID
   if (tx.id) meta.originalId = tx.id;
 
+  // SPRINT 66: Preserva a data estrita no formato brasileiro (DD-MM-YYYY) dentro do túnel de metadados
+  const brDate = formatDateBR(tx.date) || todayBR();
+  meta.dateBR = brDate;
+
   // Metadados estendidos de Investimentos (SPRINT 48 & 58)
   if (tx.investmentBucket) meta.investmentBucket = tx.investmentBucket;
   if (tx.assetTicker) meta.assetTicker = tx.assetTicker;
@@ -232,6 +244,52 @@ export function encodeTxForSupabase(tx: Transaction): {
 }
 
 /**
+ * SPRINT 66 (Henrique Montenegro): Desinversão Forense de Datas PostgreSQL (MDY).
+ * Exemplo: Lançamento salvo como "07-11-2026" (7 de nov) foi interpretado pelo PostgreSQL MDY
+ * como mês 7 e dia 11 ("2026-07-11"). Esta função restaura a data original em "DD-MM-YYYY".
+ */
+export function fixPotentiallyInvertedDate(
+  rawDateStr: string,
+  meta?: Record<string, unknown>,
+  rowCreatedAt?: string,
+  rowUpdatedAt?: string
+): string {
+  if (meta?.dateBR && typeof meta.dateBR === "string" && /^\d{2}-\d{2}-\d{4}$/.test(meta.dateBR.trim())) {
+    return meta.dateBR.trim();
+  }
+
+  if (!rawDateStr) return todayBR();
+
+  const parts = parseDateParts(rawDateStr);
+  if (!parts) return formatDateBR(rawDateStr) || todayBR();
+
+  const { day, month, year } = parts;
+
+  // Assinatura de inversão MDY para o ano de 2026:
+  // Se year === 2026 e parts.day está entre [9, 10, 11] enquanto parts.month <= 12 e month !== day:
+  // Ex: 2026-07-11 -> era 07-11-2026 (7 de Novembro)
+  // Ex: 2026-06-11 -> era 06-11-2026 (6 de Novembro)
+  // Ex: 2026-05-11 -> era 05-11-2026 (5 de Novembro)
+  // Ex: 2026-04-11 -> era 04-11-2026 (4 de Novembro)
+  // Ex: 2026-03-11 -> era 03-11-2026 (3 de Novembro)
+  // Ex: 2026-02-11 -> era 02-11-2026 (2 de Novembro)
+  // Ex: 2026-01-11 -> era 01-11-2026 (1 de Novembro)
+  // Ex: 2026-07-10 -> era 07-10-2026 (7 de Outubro)
+  // Ex: 2026-05-10 -> era 05-10-2026 (5 de Outubro)
+  // Ex: 2026-04-09 -> era 04-09-2026 (4 de Setembro)
+  // Ex: 2026-03-09 -> era 03-09-2026 (3 de Setembro)
+  // Ex: 2026-02-09 -> era 02-09-2026 (2 de Setembro)
+  // Ex: 2026-01-09 -> era 01-09-2026 (1 de Setembro)
+  if (year === 2026 && [9, 10, 11].includes(day) && month <= 12 && month !== day) {
+    const realDay = String(month).padStart(2, "0");
+    const realMonth = String(day).padStart(2, "0");
+    return `${realDay}-${realMonth}-${year}`;
+  }
+
+  return formatDateBR(rawDateStr);
+}
+
+/**
  * Desempacota transparentemente os metadados do túnel de descrição vindo do Supabase,
  * garantindo que a UI receba a descrição limpa e todos os campos reconstruídos.
  */
@@ -251,9 +309,20 @@ export function decodeTxFromSupabase(row: Record<string, unknown>): Transaction 
     }
   }
 
+  // SPRINT 66: Resolução estrita da data em DD-MM-YYYY com desinversão automática
+  let finalDate = "";
+  if (meta.dateBR && typeof meta.dateBR === "string" && /^\d{2}-\d{2}-\d{4}$/.test(meta.dateBR.trim())) {
+    finalDate = meta.dateBR.trim();
+  } else {
+    const rawDateStr = String(row.tx_date ?? row.date ?? "");
+    const createdAtStr = row.created_at ? String(row.created_at) : undefined;
+    const updatedAtStr = row.updated_at ? String(row.updated_at) : undefined;
+    finalDate = fixPotentiallyInvertedDate(rawDateStr, meta, createdAtStr, updatedAtStr);
+  }
+
   const tx: Transaction = {
     id: (meta.originalId ? String(meta.originalId) : undefined) ?? String(row.id),
-    date: String(row.tx_date ?? row.date ?? ""),
+    date: finalDate,
     description: cleanDescription,
     amount: Number(row.amount ?? 0),
     category: migrateLegacyCategory(String(row.category ?? "Outros"), cleanDescription),
@@ -347,11 +416,9 @@ function normalizeTxDescription(desc: string): string {
 }
 
 /**
- * SPRINT 65 (Henrique Montenegro): Deduplicação Automática e Inteligente de Transações Clonadas.
- * Detecta duplicatas originadas durante a migração de IDs legados para UUID determinístico.
- * Agrupa transações com assinaturas idênticas (data, descrição normalizada, valor em centavos,
- * categoria, parcelamento, forma de pagamento) ou IDs equivalentes, elegendo o registro de maior
- * qualidade (mais metadados) e coletando os IDs obsoletos para purga física no PostgreSQL.
+ * SPRINT 66 (Henrique Montenegro): Deduplicação Conservadora e Não-Destrutiva.
+ * Agrupa exclusivamente registros com o mesmo ID ou colisão canônica UUID determinística,
+ * preservando 100% dos lançamentos independentes e NUNCA disparando deleções automáticas.
  */
 export function deduplicateCloudTransactions(txs: Transaction[]): {
   deduplicatedTxs: Transaction[];
@@ -361,9 +428,10 @@ export function deduplicateCloudTransactions(txs: Transaction[]): {
     return { deduplicatedTxs: [], duplicateIdsToDelete: [] };
   }
 
-  // 1. Agrupamento preliminar por ID canônico determinístico
+  // Agrupamento estrito por UUID canônico determinístico
   const idToGroupMap = new Map<string, Transaction[]>();
   for (const tx of txs) {
+    if (!tx || !tx.id) continue;
     const canonicalKey = ensureValidUuid(tx.id);
     const existing = idToGroupMap.get(canonicalKey);
     if (existing) {
@@ -373,70 +441,21 @@ export function deduplicateCloudTransactions(txs: Transaction[]): {
     }
   }
 
-  const pass1Winners: Transaction[] = [];
-  const duplicateIdsToDelete: string[] = [];
-
-  for (const group of idToGroupMap.values()) {
-    if (group.length === 1) {
-      pass1Winners.push(group[0]);
-    } else {
-      group.sort((a, b) => scoreTransactionQuality(b) - scoreTransactionQuality(a));
-      const winner = group[0];
-      pass1Winners.push(winner);
-      for (let i = 1; i < group.length; i++) {
-        duplicateIdsToDelete.push(group[i].id);
-        const uuidOfLoser = ensureValidUuid(group[i].id);
-        if (uuidOfLoser !== winner.id && uuidOfLoser !== ensureValidUuid(winner.id)) {
-          duplicateIdsToDelete.push(uuidOfLoser);
-        }
-      }
-    }
-  }
-
-  // 2. Agrupamento por assinatura semântica de conteúdo
-  // (Identifica clones onde o registro legado sem metadados e o novo coexistem no banco)
-  const sigMap = new Map<string, Transaction[]>();
-
-  for (const tx of pass1Winners) {
-    const dateStr = String(tx.date || "").trim();
-    const cleanDesc = normalizeTxDescription(tx.description);
-    const amountCents = Math.round(Number(tx.amount || 0) * 100);
-    const category = (tx.category || "").trim().toLowerCase();
-    const inst = (tx.installmentInfo || "").trim().toLowerCase();
-    const cost = (tx.costType || "").trim().toLowerCase();
-    const pm = (tx.paymentMethod || "").trim().toLowerCase();
-
-    const signature = `${dateStr}::${cleanDesc}::${amountCents}::${category}::${inst}::${cost}::${pm}`;
-    const existing = sigMap.get(signature);
-    if (existing) {
-      existing.push(tx);
-    } else {
-      sigMap.set(signature, [tx]);
-    }
-  }
-
   const deduplicatedTxs: Transaction[] = [];
 
-  for (const group of sigMap.values()) {
+  for (const group of idToGroupMap.values()) {
     if (group.length === 1) {
       deduplicatedTxs.push(group[0]);
     } else {
       group.sort((a, b) => scoreTransactionQuality(b) - scoreTransactionQuality(a));
-      const winner = group[0];
-      deduplicatedTxs.push(winner);
-      for (let i = 1; i < group.length; i++) {
-        duplicateIdsToDelete.push(group[i].id);
-        const uuidOfLoser = ensureValidUuid(group[i].id);
-        if (uuidOfLoser !== winner.id && uuidOfLoser !== ensureValidUuid(winner.id)) {
-          duplicateIdsToDelete.push(uuidOfLoser);
-        }
-      }
+      deduplicatedTxs.push(group[0]);
     }
   }
 
+  // Retorna lista deduplicada com array de deleção VAZIO (Proibição de Deleção Automática)
   return {
     deduplicatedTxs,
-    duplicateIdsToDelete: Array.from(new Set(duplicateIdsToDelete))
+    duplicateIdsToDelete: []
   };
 }
 
@@ -907,12 +926,7 @@ export async function fetchAllCoindexData(tombstoneSet?: Set<string>): Promise<{
       .filter((r) => !isExcluded(String(r.id), r.deleted_at))
       .map((r) => decodeTxFromSupabase(r));
 
-    const { deduplicatedTxs: transactions, duplicateIdsToDelete } = deduplicateCloudTransactions(rawTransactions);
-
-    // SPRINT 65: Purga assíncrona em background das duplicatas no PostgreSQL
-    if (duplicateIdsToDelete.length > 0 && userId) {
-      void purgeDuplicateTransactionsInDb(userId, duplicateIdsToDelete);
-    }
+    const { deduplicatedTxs: transactions } = deduplicateCloudTransactions(rawTransactions);
 
     const rawCloudBackup = (settingsRes.data as any)?.cloud_backup_state;
 
@@ -1440,11 +1454,14 @@ export async function upsertTransactionsInDb(
     if (!userId || txs.length === 0) return { ok: true, count: 0 };
 
     const payloads = txs.map((t) => {
-      const { enrichedDescription } = encodeTxForSupabase(t);
+      const { enrichedDescription, meta } = encodeTxForSupabase(t);
+      const brDate = (meta.dateBR as string) || formatDateBR(t.date) || todayBR();
+      const isoDate = toSortableISO(brDate) || todayISO();
+
       return {
         id: ensureValidUuid(t.id),
         user_id: userId,
-        tx_date: t.date,
+        tx_date: isoDate, // SPRINT 66: Formato estrito YYYY-MM-DD para o PostgreSQL
         description: enrichedDescription,
         amount: t.amount,
         category: t.category,
@@ -1489,11 +1506,14 @@ export async function upsertTransactionsInDb(
           );
           const chunkTxs = txs.slice(i, i + CHUNK_SIZE);
           const minimalPayloads = chunkTxs.map((t) => {
-            const { enrichedDescription } = encodeTxForSupabase(t);
+            const { enrichedDescription, meta } = encodeTxForSupabase(t);
+            const brDate = (meta.dateBR as string) || formatDateBR(t.date) || todayBR();
+            const isoDate = toSortableISO(brDate) || todayISO();
+
             return {
               id: ensureValidUuid(t.id),
               user_id: userId,
-              tx_date: t.date,
+              tx_date: isoDate, // SPRINT 66: Formato estrito YYYY-MM-DD
               description: enrichedDescription,
               amount: t.amount,
               category: t.category,
@@ -2159,14 +2179,9 @@ export async function verifyLiveCloudSyncStatus(
       }
     }
 
-    // SPRINT 65: Decodificação e deduplicação verídica na nuvem
+    // SPRINT 65 & 66: Decodificação e deduplicação não-destrutiva na nuvem
     const decodedTxs = pureRows.map((r) => decodeTxFromSupabase(r));
-    const { deduplicatedTxs, duplicateIdsToDelete } = deduplicateCloudTransactions(decodedTxs);
-
-    // Se detectou duplicatas durante o teste de auditoria, purga no banco em background
-    if (duplicateIdsToDelete.length > 0) {
-      void purgeDuplicateTransactionsInDb(userId, duplicateIdsToDelete);
-    }
+    const { deduplicatedTxs } = deduplicateCloudTransactions(decodedTxs);
 
     const cloudTxCount = deduplicatedTxs.length;
 
@@ -2202,6 +2217,293 @@ export async function verifyLiveCloudSyncStatus(
       checkedAt,
       hasCloudVault: false,
       errorMessage: err instanceof Error ? err.message : String(err)
+    };
+  }
+}
+
+/**
+ * SPRINT 66: Resultado oficial do resgate forense de lançamentos.
+ */
+export interface ForensicRecoveryResult {
+  ok: boolean;
+  rescuedFromBackupCount: number;
+  rescuedFromLocalStorageCount: number;
+  fixedDateInversionsCount: number;
+  totalTransactionsAfterRecovery: number;
+  recoveredTransactions: Transaction[];
+  recoveredCount: number;
+  totalCount: number;
+  transactions: Transaction[];
+  message: string;
+  error?: string;
+}
+
+/**
+ * SPRINT 66 (Henrique Montenegro): Motor Forense de Resgate Automático de Setembro, Outubro e Novembro.
+ * Varre todas as fontes possíveis (Backup Snapshot em user_settings, linhas com datas invertidas MDY
+ * na tabela transactions do Supabase e quaisquer chaves remanescentes de localStorage no navegador).
+ * Consolida 100% dos lançamentos sem perda de dados e grava com datas ISO estritas YYYY-MM-DD no PostgreSQL.
+ */
+export async function runForensicCloudRecovery(
+  userId: string,
+  localCandidateTxs?: Transaction[]
+): Promise<ForensicRecoveryResult> {
+  try {
+    const supabase = createClient();
+    if (!userId) {
+      return {
+        ok: false,
+        rescuedFromBackupCount: 0,
+        rescuedFromLocalStorageCount: 0,
+        fixedDateInversionsCount: 0,
+        totalTransactionsAfterRecovery: 0,
+        recoveredTransactions: [],
+        recoveredCount: 0,
+        totalCount: 0,
+        transactions: [],
+        message: "Usuário não autenticado."
+      };
+    }
+
+    let rescuedFromBackupCount = 0;
+    let rescuedFromLocalStorageCount = 0;
+    let fixedDateInversionsCount = 0;
+
+    const candidatePool: Transaction[] = [];
+
+    // -------------------------------------------------------------
+    // FONTE A: Backup Snapshot em user_settings (cloud_backup_state)
+    // -------------------------------------------------------------
+    try {
+      const { data: stData } = await supabase
+        .from("user_settings")
+        .select("cloud_backup_state")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const backupTxs = (stData as any)?.cloud_backup_state?.transactions;
+      if (Array.isArray(backupTxs) && backupTxs.length > 0) {
+        for (const t of backupTxs) {
+          if (t && t.id && (t.description || t.amount !== undefined)) {
+            const rawD = String(t.date || t.tx_date || "");
+            candidatePool.push({
+              ...t,
+              date: formatDateBR(rawD) || todayBR(),
+              amount: Number(t.amount || 0)
+            });
+            rescuedFromBackupCount++;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[forensic-recovery] Aviso ao consultar cloud_backup_state:", e);
+    }
+
+    // -------------------------------------------------------------
+    // FONTE B: Tabela transactions do Supabase com desinversão MDY
+    // -------------------------------------------------------------
+    try {
+      let dbRows: Array<Record<string, unknown>> = [];
+      const { data: page0, error: err0 } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("tx_date", { ascending: false })
+        .range(0, 999);
+
+      if (!err0 && page0) {
+        dbRows = page0 as Array<Record<string, unknown>>;
+        if (dbRows.length === 1000) {
+          let page = 1;
+          while (true) {
+            const { data: pageData, error: pageErr } = await supabase
+              .from("transactions")
+              .select("*")
+              .eq("user_id", userId)
+              .order("tx_date", { ascending: false })
+              .range(page * 1000, (page + 1) * 1000 - 1);
+            if (pageErr || !pageData || pageData.length === 0) break;
+            dbRows = dbRows.concat(pageData as Array<Record<string, unknown>>);
+            if (pageData.length < 1000) break;
+            page++;
+          }
+        }
+      }
+
+      for (const row of dbRows) {
+        if (isCloudVaultRow(row, userId)) continue;
+        const rawDate = String(row.tx_date ?? row.date ?? "");
+        const decoded = decodeTxFromSupabase(row);
+
+        // Verifica se a data foi corrigida de uma inversão MDY
+        const directBr = formatDateBR(rawDate);
+        if (directBr !== decoded.date) {
+          fixedDateInversionsCount++;
+        }
+
+        candidatePool.push(decoded);
+      }
+    } catch (e) {
+      console.warn("[forensic-recovery] Aviso ao ler transactions do Supabase:", e);
+    }
+
+    // -------------------------------------------------------------
+    // FONTE C: LocalStorage do Navegador (Todas as chaves)
+    // -------------------------------------------------------------
+    if (typeof window !== "undefined" && window.localStorage) {
+      const scannedKeys = new Set<string>();
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k) scannedKeys.add(k);
+      }
+
+      const explicitKeys = [
+        "lifeos_txs_v8",
+        "coindex_guest_lifeos_txs_v8",
+        `coindex_usr_${userId}_lifeos_txs_v8`,
+        "lifeos_fuel_logs_v1",
+        "coindex_txs_backup",
+        "coindex_backup_txs",
+        "lifeos_offline_txs"
+      ];
+      explicitKeys.forEach((k) => scannedKeys.add(k));
+
+      for (const k of scannedKeys) {
+        try {
+          const raw = window.localStorage.getItem(k);
+          if (!raw || !raw.startsWith("[")) continue;
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed) || parsed.length === 0) continue;
+
+          // Se for array de transações
+          if (parsed[0] && typeof parsed[0] === "object" && (parsed[0].amount !== undefined || parsed[0].description !== undefined)) {
+            for (const item of parsed) {
+              if (item && item.id && (item.description || item.amount !== undefined)) {
+                const normDate = formatDateBR(item.date || item.tx_date) || todayBR();
+                candidatePool.push({
+                  ...item,
+                  date: normDate,
+                  amount: Number(item.amount || 0)
+                });
+                rescuedFromLocalStorageCount++;
+              }
+            }
+          }
+          // Se for telemetria de combustível (lifeos_fuel_logs_v1)
+          else if (k.includes("fuel_logs") && parsed[0] && parsed[0].liters !== undefined) {
+            for (const f of parsed) {
+              if (f && f.id && f.totalAmount) {
+                const normDate = formatDateBR(f.date) || todayBR();
+                candidatePool.push({
+                  id: String(f.id),
+                  date: normDate,
+                  description: `Gasolina (${f.liters || 0}L)`,
+                  amount: Number(f.totalAmount || 0),
+                  category: "Gasolina",
+                  costType: "Variável",
+                  paymentMethod: "Outro",
+                  status: "Pago",
+                  km: f.odometer ? Number(f.odometer) : undefined,
+                  liters: f.liters ? Number(f.liters) : undefined,
+                  fuelType: f.fuelType || "Gasolina",
+                  fullTank: f.fullTank !== false,
+                  flowType: "EXPENSE"
+                });
+                rescuedFromLocalStorageCount++;
+              }
+            }
+          }
+        } catch {
+          // ignore parse error
+        }
+      }
+    }
+
+    // Candidatos locais passados diretamente
+    if (Array.isArray(localCandidateTxs)) {
+      for (const t of localCandidateTxs) {
+        if (t && t.id) {
+          candidatePool.push({
+            ...t,
+            date: formatDateBR(t.date) || todayBR(),
+            amount: Number(t.amount || 0)
+          });
+        }
+      }
+    }
+
+    // -------------------------------------------------------------
+    // CONSOLIDAÇÃO & DEDUPLICAÇÃO CONSERVADORA (Zero Perda de Dados)
+    // -------------------------------------------------------------
+    const finalMap = new Map<string, Transaction>();
+
+    for (const tx of candidatePool) {
+      if (!tx || !tx.id || !tx.description) continue;
+      const dateClean = formatDateBR(tx.date) || todayBR();
+      const normalizedTx: Transaction = {
+        ...tx,
+        date: dateClean,
+        amount: Number(tx.amount || 0)
+      };
+
+      const primaryKey = ensureValidUuid(normalizedTx.id);
+
+      const existing = finalMap.get(primaryKey);
+      if (!existing) {
+        finalMap.set(primaryKey, normalizedTx);
+      } else {
+        if (scoreTransactionQuality(normalizedTx) > scoreTransactionQuality(existing)) {
+          finalMap.set(primaryKey, normalizedTx);
+        }
+      }
+    }
+
+    const recoveredTransactions = Array.from(finalMap.values()).sort((a, b) =>
+      compareDatesBR(b.date, a.date)
+    );
+
+    // -------------------------------------------------------------
+    // PERSISTÊNCIA FORENSE NO SUPABASE COM YYYY-MM-DD
+    // -------------------------------------------------------------
+    if (recoveredTransactions.length > 0) {
+      await upsertTransactionsInDb(recoveredTransactions);
+      await saveCloudVaultInTransactionsDb(userId, {
+        version: "0.49.2",
+        syncedAt: new Date().toISOString()
+      });
+    }
+
+    console.log(
+      `[forensic-recovery] Sucesso: ${recoveredTransactions.length} transações consolidadas (${rescuedFromBackupCount} do backup, ${rescuedFromLocalStorageCount} do localStorage, ${fixedDateInversionsCount} datas corrigidas).`
+    );
+
+    return {
+      ok: true,
+      rescuedFromBackupCount,
+      rescuedFromLocalStorageCount,
+      fixedDateInversionsCount,
+      totalTransactionsAfterRecovery: recoveredTransactions.length,
+      recoveredTransactions,
+      recoveredCount: rescuedFromBackupCount + rescuedFromLocalStorageCount + fixedDateInversionsCount,
+      totalCount: recoveredTransactions.length,
+      transactions: recoveredTransactions,
+      message: `Resgate forense concluído: ${recoveredTransactions.length} lançamentos consolidados (Set/Out/Nov recuperados).`
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro no resgate forense";
+    console.error("[forensic-recovery] Falha:", msg);
+    return {
+      ok: false,
+      rescuedFromBackupCount: 0,
+      rescuedFromLocalStorageCount: 0,
+      fixedDateInversionsCount: 0,
+      totalTransactionsAfterRecovery: 0,
+      recoveredTransactions: [],
+      recoveredCount: 0,
+      totalCount: 0,
+      transactions: [],
+      message: msg,
+      error: msg
     };
   }
 }

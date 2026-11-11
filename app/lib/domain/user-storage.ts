@@ -192,67 +192,21 @@ export function clearUserSessionStorage(userId?: string | null): void {
 }
 
 /**
- * SPRINT 64: Purga completa de todos os caches locais de entidades financeiras e de dados.
- * O Coindex opera sob arquitetura 100% Nuvem Estrita (Supabase PostgreSQL SSOT).
- * Lançamentos, Cartões, Bancos, Investimentos, Veículos e Notas não residem em localStorage.
+ * SPRINT 66: Purga conservadora de caches legados obsoletos.
+ * PROTEÇÃO ABSOLUTA: Transações e telemetria de combustível ("lifeos_txs_v8", "lifeos_fuel_logs_v1", "*_txs*")
+ * NUNCA são apagadas às cegas pelo navegador, servindo como rede de segurança contra perda de dados.
  */
 export function purgeAllEntityLocalCaches(userId?: string | null): void {
   if (typeof window === "undefined" || !window.localStorage) return;
 
-  const entityKeyPatterns = [
-    "lifeos_txs_v8",
-    "lifeos_cards_v8",
+  const obsoleteNonTxKeys = [
     "lifeos_cards_v1",
-    "lifeos_banks_v8",
     "lifeos_banks_v1",
-    "lifeos_status_v8",
-    "lifeos_notes_v8",
-    "lifeos_wish_v8",
-    "lifeos_bio_v8",
-    "lifeos_okrs_v8",
-    "lifeos_debtors_v8",
     "coindex_vault_cards_backup",
-    "coindex_vault_banks_backup",
-    "coindex_patrimony_real_adjustment",
-    "lifeos_vehicle_maintenance_items_v2",
-    "lifeos_vehicle_maintenance_v1",
-    "lifeos_fuel_logs_v1"
+    "coindex_vault_banks_backup"
   ];
 
-  entityKeyPatterns.forEach((k) => {
-    try {
-      window.localStorage.removeItem(k);
-    } catch {}
-  });
-
-  const cleanId = userId ? userId.trim() : "";
-  const prefixes = cleanId ? [`coindex_usr_${cleanId}_`, "coindex_guest_"] : ["coindex_usr_", "coindex_guest_"];
-
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const k = window.localStorage.key(i);
-    if (!k) continue;
-    for (const prefix of prefixes) {
-      if (k.startsWith(prefix)) {
-        if (
-          k.includes("_txs") ||
-          k.includes("_cards") ||
-          k.includes("_banks") ||
-          k.includes("_status") ||
-          k.includes("_notes") ||
-          k.includes("_vault") ||
-          k.includes("_adjustment") ||
-          k.includes("_wish") ||
-          k.includes("_bio") ||
-          k.includes("_okrs")
-        ) {
-          keysToRemove.push(k);
-        }
-      }
-    }
-  }
-
-  keysToRemove.forEach((k) => {
+  obsoleteNonTxKeys.forEach((k) => {
     try {
       window.localStorage.removeItem(k);
     } catch {}

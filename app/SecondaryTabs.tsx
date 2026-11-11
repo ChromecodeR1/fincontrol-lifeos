@@ -45,7 +45,7 @@ import { AmbientFxMode, AMBIENT_FX_OPTIONS } from "./components/AmbientBackgroun
 import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, AnimatedMetric } from "./components/AnimatedNumber144";
 import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
 import { triggerAuraBurst } from "./components/MotionEngine144";
-import { verifyLiveCloudSyncStatus, LiveCloudSyncAuditResult } from "./lib/services/coindex-supabase";
+import { verifyLiveCloudSyncStatus, LiveCloudSyncAuditResult, runForensicCloudRecovery } from "./lib/services/coindex-supabase";
 
 /**
  * Formata ritmo/pace esportivo exato em min:seg /km (AUD-15).
@@ -820,6 +820,36 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
       setIsAuditingCloud(false);
     }
   }, [currentUserId, transactions.length, cards.length]);
+
+  // SPRINT 66: Resgate Forense de Lançamentos de Set/Out/Nov
+  const [isRecovering, setIsRecovering] = useState<boolean>(false);
+  const handleForensicRecoveryClick = React.useCallback(async () => {
+    if (!currentUserId || isRecovering) return;
+    setIsRecovering(true);
+    try {
+      notify("🩺 Iniciando Resgate Forense", "Varrendo cofres, backups e corrigindo datas invertidas no Supabase...", "info", "CONFIG");
+      const res = await runForensicCloudRecovery(currentUserId, transactions);
+      if (res.ok) {
+        notify(
+          "✅ Resgate Concluído com Sucesso!",
+          `Foram resgatados/corrigidos ${res.recoveredCount} lançamentos. Total sincronizado: ${res.totalCount}.`,
+          "success",
+          "CONFIG"
+        );
+        if (handleManualForceCloudSync) {
+          await handleManualForceCloudSync();
+        }
+        void runCloudAudit();
+      } else {
+        notify("⚠️ Resgate Forense", res.message || "Nenhum lançamento adicional localizado.", "warning", "CONFIG");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido";
+      notify("Erro no Resgate Forense", msg, "error", "CONFIG");
+    } finally {
+      setIsRecovering(false);
+    }
+  }, [currentUserId, isRecovering, transactions, notify, handleManualForceCloudSync, runCloudAudit]);
 
   useEffect(() => {
     if (activeTab === "settings" && currentUserId && !cloudAudit && !isAuditingCloud) {
@@ -5108,6 +5138,21 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                   <Search className="w-3.5 h-3.5" />
                 )}
                 🔍 Testar e Verificar Nuvem Agora
+              </button>
+
+              <button
+                type="button"
+                onClick={handleForensicRecoveryClick}
+                disabled={isRecovering}
+                className="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-bold text-rose-300 flex items-center gap-2 transition cursor-pointer disabled:opacity-50 shadow-sm"
+                title="Resgata lançamentos com datas MDY invertidas ou armazenados no cofre/caches de Set/Out/Nov"
+              >
+                {isRecovering ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <span>🩺</span>
+                )}
+                Resgatar Lançamentos (Set/Out/Nov)
               </button>
 
               <button

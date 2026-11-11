@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.49.1`  
-> **Última Atualização:** 11 de Novembro de 2026 (Pós-Sprint 65 — Delta Sync Ultra-Rápido, Fim do Erro de Sync Travado, Deduplicação Automática e Correção de Aportes Cloud)  
+> **Versão da Aplicação:** `0.49.2`  
+> **Última Atualização:** 11 de Novembro de 2026 (Pós-Sprint 66 de Emergência — Resgate Forense de Lançamentos de Set/Out/Nov, Des-inversão MDY e Persistência Universal YYYY-MM-DD no PostgreSQL)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1292,6 +1292,25 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Contador de aportes corrigido para considerar lançamentos com categoria `"Aporte"`, `"Aporte / Investimento"`, `"Investimentos"`, `flowType === "INVESTMENT"` ou `Boolean(t.investmentBucket)`, exibindo o total real de aportes realizados em vez de `0 aportes`.
       - Ajuste cosmético no item "Veículos & Revisões:" com `gap-2` e `shrink-0` para prevenir quebra de layout indesejada.
       - Banner de alerta com botão acionável de reenvio atômico imediato ("Reenviar Agora") no Inspetor Cloud sempre que um erro pontual for detectado.
+
+  - **Sprint 66 de Emergência (Novembro de 2026 — Resgate Forense de Lançamentos de Set/Out/Nov, Des-inversão MDY e Persistência Universal YYYY-MM-DD no PostgreSQL assinada por Henrique Montenegro v0.49.2):**
+    - **Pilar 1 — Diagnóstico Forense da Causa Raiz do Sumiço de Lançamentos:**
+      - O frontend armazenava datas estritamente no padrão brasileiro `DD-MM-YYYY` (ex: `"07-11-2026"`). Ao enviar esse valor diretamente para a coluna `date` do PostgreSQL:
+        1. Para dias `> 12` (ex: `"15-09-2026"`, `"20-10-2026"`), o PostgreSQL disparava o erro `22008 (date/time field value out of range)`, abortando todo o lote com "Erro de Sync" e mantendo esses registros salvos apenas localmente.
+        2. Para dias `<= 12` (ex: `"07-11-2026"`, `"06-11-2026"`, `"05-10-2026"`), o parser do PostgreSQL em estilo `MDY` interpretava erroneamente o dia como mês e o mês como dia (ex: `2026-07-11`), arremessando as despesas de Setembro/Outubro/Novembro para os meses de Março a Julho.
+        3. As purgas cegas de `localStorage` nas sprints anteriores limpavam o cache local do navegador onde esses lançamentos rejeitados ainda sobreviviam.
+    - **Pilar 2 — Persistência Universal ISO YYYY-MM-DD no Supabase PostgreSQL:**
+      - Em `upsertTransactionsInDb`, toda data de transação é convertida deterministicamente para ISO `YYYY-MM-DD` via `toSortableISO(t.date)` antes de ser enviada ao PostgreSQL.
+      - A data original brasileira `DD-MM-YYYY` é simultaneamente encapsulada no túnel universal de metadados (`||__CXM__:`) sob a propriedade `meta.dateBR`.
+    - **Pilar 3 — Decodificação Segura e Des-inversão Automática (`fixPotentiallyInvertedDate`):**
+      - Na função `decodeTxFromSupabase`, a prioridade absoluta de leitura é dada ao `meta.dateBR`.
+      - Na ausência do metadado, caso uma data do banco venha com ano `2026` e o suposto dia seja `[9, 10, 11]` com mês `<= 12`, a heurística desinverte o par (`realDay = month`, `realMonth = day`), restaurando a data brasileira autêntica.
+    - **Pilar 4 — Proibição Absoluta de Exclusões e Purgas Automáticas em Segundo Plano:**
+      - Remoção total de chamadas `.delete()` de tabelas de transações em background dentro de rotinas de auditoria, deduplicação ou consulta.
+      - Desativação de purgas cegas de `localStorage` para transações (`lifeos_txs_v8`, `coindex_usr_*_txs*`) mantendo uma rede de segurança forense indelével.
+    - **Pilar 5 — Motor Forense Multi-Camadas e Botão de Ação nas Configurações (`runForensicCloudRecovery`):**
+      - Criação da ferramenta de auditoria e restauração `runForensicCloudRecovery(userId, localCandidates)` que examina o estado de backup em `user_settings`, transações no Supabase com des-inversão e todas as chaves históricas do navegador, unificando e persistindo os lançamentos no banco com datas corrigidas.
+      - Adicionado botão interativo `🩺 Resgatar Lançamentos (Set/Out/Nov)` com feedback em tempo real no card de Auditoria Cloud na aba Configurações.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

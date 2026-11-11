@@ -400,13 +400,26 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.49.1";
-export const PREVIOUS_VERSION = "0.49.0";
-export const COINDEX_APP_VERSION = "0.49.1";
+export const APP_VERSION = "0.49.2";
+export const PREVIOUS_VERSION = "0.49.1";
+export const COINDEX_APP_VERSION = "0.49.2";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.49.2",
+    date: "Nov/2026",
+    title: "Sprint 66 (Emergência): Resgate Forense de Lançamentos de Set/Out/Nov, Des-Inversão MDY e Persistência Universal YYYY-MM-DD no PostgreSQL",
+    highlights: [
+      "Diagnóstico Forense da Causa Raiz: Identificada falha crítica onde datas em formato brasileiro DD-MM-YYYY enviadas ao PostgreSQL disparavam o erro 22008 (date out of range) para dias > 12 e invertiam mês/dia (MDY) para dias <= 12, jogando transações de Setembro, Outubro e Novembro para meses anteriores.",
+      "Persistência Estrita ISO YYYY-MM-DD no Supabase: Formatação obrigatória via toSortableISO(tx.date) para a coluna física tx_date do PostgreSQL combinada com a preservação fidedigna de meta.dateBR (DD-MM-YYYY) dentro do túnel de metadados universal ||__CXM__:, garantindo integridade bidirecional.",
+      "Algoritmo Heurístico de Des-inversão MDY (fixPotentiallyInvertedDate): Decodificação inteligente no decodeTxFromSupabase que detecta e desinverte automaticamente datas convertidas erroneamente pelo PostgreSQL (ex: 2026-11-07 revertido para 07-11-2026).",
+      "Proibição Absoluta de Purgas e Exclusões Cegas: Remoção completa de rotinas automáticas de exclusão (.delete) em background e purga de localStorage, mantendo a integridade total do histórico.",
+      "Motor Forense de Resgate Multi-Camadas (runForensicCloudRecovery): Varredura unificada com restauração de lançamentos arquivados em backups do user_settings, túneis do Cofre Mestre V3 e caches locais como salvaguarda com reenvio atômico em lote para o Supabase.",
+      "Botão de Ação Imediata nas Configurações: Adicionado botão '🩺 Resgatar Lançamentos (Set/Out/Nov)' no card de Auditoria Cloud para recuperação manual instantânea com feedback visual ao vivo."
+    ]
+  },
   {
     version: "0.49.1",
     date: "Nov/2026",
