@@ -37,7 +37,8 @@ import {
   parseInstallmentInfo,
   renderCategorySemanticIcon,
   normalizeSearchText,
-  isPositiveInflowDisplay
+  isPositiveInflowDisplay,
+  migrateLegacyCategory
 } from "./lifeos-data";
 import {
   parseBankStatementFile,
@@ -336,7 +337,7 @@ const TransactionRow = React.memo<TransactionRowProps>(({
             }}
           >
             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: catColor }} />
-            {tx.category}
+            {migrateLegacyCategory(tx.category, tx.description)}
           </span>
         )}
       </td>
@@ -543,6 +544,79 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
     dir: "desc"
   });
   const [activeFilterPopover, setActiveFilterPopover] = useState<TxSortKey | null>(null);
+  const [filterAnchor, setFilterAnchor] = useState<{
+    top: number;
+    left: number;
+    right?: number;
+    width: number;
+    align: "left" | "right";
+  } | null>(null);
+  const [categorySearchQuery, setCategorySearchQuery] = useState("");
+
+  const toggleFilterPopover = useCallback((
+    key: TxSortKey,
+    e: React.MouseEvent<HTMLButtonElement>,
+    align: "left" | "right" = "left"
+  ) => {
+    e.stopPropagation();
+    if (activeFilterPopover === key) {
+      setActiveFilterPopover(null);
+      setFilterAnchor(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setFilterAnchor({
+        top: rect.bottom + 6,
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        align
+      });
+      setActiveFilterPopover(key);
+      if (key === "category") {
+        setCategorySearchQuery("");
+      }
+    }
+  }, [activeFilterPopover]);
+
+  // SPRINT 61: Fechamento automático de popovers ao clicar fora, scrollar fora ou pressionar Esc
+  React.useEffect(() => {
+    if (!activeFilterPopover) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const popoverEl = document.getElementById("coindex-filter-popover-portal");
+      if (popoverEl && !popoverEl.contains(e.target as Node)) {
+        setActiveFilterPopover(null);
+        setFilterAnchor(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setActiveFilterPopover(null);
+        setFilterAnchor(null);
+      }
+    };
+
+    const handleScroll = (e: Event) => {
+      const popoverEl = document.getElementById("coindex-filter-popover-portal");
+      if (popoverEl && !popoverEl.contains(e.target as Node)) {
+        setActiveFilterPopover(null);
+        setFilterAnchor(null);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("touchstart", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("touchstart", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [activeFilterPopover]);
+
   const [txStatusFilter, setTxStatusFilter] = useState<"ALL" | "PAGO" | "PENDENTE" | "NA_FATURA">("ALL");
   const [columnFilters, setColumnFilters] = useState<TxColumnFilters>({
     categories: [],
@@ -560,11 +634,29 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
   const BATCH_INCREMENT = 50;
   const [visibleCount, setVisibleCount] = useState<number>(INITIAL_BATCH_SIZE);
 
-  // Lista de categorias e métodos únicos para os popovers de filtro
-  const allUniqueCategories = useMemo(
-    () => Array.from(new Set(filteredTransactions.map((t) => t.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })),
-    [filteredTransactions]
-  );
+  // SPRINT 61: Higienização e desduplicação de categorias para o filtro
+  const allUniqueCategories = useMemo(() => {
+    const catMap = new Map<string, string>();
+    filteredTransactions.forEach((t) => {
+      if (!t.category) return;
+      const clean = migrateLegacyCategory(t.category, t.description).trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (!catMap.has(key)) {
+        catMap.set(key, clean);
+      }
+    });
+    return Array.from(catMap.values()).sort((a, b) =>
+      a.localeCompare(b, "pt-BR", { sensitivity: "base" })
+    );
+  }, [filteredTransactions]);
+
+  const displayedCategories = useMemo(() => {
+    const q = categorySearchQuery.trim().toLowerCase();
+    if (!q) return allUniqueCategories;
+    return allUniqueCategories.filter((c) => c.toLowerCase().includes(q));
+  }, [allUniqueCategories, categorySearchQuery]);
+
   const allUniqueMethods = useMemo(
     () => Array.from(new Set(filteredTransactions.map((t) => t.paymentMethod))).sort(),
     [filteredTransactions]
@@ -625,7 +717,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
       // Busca textual a 120Hz sem bloquear a digitação
       if (q) {
         const desc = normalizeSearchText(tx.description);
-        const cat = normalizeSearchText(tx.category);
+        const cat = normalizeSearchText(migrateLegacyCategory(tx.category, tx.description));
         const meth = normalizeSearchText(tx.paymentMethod);
         const debtor = normalizeSearchText(tx.debtor || "");
         const brDate = normalizeSearchText(formatDateBR(tx.date));
@@ -638,9 +730,12 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
       if (txStatusFilter === "PENDENTE" && (tx.status === "Pago" || tx.status === "Na Fatura")) return false;
       if (txStatusFilter === "NA_FATURA" && tx.status !== "Na Fatura" && tx.status !== "Pendente / Na Fatura") return false;
 
-      // Filtro de categorias por coluna
-      if (columnFilters.categories.length > 0 && !columnFilters.categories.includes(tx.category)) {
-        return false;
+      // Filtro de categorias por coluna (Sprint 61)
+      if (columnFilters.categories.length > 0) {
+        const txCat = migrateLegacyCategory(tx.category, tx.description).trim();
+        if (!columnFilters.categories.includes(txCat)) {
+          return false;
+        }
       }
       // Filtro de custos por coluna
       if (columnFilters.costTypes.length > 0 && !columnFilters.costTypes.includes(tx.costType)) {
@@ -1088,7 +1183,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                       }}
                     >
                       {renderCategorySemanticIcon(tx.category)}
-                      <span className="truncate max-w-[120px]">{tx.category}</span>
+                      <span className="truncate max-w-[120px]">{migrateLegacyCategory(tx.category, tx.description)}</span>
                     </span>
                   </div>
 
@@ -1183,11 +1278,7 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
 
       {/* VISÃO DESKTOP EM TABELA COMPLETA (hidden md:block) */}
       <div className="hidden md:block">
-        <div
-          className={`rounded-2xl border border-white/[0.06] transition-all relative ${
-            activeFilterPopover ? "z-[80] min-h-[380px] overflow-visible pb-20" : "z-10 overflow-x-auto"
-          }`}
-        >
+        <div className="rounded-2xl border border-white/[0.06] transition-all relative z-10 overflow-x-auto">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="relative z-30">
             <tr className="border-b border-white/[0.08] bg-slate-950/80 text-slate-400">
@@ -1216,50 +1307,16 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     <span>Data</span>
                     {renderSortArrow("date")}
                   </button>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveFilterPopover(activeFilterPopover === "date" ? null : "date")
-                      }
-                      className={`p-1 rounded hover:bg-white/10 transition ${
-                        columnFilters.dateQuery ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
-                      }`}
-                      title="Filtrar por data"
-                    >
-                      <Filter className="w-3 h-3" />
-                    </button>
-                    {activeFilterPopover === "date" && (
-                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
-                        <span className="font-bold text-white block">Filtrar por Data</span>
-                        <input
-                          type="text"
-                          placeholder="Ex: 2026, 10/2026 ou 15/10"
-                          value={columnFilters.dateQuery}
-                          onChange={(e) =>
-                            setColumnFilters({ ...columnFilters, dateQuery: e.target.value })
-                          }
-                          className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-white/10 text-white outline-none text-xs"
-                        />
-                        <div className="flex justify-between pt-1">
-                          <button
-                            type="button"
-                            onClick={() => setColumnFilters({ ...columnFilters, dateQuery: "" })}
-                            className="text-[10px] text-slate-400 hover:text-rose-400"
-                          >
-                            Limpar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveFilterPopover(null)}
-                            className="px-2.5 py-1 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white text-[10px] font-medium shadow-sm transition cursor-pointer"
-                          >
-                            Fechar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => toggleFilterPopover("date", e, "left")}
+                    className={`p-1 rounded hover:bg-white/10 transition cursor-pointer ${
+                      columnFilters.dateQuery ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
+                    }`}
+                    title="Filtrar por data"
+                  >
+                    <Filter className="w-3 h-3" />
+                  </button>
                 </div>
               </th>
 
@@ -1288,65 +1345,16 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     <span>Categoria</span>
                     {renderSortArrow("category")}
                   </button>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveFilterPopover(activeFilterPopover === "category" ? null : "category")
-                      }
-                      className={`p-1 rounded hover:bg-white/10 transition ${
-                        columnFilters.categories.length > 0 ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
-                      }`}
-                      title="Filtrar categorias"
-                    >
-                      <Filter className="w-3 h-3" />
-                    </button>
-                    {activeFilterPopover === "category" && (
-                      <div className="absolute left-0 mt-2 p-3 w-64 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
-                        <div className="flex items-center justify-between pb-1 border-b border-white/10">
-                          <span className="font-bold text-white">Selecionar Categorias</span>
-                          <button
-                            type="button"
-                            onClick={() => setColumnFilters({ ...columnFilters, categories: [] })}
-                            className="text-[10px] text-slate-400 hover:text-rose-400"
-                          >
-                            Todas
-                          </button>
-                        </div>
-                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                          {allUniqueCategories.map((cat) => {
-                            const checked = columnFilters.categories.includes(cat);
-                            return (
-                              <label
-                                key={cat}
-                                className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer"
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="accent-[#0A84FF] rounded cursor-pointer"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    const next = e.target.checked
-                                      ? [...columnFilters.categories, cat]
-                                      : columnFilters.categories.filter((c) => c !== cat);
-                                    setColumnFilters({ ...columnFilters, categories: next });
-                                  }}
-                                />
-                                <span className="truncate">{cat}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[11px] mt-1 cursor-pointer"
-                        >
-                          Concluir
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => toggleFilterPopover("category", e, "left")}
+                    className={`p-1 rounded hover:bg-white/10 transition cursor-pointer ${
+                      columnFilters.categories.length > 0 ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
+                    }`}
+                    title="Filtrar categorias"
+                  >
+                    <Filter className="w-3 h-3" />
+                  </button>
                 </div>
               </th>
 
@@ -1362,51 +1370,16 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     <span>Custo</span>
                     {renderSortArrow("costType")}
                   </button>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveFilterPopover(activeFilterPopover === "costType" ? null : "costType")
-                      }
-                      className={`p-1 rounded hover:bg-white/10 transition ${
-                        columnFilters.costTypes.length > 0 ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
-                      }`}
-                      title="Filtrar fixo ou variável"
-                    >
-                      <Filter className="w-3 h-3" />
-                    </button>
-                    {activeFilterPopover === "costType" && (
-                      <div className="absolute left-0 mt-2 p-3 w-44 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
-                        <span className="font-bold text-white block">Tipo de Custo</span>
-                        {["Fixo", "Variável"].map((cType) => (
-                          <label
-                            key={cType}
-                            className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              className="accent-[#0A84FF] rounded cursor-pointer"
-                              checked={columnFilters.costTypes.includes(cType)}
-                              onChange={(e) => {
-                                const next = e.target.checked
-                                  ? [...columnFilters.costTypes, cType]
-                                  : columnFilters.costTypes.filter((c) => c !== cType);
-                                setColumnFilters({ ...columnFilters, costTypes: next });
-                              }}
-                            />
-                            <span>{cType}</span>
-                          </label>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer"
-                        >
-                          Fechar
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => toggleFilterPopover("costType", e, "left")}
+                    className={`p-1 rounded hover:bg-white/10 transition cursor-pointer ${
+                      columnFilters.costTypes.length > 0 ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
+                    }`}
+                    title="Filtrar fixo ou variável"
+                  >
+                    <Filter className="w-3 h-3" />
+                  </button>
                 </div>
               </th>
 
@@ -1422,62 +1395,16 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     <span>Método</span>
                     {renderSortArrow("paymentMethod")}
                   </button>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveFilterPopover(activeFilterPopover === "paymentMethod" ? null : "paymentMethod")
-                      }
-                      className={`p-1 rounded hover:bg-white/10 transition ${
-                        columnFilters.methods.length > 0 ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
-                      }`}
-                      title="Filtrar métodos"
-                    >
-                      <Filter className="w-3 h-3" />
-                    </button>
-                    {activeFilterPopover === "paymentMethod" && (
-                      <div className="absolute left-0 mt-2 p-3 w-56 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
-                        <div className="flex items-center justify-between pb-1 border-b border-white/10">
-                          <span className="font-bold text-white">Métodos</span>
-                          <button
-                            type="button"
-                            onClick={() => setColumnFilters({ ...columnFilters, methods: [] })}
-                            className="text-[10px] text-slate-400 hover:text-rose-400"
-                          >
-                            Todos
-                          </button>
-                        </div>
-                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                          {allUniqueMethods.map((m) => (
-                            <label
-                              key={m}
-                              className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer"
-                            >
-                              <input
-                                type="checkbox"
-                                className="accent-[#0A84FF] rounded cursor-pointer"
-                                checked={columnFilters.methods.includes(m)}
-                                onChange={(e) => {
-                                  const next = e.target.checked
-                                    ? [...columnFilters.methods, m]
-                                    : columnFilters.methods.filter((item) => item !== m);
-                                  setColumnFilters({ ...columnFilters, methods: next });
-                                }}
-                              />
-                              <span className="truncate">{m}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer"
-                        >
-                          Fechar
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => toggleFilterPopover("paymentMethod", e, "left")}
+                    className={`p-1 rounded hover:bg-white/10 transition cursor-pointer ${
+                      columnFilters.methods.length > 0 ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
+                    }`}
+                    title="Filtrar métodos"
+                  >
+                    <Filter className="w-3 h-3" />
+                  </button>
                 </div>
               </th>
 
@@ -1493,42 +1420,16 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     <span>Odômetro</span>
                     {renderSortArrow("km")}
                   </button>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveFilterPopover(activeFilterPopover === "km" ? null : "km")
-                      }
-                      className={`p-1 rounded hover:bg-white/10 transition ${
-                        columnFilters.hasKmOnly ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
-                      }`}
-                      title="Filtrar odômetro"
-                    >
-                      <Filter className="w-3 h-3" />
-                    </button>
-                    {activeFilterPopover === "km" && (
-                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
-                        <label className="flex items-center gap-2 text-slate-200 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="accent-[#0A84FF] rounded cursor-pointer"
-                            checked={columnFilters.hasKmOnly}
-                            onChange={(e) =>
-                              setColumnFilters({ ...columnFilters, hasKmOnly: e.target.checked })
-                            }
-                          />
-                          <span>Apenas com Odômetro</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer"
-                        >
-                          Fechar
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => toggleFilterPopover("km", e, "left")}
+                    className={`p-1 rounded hover:bg-white/10 transition cursor-pointer ${
+                      columnFilters.hasKmOnly ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
+                    }`}
+                    title="Filtrar odômetro"
+                  >
+                    <Filter className="w-3 h-3" />
+                  </button>
                 </div>
               </th>
 
@@ -1544,114 +1445,34 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
                     <span>Situação</span>
                     {renderSortArrow("status")}
                   </button>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveFilterPopover(activeFilterPopover === "status" ? null : "status")
-                      }
-                      className={`p-1 rounded hover:bg-white/10 transition ${
-                        columnFilters.statuses.length > 0 ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
-                      }`}
-                      title="Filtrar situação"
-                    >
-                      <Filter className="w-3 h-3" />
-                    </button>
-                    {activeFilterPopover === "status" && (
-                      <div className="absolute left-0 mt-2 p-3 w-48 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs">
-                        <span className="font-bold text-white block">Situação</span>
-                        {["Pago", "Pendente / Na Fatura"].map((st) => (
-                          <label
-                            key={st}
-                            className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              className="accent-[#0A84FF] rounded cursor-pointer"
-                              checked={columnFilters.statuses.includes(st)}
-                              onChange={(e) => {
-                                const next = e.target.checked
-                                  ? [...columnFilters.statuses, st]
-                                  : columnFilters.statuses.filter((item) => item !== st);
-                                setColumnFilters({ ...columnFilters, statuses: next });
-                              }}
-                            />
-                            <span className="truncate">{st}</span>
-                          </label>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => setActiveFilterPopover(null)}
-                          className="w-full py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer"
-                        >
-                          Fechar
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => toggleFilterPopover("status", e, "left")}
+                    className={`p-1 rounded hover:bg-white/10 transition cursor-pointer ${
+                      columnFilters.statuses.length > 0 ? "text-indigo-400 bg-indigo-500/20" : "text-slate-400"
+                    }`}
+                    title="Filtrar situação"
+                  >
+                    <Filter className="w-3 h-3" />
+                  </button>
                 </div>
               </th>
 
               {/* 8. VALOR */}
               <th className="py-3.5 px-3 text-right">
                 <div className="flex items-center justify-end gap-1.5">
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveFilterPopover(activeFilterPopover === "amount" ? null : "amount")
-                      }
-                      className={`p-1 rounded hover:bg-white/10 transition ${
-                        columnFilters.minAmount || columnFilters.maxAmount
-                          ? "text-indigo-400 bg-indigo-500/20"
-                          : "text-slate-400"
-                      }`}
-                      title="Filtrar faixa de valor"
-                    >
-                      <Filter className="w-3 h-3" />
-                    </button>
-                    {activeFilterPopover === "amount" && (
-                      <div className="absolute right-0 mt-2 p-3 w-52 rounded-2xl bg-[var(--cupertino-card)] backdrop-blur-2xl border border-[var(--cupertino-border)] shadow-[var(--cupertino-shadow)] z-[9999] space-y-2 text-xs text-left">
-                        <span className="font-bold text-white block">Faixa de Valor (R$)</span>
-                        <input
-                          type="number"
-                          placeholder="Mínimo (R$)"
-                          value={columnFilters.minAmount}
-                          onChange={(e) =>
-                            setColumnFilters({ ...columnFilters, minAmount: e.target.value })
-                          }
-                          className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-white/10 text-white outline-none text-xs tabular-nums"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Máximo (R$)"
-                          value={columnFilters.maxAmount}
-                          onChange={(e) =>
-                            setColumnFilters({ ...columnFilters, maxAmount: e.target.value })
-                          }
-                          className="w-full px-2.5 py-1.5 rounded-xl bg-slate-900 border border-white/10 text-white outline-none text-xs tabular-nums"
-                        />
-                        <div className="flex justify-between pt-1">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setColumnFilters({ ...columnFilters, minAmount: "", maxAmount: "" })
-                            }
-                            className="text-[10px] text-slate-400 hover:text-rose-400"
-                          >
-                            Limpar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveFilterPopover(null)}
-                            className="px-2.5 py-1 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white text-[10px] font-medium shadow-sm transition cursor-pointer"
-                          >
-                            Fechar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => toggleFilterPopover("amount", e, "right")}
+                    className={`p-1 rounded hover:bg-white/10 transition cursor-pointer ${
+                      columnFilters.minAmount || columnFilters.maxAmount
+                        ? "text-indigo-400 bg-indigo-500/20"
+                        : "text-slate-400"
+                    }`}
+                    title="Filtrar faixa de valor"
+                  >
+                    <Filter className="w-3 h-3" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => toggleSort("amount")}
@@ -1706,6 +1527,397 @@ export const TransactionsTableAdvanced: React.FC<TransactionsTableAdvancedProps>
         </table>
       </div>
       </div>
+
+      {/* SPRINT 61: POPOVER DE FILTRO DE CABEÇALHO 100% OPACO RENDERIZADO VIA PORTAL */}
+      {activeFilterPopover && filterAnchor && typeof document !== "undefined" && (() => {
+        const popoverWidth =
+          activeFilterPopover === "category" ? 268 :
+          activeFilterPopover === "costType" ? 180 :
+          activeFilterPopover === "km" ? 200 :
+          activeFilterPopover === "status" ? 210 :
+          activeFilterPopover === "amount" ? 230 :
+          240;
+
+        let computedLeft = filterAnchor.align === "right"
+          ? (filterAnchor.right ?? filterAnchor.left) - popoverWidth
+          : filterAnchor.left;
+
+        if (typeof window !== "undefined") {
+          if (computedLeft + popoverWidth > window.innerWidth - 16) {
+            computedLeft = window.innerWidth - popoverWidth - 16;
+          }
+          if (computedLeft < 16) {
+            computedLeft = 16;
+          }
+        }
+
+        let computedTop = filterAnchor.top;
+        if (typeof window !== "undefined") {
+          const estHeight = activeFilterPopover === "category" ? 360 : 220;
+          if (computedTop + estHeight > window.innerHeight - 16) {
+            computedTop = Math.max(16, window.innerHeight - estHeight - 16);
+          }
+        }
+
+        return createPortal(
+          <div
+            id="coindex-filter-popover-portal"
+            className="fixed z-[99999] coindex-filter-popover bg-[#0F1420] text-slate-100 [html[data-theme='light']_&]:bg-white [html[data-theme='light']_&]:text-slate-800 border border-white/15 [html[data-theme='light']_&]:border-slate-200 rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.92)] p-3.5 animate-in fade-in zoom-in-95 duration-150"
+            style={{
+              top: `${computedTop}px`,
+              left: `${computedLeft}px`,
+              width: `${popoverWidth}px`,
+              maxWidth: "calc(100vw - 32px)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {activeFilterPopover === "date" && (
+              <div className="space-y-2 text-xs">
+                <span className="font-bold text-white [html[data-theme='light']_&]:text-slate-900 block">
+                  Filtrar por Data
+                </span>
+                <input
+                  type="text"
+                  placeholder="Ex: 2026, 10/2026 ou 15/10"
+                  value={columnFilters.dateQuery}
+                  onChange={(e) =>
+                    setColumnFilters({ ...columnFilters, dateQuery: e.target.value })
+                  }
+                  className="w-full px-2.5 py-1.5 rounded-xl bg-slate-950/60 [html[data-theme='light']_&]:bg-slate-100 border border-white/10 [html[data-theme='light']_&]:border-slate-300 text-white [html[data-theme='light']_&]:text-slate-900 outline-none text-xs"
+                />
+                <div className="flex justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setColumnFilters({ ...columnFilters, dateQuery: "" })}
+                    className="text-[10px] text-slate-400 hover:text-rose-400 cursor-pointer"
+                  >
+                    Limpar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveFilterPopover(null);
+                      setFilterAnchor(null);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white text-[10px] font-medium shadow-sm transition cursor-pointer"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeFilterPopover === "category" && (
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between pb-1.5 border-b border-white/10 [html[data-theme='light']_&]:border-slate-200">
+                  <span className="font-bold text-white [html[data-theme='light']_&]:text-slate-900">
+                    Selecionar Categorias
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setColumnFilters({ ...columnFilters, categories: allUniqueCategories })}
+                      className="text-[10px] text-blue-400 hover:text-blue-300 font-medium transition cursor-pointer"
+                    >
+                      Todas
+                    </button>
+                    <span className="text-slate-600 [html[data-theme='light']_&]:text-slate-300 text-[10px]">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setColumnFilters({ ...columnFilters, categories: [] })}
+                      className="text-[10px] text-slate-400 hover:text-rose-400 font-medium transition cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="🔍 Filtrar categoria..."
+                    value={categorySearchQuery}
+                    onChange={(e) => setCategorySearchQuery(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-xl bg-slate-950/60 [html[data-theme='light']_&]:bg-slate-100 border border-white/10 [html[data-theme='light']_&]:border-slate-300 text-white [html[data-theme='light']_&]:text-slate-900 outline-none text-xs placeholder:text-slate-500"
+                  />
+                  {categorySearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setCategorySearchQuery("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white [html[data-theme='light']_&]:hover:text-slate-900 text-[11px] cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1 max-h-56 overflow-y-auto pr-1 cupertino-thin-scroll">
+                  {displayedCategories.length === 0 ? (
+                    <div className="py-4 text-center text-slate-400 text-[11px]">
+                      Nenhuma categoria encontrada
+                    </div>
+                  ) : (
+                    displayedCategories.map((cat) => {
+                      const checked = columnFilters.categories.includes(cat);
+                      return (
+                        <label
+                          key={cat}
+                          className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-white/5 [html[data-theme='light']_&]:hover:bg-slate-100 text-slate-300 [html[data-theme='light']_&]:text-slate-700 hover:text-white [html[data-theme='light']_&]:hover:text-slate-900 cursor-pointer text-xs transition select-none"
+                        >
+                          <input
+                            type="checkbox"
+                            className="accent-[#0A84FF] rounded cursor-pointer w-3.5 h-3.5"
+                            checked={checked}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...columnFilters.categories, cat]
+                                : columnFilters.categories.filter((c) => c !== cat);
+                              setColumnFilters({ ...columnFilters, categories: next });
+                            }}
+                          />
+                          <span className="truncate">{cat}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFilterPopover(null);
+                    setFilterAnchor(null);
+                  }}
+                  className="w-full py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-xs mt-1 cursor-pointer"
+                >
+                  Concluir
+                </button>
+              </div>
+            )}
+
+            {activeFilterPopover === "costType" && (
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between pb-1 border-b border-white/10 [html[data-theme='light']_&]:border-slate-200">
+                  <span className="font-bold text-white [html[data-theme='light']_&]:text-slate-900 block">
+                    Tipo de Custo
+                  </span>
+                  {columnFilters.costTypes.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setColumnFilters({ ...columnFilters, costTypes: [] })}
+                      className="text-[10px] text-slate-400 hover:text-rose-400 cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+                {["Fixo", "Variável"].map((cType) => (
+                  <label
+                    key={cType}
+                    className="flex items-center gap-2 px-1 py-0.5 text-slate-300 [html[data-theme='light']_&]:text-slate-700 hover:text-white [html[data-theme='light']_&]:hover:text-slate-900 cursor-pointer select-none"
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-[#0A84FF] rounded cursor-pointer w-3.5 h-3.5"
+                      checked={columnFilters.costTypes.includes(cType)}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...columnFilters.costTypes, cType]
+                          : columnFilters.costTypes.filter((c) => c !== cType);
+                        setColumnFilters({ ...columnFilters, costTypes: next });
+                      }}
+                    />
+                    <span>{cType}</span>
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFilterPopover(null);
+                    setFilterAnchor(null);
+                  }}
+                  className="w-full py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer mt-1"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
+
+            {activeFilterPopover === "paymentMethod" && (
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between pb-1 border-b border-white/10 [html[data-theme='light']_&]:border-slate-200">
+                  <span className="font-bold text-white [html[data-theme='light']_&]:text-slate-900">
+                    Métodos
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setColumnFilters({ ...columnFilters, methods: [] })}
+                    className="text-[10px] text-slate-400 hover:text-rose-400 cursor-pointer"
+                  >
+                    Todos
+                  </button>
+                </div>
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1 cupertino-thin-scroll">
+                  {allUniqueMethods.map((m) => (
+                    <label
+                      key={m}
+                      className="flex items-center gap-2 px-1 py-0.5 text-slate-300 [html[data-theme='light']_&]:text-slate-700 hover:text-white [html[data-theme='light']_&]:hover:text-slate-900 cursor-pointer select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        className="accent-[#0A84FF] rounded cursor-pointer w-3.5 h-3.5"
+                        checked={columnFilters.methods.includes(m)}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...columnFilters.methods, m]
+                            : columnFilters.methods.filter((item) => item !== m);
+                          setColumnFilters({ ...columnFilters, methods: next });
+                        }}
+                      />
+                      <span className="truncate">{m}</span>
+                    </label>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFilterPopover(null);
+                    setFilterAnchor(null);
+                  }}
+                  className="w-full py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer mt-1"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
+
+            {activeFilterPopover === "km" && (
+              <div className="space-y-2 text-xs">
+                <span className="font-bold text-white [html[data-theme='light']_&]:text-slate-900 block">
+                  Odômetro
+                </span>
+                <label className="flex items-center gap-2 text-slate-200 [html[data-theme='light']_&]:text-slate-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="accent-[#0A84FF] rounded cursor-pointer w-3.5 h-3.5"
+                    checked={columnFilters.hasKmOnly}
+                    onChange={(e) =>
+                      setColumnFilters({ ...columnFilters, hasKmOnly: e.target.checked })
+                    }
+                  />
+                  <span>Apenas com Odômetro</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFilterPopover(null);
+                    setFilterAnchor(null);
+                  }}
+                  className="w-full py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer mt-1"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
+
+            {activeFilterPopover === "status" && (
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between pb-1 border-b border-white/10 [html[data-theme='light']_&]:border-slate-200">
+                  <span className="font-bold text-white [html[data-theme='light']_&]:text-slate-900 block">
+                    Situação
+                  </span>
+                  {columnFilters.statuses.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setColumnFilters({ ...columnFilters, statuses: [] })}
+                      className="text-[10px] text-slate-400 hover:text-rose-400 cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+                {["Pago", "Pendente / Na Fatura"].map((st) => (
+                  <label
+                    key={st}
+                    className="flex items-center gap-2 px-1 py-0.5 text-slate-300 [html[data-theme='light']_&]:text-slate-700 hover:text-white [html[data-theme='light']_&]:hover:text-slate-900 cursor-pointer select-none"
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-[#0A84FF] rounded cursor-pointer w-3.5 h-3.5"
+                      checked={columnFilters.statuses.includes(st)}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...columnFilters.statuses, st]
+                          : columnFilters.statuses.filter((item) => item !== st);
+                        setColumnFilters({ ...columnFilters, statuses: next });
+                      }}
+                    />
+                    <span className="truncate">{st}</span>
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFilterPopover(null);
+                    setFilterAnchor(null);
+                  }}
+                  className="w-full py-1.5 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white font-medium shadow-sm transition text-[10px] cursor-pointer mt-1"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
+
+            {activeFilterPopover === "amount" && (
+              <div className="space-y-2 text-xs text-left">
+                <span className="font-bold text-white [html[data-theme='light']_&]:text-slate-900 block">
+                  Faixa de Valor (R$)
+                </span>
+                <input
+                  type="number"
+                  placeholder="Mínimo (R$)"
+                  value={columnFilters.minAmount}
+                  onChange={(e) =>
+                    setColumnFilters({ ...columnFilters, minAmount: e.target.value })
+                  }
+                  className="w-full px-2.5 py-1.5 rounded-xl bg-slate-950/60 [html[data-theme='light']_&]:bg-slate-100 border border-white/10 [html[data-theme='light']_&]:border-slate-300 text-white [html[data-theme='light']_&]:text-slate-900 outline-none text-xs tabular-nums"
+                />
+                <input
+                  type="number"
+                  placeholder="Máximo (R$)"
+                  value={columnFilters.maxAmount}
+                  onChange={(e) =>
+                    setColumnFilters({ ...columnFilters, maxAmount: e.target.value })
+                  }
+                  className="w-full px-2.5 py-1.5 rounded-xl bg-slate-950/60 [html[data-theme='light']_&]:bg-slate-100 border border-white/10 [html[data-theme='light']_&]:border-slate-300 text-white [html[data-theme='light']_&]:text-slate-900 outline-none text-xs tabular-nums"
+                />
+                <div className="flex justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setColumnFilters({ ...columnFilters, minAmount: "", maxAmount: "" })
+                    }
+                    className="text-[10px] text-slate-400 hover:text-rose-400 cursor-pointer"
+                  >
+                    Limpar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveFilterPopover(null);
+                      setFilterAnchor(null);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-[#0A84FF] hover:bg-[#0070E0] text-white text-[10px] font-medium shadow-sm transition cursor-pointer"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>,
+          document.body
+        );
+      })()}
 
       {/* SPRINT 55 & 59: BARRA FLUTUANTE DE AÇÕES EM LOTE FIXA VIA CREATEPORTAL */}
       {selectedTxIds.size > 0 && typeof document !== "undefined" && createPortal(

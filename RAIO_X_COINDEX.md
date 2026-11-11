@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.46.0`  
-> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 60 — Soberania Estrita da Nuvem Supabase SSOT e Exclusão Instantânea com Cofre Mestre)  
+> **Versão da Aplicação:** `0.46.1`  
+> **Última Atualização:** 10 de Novembro de 2026 (Pós-Sprint 61 — Popovers em Portal Opaco, Scrollbar Fina sem Setas e Higienização de Categorias)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1173,6 +1173,44 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - **Seção 2 (O Manifesto):** Card nobre de leitura contendo o manifesto pessoal de integração entre objetivos pessoais, profissionais e financeiros, destacando o Coindex como ponto de clareza, foco e direção.
       - **Seção 3 (Os 4 Pilares do Ecossistema):** Grid Bento 2x2 com iluminação de proximidade (`useProximityBorderGlow`) detalhando Organização Financeira & Patrimônio, Saúde & Bem-Estar, Conhecimento & Insights e Hábitos & Metas.
       - **Seção 4 (Missão, Visão, Valores & Símbolo do Equilíbrio):** Tríade institucional acompanhada da explicação do entrelaçamento contínuo entre o Elo Esquerdo em Titânio (disciplina, clareza e fundação) e o Elo Direito em Apple Blue (expansão, sonhos e futuro), finalizando com rodapé minimalista.
+
+  - **Sprint 59 (Novembro de 2026 — Auditoria de Abastecimento, Odômetro Customizável e Modo de Seleção Sob Demanda v0.45.2):**
+    - **Passo 1 — Auditoria Contábil de Combustível (`app/lib/domain/vehicle-math.ts` e `app/components/VehiclesTab.tsx`):**
+      - Eliminação de falsos positivos (ex: "Imposto" contendo substring "posto") e deduplicação estrita de abastecimentos por ID.
+      - Eixo X do gráfico "Gasto com Combustível por Mês" normalizado com parser cronológico canônico `MM/AA`, eliminando rótulos truncados como `11/`.
+      - Unificação do cabeçalho da aba Veículos para um único botão `Registrar Abastecimento` e migração do seletor de cor do odômetro para a engrenagem do próprio widget.
+    - **Passo 2 — Plano de Manutenção Preventiva 100% Customizável (`app/components/VehiclesTab.tsx`):**
+      - Adição, edição, exclusão e restauração de padrões de itens de revisão preventiva por odômetro (`CustomMaintenanceDefinition`).
+      - Sincronização bidirecional automática de quilometragem (`nextKm = lastKm + intervalKm`) e persistência no Cofre Nuvem `__COINDEX_CLOUD_VAULT__`.
+    - **Passo 3 — Modo de Seleção Sob Demanda e Barra Flutuante via Portal (`app/TransactionsTableAdvanced.tsx`):**
+      - Ativação do modo multi-select por botão `☑️ Selecionar` ou Long-Press de 320ms em qualquer linha/card da tabela.
+      - Barra flutuante de ações em lote renderizada via `createPortal` com fixação central e atalho `Esc` para cancelamento instantâneo.
+
+  - **Sprint 60 (Novembro de 2026 — Soberania Estrita da Nuvem Supabase SSOT e Fim do Merge Aditivo Local v0.46.0):**
+    - **Passo 1 — Expurgo de Merge Aditivo e Chaves Fantasmas (`app/page.tsx`):**
+      - Desativação completa de `mergeEntitiesSafe` e `rescueMissingBanksAndCards`. Supabase passa a ser 100% a única fonte da verdade (SSOT), sobrescrevendo o cache local sem ressuscitar entidades deletadas.
+      - Purga proativa de chaves legadas de teste e backup no carregamento inicial (`lifeos_banks_v1`, `coindex_vault_cards_backup`, `coindex_vault_banks_backup`).
+      - Desativação do Auto-Heal Push na inicialização: a nuvem só é modificada sob ação intencional do usuário.
+    - **Passo 2 — Exclusão Atômica de Cartões e Bancos com Tombstone Imediato (`app/page.tsx`):**
+      - Deleção síncrona na tabela `credit_cards` do Supabase e no cofre mestre `__COINDEX_CLOUD_VAULT__`.
+      - Adição do botão de lixeira rápida (`🗑️`) dentro do modal "⚙️ Ordenar Meus Cartões".
+    - **Passo 3 — Sincronização Forçada com Purga de Cache na Topbar (`app/page.tsx`):**
+      - Clique no badge de sincronização purga o cache de sessão e re-hidrata a interface 100% diretamente da nuvem Supabase.
+
+  - **Sprint 61 (Novembro de 2026 — Popovers em Portal Opaco sem Vazamento, Scrollbar Fina sem Setas e Higienização de Categorias v0.46.1):**
+    - **Passo 1 — Popovers de Filtro em Portal 100% Opaco (`app/TransactionsTableAdvanced.tsx` e `app/globals.css`):**
+      - Todos os 7 popovers de filtro de cabeçalho da tabela (`Data`, `Categoria`, `Custo`, `Método`, `Odômetro`, `Situação`, `Valor`) desacoplados das tags `<th>` e renderizados via `createPortal(..., document.body)` com `z-[99999]`.
+      - Fundo 100% sólido e opaco (`#0F1420` no dark mode e `#FFFFFF` no light mode) sem transparência ou `backdrop-blur`, impedindo completamente que textos da tabela por trás vazem por transparência.
+      - Posicionamento dinâmico calculado por `getBoundingClientRect()` com bounding box viewport safe e fechamento inteligente ao clicar fora, scrollar ou pressionar `Esc`.
+    - **Passo 2 — Mini Busca Rápida e Scrollbar Fina estilo Cupertino (`app/TransactionsTableAdvanced.tsx` e `app/globals.css`):**
+      - Mini campo de busca rápida (`🔍 Filtrar categoria...`) no topo do popover de categorias, com pesquisa em tempo real e botões "Todas" e "Limpar".
+      - Nova classe CSS utilitária `.cupertino-thin-scroll` com largura de 5px, trilho transparente e supressão global de setas nativas do Windows (`::-webkit-scrollbar-button { display: none !important; }`).
+    - **Passo 3 — Higienização Automática de Categorias Legadas (`app/lifeos-data.tsx`, `app/lib/services/coindex-supabase.ts` e `app/TransactionsTableAdvanced.tsx`):**
+      - Padronização determinística em `migrateLegacyCategory`: `Aporte / Investimento` -> `Aporte`, `Benefícios (VA/Combustível)` -> `Alimentação`, `Manutenção` -> `Manutenção Veículo`, `Selfiit` -> `Academia`, `DSR` -> `Salário`.
+      - Sanitização automática na decodificação de dados remotos (`decodeTxFromSupabase`) e filtro de busca da tabela.
+      - Desduplicação case-insensitive via `Map` e ordenação alfabética estrita `localeCompare("pt-BR")` em `allUniqueCategories`.
+    - **Passo 4 — Ocultação Estrita da Coluna de Checkboxes (`app/TransactionsTableAdvanced.tsx`):**
+      - `<th>` e `<td>` da coluna de seleção estritamente omitidos do DOM quando `showCheckboxes === false`, garantindo que "Data" seja sempre a primeira coluna visível.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

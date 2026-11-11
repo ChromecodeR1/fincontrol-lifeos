@@ -402,7 +402,7 @@ export interface ChangelogEntry {
 
 export const APP_VERSION = "0.46.0";
 export const PREVIOUS_VERSION = "0.45.2";
-export const COINDEX_APP_VERSION = "0.46.0";
+export const COINDEX_APP_VERSION = "0.46.1";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
@@ -1044,12 +1044,92 @@ export function compressImageFileToBase64(file: File, callback: (base64: string)
 }
 
 /**
- * Normaliza e migra categorias legadas para o padrão oficial da Sprint 19
+ * Normaliza e migra categorias legadas para o padrão oficial da Sprint 19 e 61
  */
 export function migrateLegacyCategory(category?: string | null, description = ""): string {
   if (!category) return "Outros";
   const c = category.trim();
   const d = (description || "").toLowerCase();
+
+  // SPRINT 61: Aporte / Investimento
+  if (
+    c === "Aporte / Investimento" ||
+    c === "Aporte/Investimento" ||
+    c === "Investimento" ||
+    c === "Investimentos" ||
+    c === "Aplicação" ||
+    c === "Aplicacao" ||
+    c === "Aporte"
+  ) {
+    return "Aporte";
+  }
+
+  // SPRINT 61: Benefícios (VA/Combustível)
+  if (
+    c === "Benefícios (VA/Combustível)" ||
+    c === "Beneficios (VA/Combustivel)" ||
+    c === "Benefícios" ||
+    c === "Beneficios" ||
+    c === "Benefício" ||
+    c === "Beneficio" ||
+    c === "Vale Alimentação" ||
+    c === "Vale Alimentacao" ||
+    c === "VA / VR" ||
+    c === "VA/VR" ||
+    c === "Cartão ECX" ||
+    c === "Cartao ECX"
+  ) {
+    return "Alimentação";
+  }
+
+  // SPRINT 61: Manutenção Veículo
+  if (
+    c === "Manutenção" ||
+    c === "Manutencao" ||
+    c === "Manutenção Carro" ||
+    c === "Manutencao Carro" ||
+    c === "Oficina" ||
+    c === "Manutenção Veículo" ||
+    c === "Manutencao Veiculo"
+  ) {
+    return "Manutenção Veículo";
+  }
+
+  // SPRINT 61: Academia / Saúde
+  if (
+    c === "Selfiit" ||
+    c === "Selfit" ||
+    c === "Smartfit" ||
+    c === "Smart Fit"
+  ) {
+    return "Academia";
+  }
+  if (c === "Saúde" || c === "Saude") {
+    if (
+      d.includes("selfiit") ||
+      d.includes("selfit") ||
+      d.includes("smart") ||
+      d.includes("academia") ||
+      d.includes("gym") ||
+      d.includes("musculação") ||
+      d.includes("musculacao")
+    ) {
+      return "Academia";
+    }
+  }
+
+  // SPRINT 61: DSR / Salário / Hora Extra
+  if (
+    c === "DSR" ||
+    c === "Hora extra 50%" ||
+    c === "Hora Extra 50%" ||
+    c === "Hora extra" ||
+    c === "Hora Extra" ||
+    c === "Salário DSR" ||
+    c === "Salario DSR"
+  ) {
+    return "Salário";
+  }
 
   // Moradia / Aluguel
   if (c === "Moradia / Aluguel" || c === "Moradia/Aluguel") {
@@ -1146,9 +1226,8 @@ export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = sortCategoriesA
   { name: "Água & Gás", flow: "EXPENSE" },
   { name: "Alimentação", flow: "EXPENSE" },
   { name: "Aluguel", flow: "EXPENSE" },
-  { name: "Aporte / Investimento", flow: "INVESTMENT" },
+  { name: "Aporte", flow: "INVESTMENT" },
   { name: "Assinaturas", flow: "EXPENSE" },
-  { name: "Benefícios (VA/Combustível)", flow: "INCOME" },
   { name: "Celular / Telefonia", flow: "EXPENSE" },
   { name: "Comissão", flow: "INCOME" },
   { name: "Cuidados Pessoais", flow: "EXPENSE" },
@@ -1164,7 +1243,7 @@ export const DEFAULT_CATEGORIES_CATALOG: CategoryCatalogItem[] = sortCategoriesA
   { name: "IPVA", flow: "EXPENSE", isAuto: true },
   { name: "Lazer", flow: "EXPENSE" },
   { name: "Licenciamento", flow: "EXPENSE", isAuto: true },
-  { name: "Manutenção", flow: "EXPENSE", isAuto: true },
+  { name: "Manutenção Veículo", flow: "EXPENSE", isAuto: true },
   { name: "Moradia", flow: "EXPENSE" },
   { name: "Pagamento de Fatura", flow: "NEUTRAL" },
   { name: "Recebimento de Empréstimo", flow: "INCOME" },
@@ -1200,6 +1279,7 @@ export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   "Comissão": "#059669",
   "Serviços": "#2dd4bf",
   "Rendimentos": "#14b8a6",
+  "Aporte": "#6366f1",
   "Aporte / Investimento": "#6366f1",
   "Resgate": "#f43f5e",
   "Resgate Caixinha": "#f43f5e",
@@ -1229,6 +1309,7 @@ export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   "Combustível (Gasolina / Etanol)": "#f59e0b",
   "Gasolina": "#f59e0b",
   "Manutenção": "#ea580c",
+  "Manutenção Veículo": "#ea580c",
   "Troca de Óleo": "#d97706",
   "IPVA": "#e11d48",
   "Licenciamento": "#f43f5e",
