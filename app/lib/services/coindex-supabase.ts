@@ -174,6 +174,7 @@ export function encodeTxForSupabase(tx: Transaction): {
   cleanDescription: string;
   enrichedDescription: string;
   meta: Record<string, unknown>;
+  isoDate: string;
 } {
   const rawDesc = String(tx.description || "");
   const delimiterIndex = rawDesc.indexOf(TX_METADATA_DELIMITER);
@@ -184,9 +185,11 @@ export function encodeTxForSupabase(tx: Transaction): {
   // SPRINT 62: Preserva o ID original da aplicação para restauração precisa após conversão UUID
   if (tx.id) meta.originalId = tx.id;
 
-  // SPRINT 66: Preserva a data estrita no formato brasileiro (DD-MM-YYYY) dentro do túnel de metadados
+  // SPRINT 66 (Protocolo Caixa-Preta): Preserva a data estrita no formato brasileiro (DD-MM-YYYY)
+  // dentro do túnel de metadados e gera a data ISO YYYY-MM-DD para o PostgreSQL
   const brDate = formatDateBR(tx.date) || todayBR();
   meta.dateBR = brDate;
+  const isoDate = toSortableISO(brDate) || todayISO();
 
   // Metadados estendidos de Investimentos (SPRINT 48 & 58)
   if (tx.investmentBucket) meta.investmentBucket = tx.investmentBucket;
@@ -236,11 +239,11 @@ export function encodeTxForSupabase(tx: Transaction): {
   if (tx.updatedAt) meta.updatedAt = tx.updatedAt;
 
   if (Object.keys(meta).length === 0) {
-    return { cleanDescription, enrichedDescription: cleanDescription, meta };
+    return { cleanDescription, enrichedDescription: cleanDescription, meta, isoDate };
   }
 
   const enrichedDescription = `${cleanDescription}${TX_METADATA_DELIMITER}${safeBase64Encode(JSON.stringify(meta))}`;
-  return { cleanDescription, enrichedDescription, meta };
+  return { cleanDescription, enrichedDescription, meta, isoDate };
 }
 
 /**
@@ -468,49 +471,10 @@ export async function purgeDuplicateTransactionsInDb(
   userId: string,
   idsToDelete: string[]
 ): Promise<{ ok: boolean; deletedCount: number; error?: string }> {
-  if (!userId || !idsToDelete || idsToDelete.length === 0) {
-    return { ok: true, deletedCount: 0 };
-  }
-  try {
-    const supabase = createClient();
-    const vaultId = getCloudVaultRowId(userId);
-
-    // Filtra IDs inválidos e garante proteção absoluta do Cofre Mestre V3
-    const uniqueIds = Array.from(new Set(idsToDelete))
-      .filter((id) => id && id !== vaultId && id !== "00000000-0000-4000-8000-000000000000");
-
-    if (uniqueIds.length === 0) return { ok: true, deletedCount: 0 };
-
-    const CHUNK_SIZE = 50;
-    let deletedCount = 0;
-
-    for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
-      const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
-      const targetUuids = Array.from(new Set(chunk.flatMap((id) => [id, ensureValidUuid(id)])))
-        .filter((id) => id !== vaultId);
-
-      const { error } = await supabase
-        .from("transactions")
-        .delete()
-        .in("id", targetUuids)
-        .eq("user_id", userId);
-
-      if (error) {
-        console.warn("[coindex-supabase] Aviso ao purgar lote de duplicatas:", error.message);
-      } else {
-        deletedCount += chunk.length;
-      }
-    }
-
-    if (deletedCount > 0) {
-      console.log(`[coindex-supabase] Purgadas ${deletedCount} transações duplicadas do PostgreSQL com sucesso.`);
-    }
-    return { ok: true, deletedCount };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Erro desconhecido ao purgar duplicatas";
-    console.error("[coindex-supabase] Falha na purga de duplicatas:", msg);
-    return { ok: false, deletedCount: 0, error: msg };
-  }
+  // SPRINT 66 (Protocolo Caixa-Preta): Proibição absoluta de purgas automáticas em segundo plano.
+  // O sistema NUNCA tem permissão para apagar linhas do Supabase sozinho em background.
+  console.warn("[coindex-supabase] Protocolo Caixa-Preta: Purga automática desativada para proteger integridade histórica.");
+  return { ok: true, deletedCount: 0 };
 }
 
 const WISH_META_PREFIX = "<!--__COINDEX_WISH_META__:";
@@ -1264,11 +1228,11 @@ export async function migrateAllStateToSupabase(
 
     if (snapshot.transactions.length > 0) {
       const txPayload = snapshot.transactions.map((t) => {
-        const { enrichedDescription } = encodeTxForSupabase(t);
+        const { enrichedDescription, isoDate } = encodeTxForSupabase(t);
         return {
           id: ensureValidUuid(t.id),
           user_id: userId,
-          tx_date: t.date,
+          tx_date: isoDate,
           description: enrichedDescription,
           amount: t.amount,
           category: t.category,
@@ -1300,18 +1264,21 @@ export async function migrateAllStateToSupabase(
       });
       const { error: txErr } = await supabase.from("transactions").upsert(txPayload, { onConflict: "id,user_id" });
       if (txErr) {
-        const safePayload = snapshot.transactions.map((t) => ({
-          id: ensureValidUuid(t.id),
-          user_id: userId,
-          tx_date: t.date,
-          description: encodeTxForSupabase(t).enrichedDescription,
-          amount: t.amount,
-          category: t.category,
-          cost_type: t.costType,
-          payment_method: t.paymentMethod,
-          card_used: t.cardUsed ?? t.bankAccount ?? null,
-          status: t.status
-        }));
+        const safePayload = snapshot.transactions.map((t) => {
+          const { enrichedDescription, isoDate } = encodeTxForSupabase(t);
+          return {
+            id: ensureValidUuid(t.id),
+            user_id: userId,
+            tx_date: isoDate,
+            description: enrichedDescription,
+            amount: t.amount,
+            category: t.category,
+            cost_type: t.costType,
+            payment_method: t.paymentMethod,
+            card_used: t.cardUsed ?? t.bankAccount ?? null,
+            status: t.status
+          };
+        });
         await supabase.from("transactions").upsert(safePayload, { onConflict: "id,user_id" });
       }
     }

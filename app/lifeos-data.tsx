@@ -410,14 +410,13 @@ export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
     version: "0.49.2",
     date: "Nov/2026",
-    title: "Sprint 66 (Emergência): Resgate Forense de Lançamentos de Set/Out/Nov, Des-Inversão MDY e Persistência Universal YYYY-MM-DD no PostgreSQL",
+    title: "Sprint 66: Protocolo Caixa-Preta (Backup Físico Obrigatório Pré-Sprint, Snapshots Imutáveis no Navegador, Trava Anti-Exclusão e Persistência ISO YYYY-MM-DD)",
     highlights: [
-      "Diagnóstico Forense da Causa Raiz: Identificada falha crítica onde datas em formato brasileiro DD-MM-YYYY enviadas ao PostgreSQL disparavam o erro 22008 (date out of range) para dias > 12 e invertiam mês/dia (MDY) para dias <= 12, jogando transações de Setembro, Outubro e Novembro para meses anteriores.",
-      "Persistência Estrita ISO YYYY-MM-DD no Supabase: Formatação obrigatória via toSortableISO(tx.date) para a coluna física tx_date do PostgreSQL combinada com a preservação fidedigna de meta.dateBR (DD-MM-YYYY) dentro do túnel de metadados universal ||__CXM__:, garantindo integridade bidirecional.",
-      "Algoritmo Heurístico de Des-inversão MDY (fixPotentiallyInvertedDate): Decodificação inteligente no decodeTxFromSupabase que detecta e desinverte automaticamente datas convertidas erroneamente pelo PostgreSQL (ex: 2026-11-07 revertido para 07-11-2026).",
-      "Proibição Absoluta de Purgas e Exclusões Cegas: Remoção completa de rotinas automáticas de exclusão (.delete) em background e purga de localStorage, mantendo a integridade total do histórico.",
-      "Motor Forense de Resgate Multi-Camadas (runForensicCloudRecovery): Varredura unificada com restauração de lançamentos arquivados em backups do user_settings, túneis do Cofre Mestre V3 e caches locais como salvaguarda com reenvio atômico em lote para o Supabase.",
-      "Botão de Ação Imediata nas Configurações: Adicionado botão '🩺 Resgatar Lançamentos (Set/Out/Nov)' no card de Auditoria Cloud para recuperação manual instantânea com feedback visual ao vivo."
+      "Protocolo Caixa-Preta e Backup Físico Pré-Sprint: Implementação da regra pétrea com o script scripts/pre-sprint-backup.mjs ('npm run backup:db') que baixa 100% dos dados brutos do Supabase e salva em ./backups_seguranca/ com timestamp antes de qualquer alteração.",
+      "Snapshots Imutáveis Locais no Navegador: Função saveImmutableSafetySnapshot que mantém uma lista rotativa dos últimos 10 estados completos sob chave blindada (coindex_blackbox_snapshots_${userId}), disparada no 1º acesso do dia, na mudança de versão e antes de Push/Pull/Exclusões.",
+      "Seção Caixa-Preta na Interface: Disponibilizada na Central de Sincronização e na aba Configurações com botões de download instantâneo do backup JSON e restauração 1-clique dos pontos históricos.",
+      "Diagnóstico Forense e Resgate de Set/Out/Nov: Identificada falha de formato onde DD-MM-YYYY disparava erro 22008 (dias > 12) e inversão MDY (dias <= 12) no PostgreSQL, revertendo as datas para ISO YYYY-MM-DD com des-inversão automática.",
+      "Revogação Total de Exclusões Automáticas e Purgas: Proibição absoluta de chamadas .delete() em segundo plano no Supabase e de remoção cega de caches locais do usuário."
     ]
   },
   {
@@ -915,7 +914,12 @@ export {
   getTombstones,
   isTombstoned,
   clearUserSessionStorage,
-  purgeAllEntityLocalCaches
+  purgeAllEntityLocalCaches,
+  saveImmutableSafetySnapshot,
+  getImmutableSafetySnapshots,
+  downloadSafetySnapshotJson,
+  downloadCurrentStateJson,
+  type SafetySnapshotItem
 } from "./lib/domain/user-storage";
 
 export function addMonthsToDate(dateStr: string, monthsToAdd: number): string {

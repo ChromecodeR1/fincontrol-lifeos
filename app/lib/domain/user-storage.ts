@@ -183,6 +183,8 @@ export function clearUserSessionStorage(userId?: string | null): void {
   const keysToRemove: string[] = [];
   for (let i = 0; i < window.localStorage.length; i++) {
     const k = window.localStorage.key(i);
+    // BLINDAGEM PERMANENTE: Snapshots da Caixa-Preta NUNCA são limpos
+    if (k && k.startsWith("coindex_blackbox_snapshots_")) continue;
     if (k && (k.startsWith(prefix) || k === "lifeos_active_session")) {
       keysToRemove.push(k);
     }
@@ -193,8 +195,8 @@ export function clearUserSessionStorage(userId?: string | null): void {
 
 /**
  * SPRINT 66: Purga conservadora de caches legados obsoletos.
- * PROTEÇÃO ABSOLUTA: Transações e telemetria de combustível ("lifeos_txs_v8", "lifeos_fuel_logs_v1", "*_txs*")
- * NUNCA são apagadas às cegas pelo navegador, servindo como rede de segurança contra perda de dados.
+ * PROTEÇÃO ABSOLUTA: Transações, telemetria de combustível e snapshots da Caixa-Preta
+ * NUNCA são apagados pelo navegador, servindo como rede perene de segurança contra perda de dados.
  */
 export function purgeAllEntityLocalCaches(userId?: string | null): void {
   if (typeof window === "undefined" || !window.localStorage) return;
@@ -211,4 +213,145 @@ export function purgeAllEntityLocalCaches(userId?: string | null): void {
       window.localStorage.removeItem(k);
     } catch {}
   });
+}
+
+// -------------------------------------------------------------
+// SPRINT 66: PROTOCOLO CAIXA-PRETA — SNAPSHOTS IMUTÁVEIS LOCAIS
+// -------------------------------------------------------------
+
+export interface SafetySnapshotItem {
+  id: string;
+  timestamp: string;
+  displayDate: string;
+  reason: string;
+  version: string;
+  txCount: number;
+  cardsCount: number;
+  banksCount: number;
+  payload: Record<string, unknown>;
+}
+
+const BLACKBOX_PREFIX = "coindex_blackbox_snapshots_";
+
+export function getBlackboxSnapshotKey(userId: string): string {
+  const clean = userId ? userId.trim() : "guest";
+  return `${BLACKBOX_PREFIX}${clean}`;
+}
+
+/**
+ * Salva um snapshot completo, imutável e rotativo dos últimos 10 estados da conta do usuário.
+ * Essa chave NUNCA é limpa por nenhuma função de reset ou purga do sistema.
+ */
+export function saveImmutableSafetySnapshot(
+  userId: string,
+  statePayload: Record<string, unknown>,
+  reason: string,
+  version = "0.49.2"
+): SafetySnapshotItem | null {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+  if (!statePayload) return null;
+
+  try {
+    const key = getBlackboxSnapshotKey(userId);
+    let existingList: SafetySnapshotItem[] = [];
+    const raw = window.localStorage.getItem(key);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          existingList = parsed;
+        }
+      } catch {}
+    }
+
+    const txs = Array.isArray(statePayload.transactions) ? statePayload.transactions : [];
+    const cards = Array.isArray(statePayload.cards) ? statePayload.cards : [];
+    const banks = Array.isArray(statePayload.banks) ? statePayload.banks : [];
+
+    const newSnapshot: SafetySnapshotItem = {
+      id: `snap_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      displayDate: new Date().toLocaleString("pt-BR"),
+      reason: reason || "Ponto de Recuperação Automático",
+      version,
+      txCount: txs.length,
+      cardsCount: cards.length,
+      banksCount: banks.length,
+      payload: statePayload
+    };
+
+    // Mantém no armazenamento local uma lista rotativa dos últimos 10 snapshots completos
+    const updatedList = [newSnapshot, ...existingList].slice(0, 10);
+    window.localStorage.setItem(key, JSON.stringify(updatedList));
+
+    console.log(`[Protocolo Caixa-Preta] Snapshot "${reason}" salvo com sucesso (${txs.length} transações).`);
+    return newSnapshot;
+  } catch (err) {
+    console.error("[Protocolo Caixa-Preta] Erro ao salvar snapshot de segurança:", err);
+    return null;
+  }
+}
+
+/**
+ * Retorna a lista dos últimos snapshots automáticos da Caixa-Preta do usuário.
+ */
+export function getImmutableSafetySnapshots(userId: string): SafetySnapshotItem[] {
+  if (typeof window === "undefined" || !window.localStorage) return [];
+  try {
+    const key = getBlackboxSnapshotKey(userId);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Dispara o download de um arquivo .json formatado no navegador.
+ */
+export function triggerJsonDownload(filename: string, data: unknown): void {
+  if (typeof window === "undefined") return;
+  try {
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("[Protocolo Caixa-Preta] Erro ao baixar arquivo JSON:", err);
+  }
+}
+
+/**
+ * Baixa um snapshot específico da Caixa-Preta como arquivo JSON.
+ */
+export function downloadSafetySnapshotJson(snapshot: SafetySnapshotItem): void {
+  const safeDate = snapshot.timestamp.replace(/[:.]/g, "-");
+  const filename = `coindex_snapshot_${safeDate}.json`;
+  triggerJsonDownload(filename, snapshot);
+}
+
+/**
+ * Baixa o estado atual completo como backup JSON seguro.
+ */
+export function downloadCurrentStateJson(statePayload: Record<string, unknown>, filenamePrefix = "coindex_backup_completo"): void {
+  const safeDate = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `${filenamePrefix}_${safeDate}.json`;
+  const exportPayload = {
+    metadata: {
+      exportedAt: new Date().toISOString(),
+      displayDate: new Date().toLocaleString("pt-BR"),
+      system: "Coindex Equilibrium LifeOS",
+      version: "0.49.2"
+    },
+    ...statePayload
+  };
+  triggerJsonDownload(filename, exportPayload);
 }

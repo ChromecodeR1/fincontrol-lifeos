@@ -91,6 +91,7 @@ import {
   PolarRadiusAxis
 } from "recharts";
 import SecondaryTabs from "./SecondaryTabs";
+import { BlackboxSafetyPanel } from "./components/BlackboxSafetyPanel";
 import CoindexAuthScreen from "./components/CoindexAuthScreen";
 import { CoindexLogoHorizontal, CoindexIcon } from "./components/CoindexLogo";
 import {
@@ -197,6 +198,11 @@ import {
   isTombstoned,
   clearUserSessionStorage,
   purgeAllEntityLocalCaches,
+  saveImmutableSafetySnapshot,
+  getImmutableSafetySnapshots,
+  downloadSafetySnapshotJson,
+  downloadCurrentStateJson,
+  SafetySnapshotItem,
   normalizeSearchText,
   evaluateMathExpression
 } from "./lifeos-data";
@@ -1791,11 +1797,8 @@ export default function CoindexApp() {
 
           if (purgedIds.length > 0) {
             recordTombstones(purgedIds, targetUserId);
-            try {
-              await deleteTransactionsInDb(purgedIds);
-            } catch (err) {
-              console.error("Erro ao expurgar recebimentos fantasmas no Supabase:", err);
-            }
+            // SPRINT 66 (Protocolo Caixa-Preta): Proibição absoluta de exclusão automática no Supabase em segundo plano
+            console.warn(`[Protocolo Caixa-Preta] ${purgedIds.length} recebimentos fantasmas marcados como tombstones locais; exclusão automática em background bloqueada.`);
           }
 
           if (updatedTxs.length > 0) {
@@ -3572,6 +3575,7 @@ export default function CoindexApp() {
   const handleBatchImportTransactions = useCallback(
     (newTxs: Transaction[]) => {
       if (!newTxs || newTxs.length === 0) return;
+      createSafetySnapshot(`Antes de Importar Extrato (${newTxs.length} lançamentos)`);
       setTransactions((prev) => [...newTxs, ...prev]);
       void upsertTransactionsInDb(newTxs, debtorMap);
       notify(
@@ -5337,6 +5341,7 @@ export default function CoindexApp() {
         confirmLabel: "Sim, Excluir Todos",
         danger: true,
         onConfirm: async () => {
+          createSafetySnapshot(`Antes de Excluir em Lote (${ids.length} lançamentos)`);
           const idSet = new Set(ids);
           const nextList = transactions.filter((t) => !idSet.has(t.id));
           setTransactions(nextList);
@@ -6488,6 +6493,7 @@ export default function CoindexApp() {
     const reader = new FileReader();
     reader.onload = async (ev) => {
       try {
+        createSafetySnapshot("Antes de Importar Backup JSON");
         const raw = String(ev.target?.result);
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== "object") {
@@ -6812,12 +6818,155 @@ export default function CoindexApp() {
     };
   });
 
+  // SPRINT 66: PROTOCOLO CAIXA-PRETA — ESTADO COMPLETO E SNAPSHOTS IMUTÁVEIS
+  const currentFullState = useMemo<Record<string, unknown>>(() => ({
+    transactions,
+    cards,
+    banks,
+    staticStatus,
+    wishlist,
+    notes,
+    bioLogs,
+    okrs,
+    alertRules,
+    debtorMap,
+    settings: {
+      themeMode,
+      bgFxMode,
+      cupertinoTheme,
+      personalBudgetLimit,
+      monthlyInvestmentGoal,
+      patrimonyTarget,
+      initialPatrimony,
+      annualRunGoalKm,
+      chartTheme,
+      dashboardLayout,
+      chartConfigs,
+      readNotificationIds,
+      stravaConfig,
+      stravaStats
+    },
+    investments: {
+      manualAdjustment,
+      yieldMode,
+      visibleMarketCharts,
+      simulatorMonthlyContribution
+    }
+  }), [
+    transactions,
+    cards,
+    banks,
+    staticStatus,
+    wishlist,
+    notes,
+    bioLogs,
+    okrs,
+    alertRules,
+    debtorMap,
+    themeMode,
+    bgFxMode,
+    cupertinoTheme,
+    personalBudgetLimit,
+    monthlyInvestmentGoal,
+    patrimonyTarget,
+    initialPatrimony,
+    annualRunGoalKm,
+    chartTheme,
+    dashboardLayout,
+    chartConfigs,
+    readNotificationIds,
+    stravaConfig,
+    stravaStats,
+    manualAdjustment,
+    yieldMode,
+    visibleMarketCharts,
+    simulatorMonthlyContribution
+  ]);
+
+  const createSafetySnapshot = useCallback((reason: string) => {
+    if (!currentUserId) return null;
+    return saveImmutableSafetySnapshot(currentUserId, currentFullState, reason, COINDEX_APP_VERSION);
+  }, [currentUserId, currentFullState]);
+
+  const handleRestoreSafetySnapshot = useCallback(async (snapshot: SafetySnapshotItem) => {
+    if (!snapshot || !snapshot.payload) return;
+    const p = snapshot.payload as Record<string, unknown>;
+
+    if (Array.isArray(p.transactions)) {
+      setTransactions(p.transactions as Transaction[]);
+    }
+    if (Array.isArray(p.cards)) {
+      setCards(p.cards as CreditCardItem[]);
+    }
+    if (Array.isArray(p.banks)) {
+      setBanks(p.banks as BankItem[]);
+    }
+    if (Array.isArray(p.staticStatus)) {
+      setStaticStatus(p.staticStatus as StaticStatusItem[]);
+    }
+    if (Array.isArray(p.wishlist)) {
+      setWishlist(p.wishlist as WishlistItem[]);
+    }
+    if (Array.isArray(p.notes)) {
+      setNotes(p.notes as BrainNote[]);
+    }
+    if (Array.isArray(p.bioLogs)) {
+      setBioLogs(p.bioLogs as BioLog[]);
+    }
+    if (Array.isArray(p.okrs)) {
+      setOkrs(p.okrs as PersonalOKR[]);
+    }
+    if (Array.isArray(p.alertRules)) {
+      setAlertRules(p.alertRules as CustomAlertRule[]);
+    }
+    if (p.investments && typeof p.investments === "object") {
+      const inv = p.investments as Record<string, unknown>;
+      if (inv.manualAdjustment !== undefined) setManualAdjustment(inv.manualAdjustment as number);
+      if (inv.yieldMode) setYieldMode(inv.yieldMode as "bruto" | "liquido" | "aportes");
+      if (Array.isArray(inv.visibleMarketCharts)) setVisibleMarketCharts(inv.visibleMarketCharts as string[]);
+      if (inv.simulatorMonthlyContribution !== undefined) setSimulatorMonthlyContribution(inv.simulatorMonthlyContribution as number);
+    }
+
+    notify(
+      "⏪ Ponto Restaurado com Sucesso!",
+      `O ponto de segurança "${snapshot.reason}" de ${snapshot.displayDate} foi restaurado (${snapshot.txCount} lançamentos).`,
+      "success",
+      "CONFIG"
+    );
+  }, [notify]);
+
+  // SPRINT 66: Auto-Snapshot na primeira carga do dia ou na mudança de versão da aplicação
+  useEffect(() => {
+    if (!currentUserId || !isInitialCloudHydrationCompleteRef.current) return;
+    if (transactions.length === 0) return;
+
+    try {
+      const todayKey = `coindex_last_daily_snap_${currentUserId}`;
+      const versionKey = `coindex_last_version_snap_${currentUserId}`;
+      const todayDate = new Date().toISOString().slice(0, 10);
+
+      const lastDate = localStorage.getItem(todayKey);
+      const lastVersion = localStorage.getItem(versionKey);
+
+      if (lastVersion !== COINDEX_APP_VERSION) {
+        createSafetySnapshot(`Atualização de versão para v${COINDEX_APP_VERSION}`);
+        localStorage.setItem(versionKey, COINDEX_APP_VERSION);
+        localStorage.setItem(todayKey, todayDate);
+      } else if (lastDate !== todayDate) {
+        createSafetySnapshot(`Primeira carga do dia (${todayDate})`);
+        localStorage.setItem(todayKey, todayDate);
+      }
+    } catch {}
+  }, [currentUserId, transactions.length, createSafetySnapshot]);
+
   /**
    * SPRINT 62: Gravação Total e Atômica na Nuvem (Push)
    * Envia 100% do estado local para o Supabase (transações com UUIDs determinísticos + Vault V3).
    */
   const pushFullStateToCloud = useCallback(
     async (options?: { showToast?: boolean }): Promise<{ ok: boolean; count?: number; error?: string }> => {
+      // SPRINT 66 (Protocolo Caixa-Preta): Snapshot obrigatório antes de Push para a nuvem
+      createSafetySnapshot("Antes de Enviar para Nuvem (Push)");
       const state = latestStateRef.current;
       const targetUserId = state.currentUserId || currentUserId;
       if (!targetUserId) {
@@ -7116,6 +7265,9 @@ export default function CoindexApp() {
       message: "Sincronizando com a Nuvem...",
       timestamp: new Date().toLocaleTimeString("pt-BR")
     });
+
+    // SPRINT 66 (Protocolo Caixa-Preta): Snapshot obrigatório antes de Pull da nuvem
+    createSafetySnapshot("Antes de Baixar da Nuvem (Pull)");
 
     try {
       // 1. Limpeza proativa de chaves legadas e caches de sessão obsoletos
@@ -10157,6 +10309,8 @@ export default function CoindexApp() {
               onBatchUpdateStatus={handleBatchUpdateStatus}
               onBatchChangeCategory={handleBatchChangeCategory}
               onBatchDeleteTransactions={handleBatchDeleteTransactions}
+              currentStatePayload={currentFullState}
+              onRestoreSnapshot={handleRestoreSafetySnapshot}
             />
           </div>
           )}
@@ -11237,6 +11391,15 @@ export default function CoindexApp() {
                   </p>
                 </button>
               </div>
+
+              {/* SPRINT 66: PROTOCOLO CAIXA-PRETA — BACKUPS & SNAPSHOTS IMUTÁVEIS */}
+              <BlackboxSafetyPanel
+                currentUserId={currentUserId}
+                currentStatePayload={currentFullState}
+                onRestoreSnapshot={handleRestoreSafetySnapshot}
+                notify={notify}
+                compact
+              />
 
               <div className="flex items-center justify-between pt-2 border-t border-white/10">
                 <span className="text-[11px] text-slate-400">

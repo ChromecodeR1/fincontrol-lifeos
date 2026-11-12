@@ -9,6 +9,15 @@
 
 O **Coindex** é uma plataforma corporativa e pessoal de Business Intelligence (BI) financeiro, telemetria patrimonial, gestão de cartões de crédito e telemetria automotiva, construída sob a estética **Apple Copilot Pure — Cupertino Light & Dark** e princípios de Human Interface Design da Apple com inspiração no Copilot Money.
 
+### 🛡️ REGRA PÉTREA PERMANENTE: PROTOCOLO CAIXA-PRETA (BACKUP PRÉ-SPRINT OBRIGATÓRIO)
+> **ATENÇÃO MÁXIMA PARA QUALQUER ENGENHEIRO OU AGENTE DE IA:**  
+> Antes de qualquer alteração de código que envolva banco de dados, migrações de esquema ou persistência no Supabase, é **ESTRITAMENTE OBRIGATÓRIO** executar um backup físico completo do banco localmente via:
+> ```bash
+> npm run backup:db
+> ```
+> O script [`scripts/pre-sprint-backup.mjs`](file:///c:/Users/cabra/Desktop/fincontrol-lifeos/scripts/pre-sprint-backup.mjs) consulta 100% dos registros de todas as tabelas (`transactions`, `credit_cards`, `banks`, `static_status`, `brain_notes`, `user_settings`) e salva um arquivo JSON completo, seguro e indentado na pasta local `./backups_seguranca/coindex_db_backup_${timestamp}.json` (protegida no `.gitignore`).
+> Além disso, o sistema conta com a **Caixa-Preta do Navegador** (`saveImmutableSafetySnapshot`), que armazena os últimos 10 snapshots completos sob a chave blindada `coindex_blackbox_snapshots_${userId}`, disparada automaticamente na primeira carga do dia, na mudança de versão ou antes de qualquer operação de Push, Pull, exclusão ou importação.
+
 ### Stack Base:
 - **Framework:** Next.js 16.4.2 (App Router, Turbopack, Cache Components, Partial Prefetching).
 - **Linguagem:** TypeScript 5 (Modo Estrito / Strict Mode habilitado).
@@ -1317,6 +1326,9 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
 
 Antes de enviar qualquer commit ou deploy:
 ```bash
+# 0. Backup Físico Obrigatório Pré-Sprint (Protocolo Caixa-Preta)
+npm run backup:db
+
 # 1. Verificação de Tipos TypeScript (Obrigatório - 0 erros)
 npx tsc --noEmit
 

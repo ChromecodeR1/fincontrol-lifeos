@@ -46,6 +46,8 @@ import { AnimatedNumber144, AnimatedBRL144, AnimatedMetric144, AnimatedBRL, Anim
 import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
 import { triggerAuraBurst } from "./components/MotionEngine144";
 import { verifyLiveCloudSyncStatus, LiveCloudSyncAuditResult, runForensicCloudRecovery } from "./lib/services/coindex-supabase";
+import { BlackboxSafetyPanel } from "./components/BlackboxSafetyPanel";
+import { SafetySnapshotItem } from "./lib/domain/user-storage";
 
 /**
  * Formata ritmo/pace esportivo exato em min:seg /km (AUD-15).
@@ -308,6 +310,8 @@ export interface SecondaryTabsProps {
   setSystemLogs: (l: SystemLogEntry[]) => void;
   logFilter: string;
   setLogFilter: (f: string) => void;
+  currentStatePayload?: Record<string, unknown>;
+  onRestoreSnapshot?: (snapshot: SafetySnapshotItem) => void | Promise<void>;
 }
 
 // ============================================================================
@@ -801,7 +805,8 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     realBalanceOverride, onSaveRealBalanceOverride,
     visibleMarketCharts, onUpdateVisibleMarketCharts,
     simulatorMonthlyContribution, onUpdateSimulatorMonthlyContribution,
-    currentUserId, pushFullStateToCloud, handleManualForceCloudSync, syncStatus = "idle"
+    currentUserId, pushFullStateToCloud, handleManualForceCloudSync, syncStatus = "idle",
+    currentStatePayload, onRestoreSnapshot
   } = props;
 
   // SPRINT 64: Estado da Auditoria Verídica de Nuvem (Henrique Montenegro)
@@ -4983,6 +4988,30 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </label>
           </div>
         </div>
+
+        {/* SPRINT 66: PROTOCOLO CAIXA-PRETA — BACKUPS & SNAPSHOTS IMUTÁVEIS */}
+        <BlackboxSafetyPanel
+          currentUserId={currentUserId}
+          currentStatePayload={currentStatePayload || {
+            transactions,
+            cards,
+            banks,
+            wishlist,
+            bioLogs,
+            notes,
+            okrs,
+            alertRules,
+            settings: {
+              personalBudgetLimit,
+              monthlyInvestmentGoal,
+              patrimonyTarget,
+              annualRunGoalKm,
+              chartTheme
+            }
+          }}
+          onRestoreSnapshot={onRestoreSnapshot}
+          notify={notify}
+        />
 
         {/* SPRINT 64: CARD OFICIAL DE DIAGNÓSTICO DE COMPUTAÇÃO EM NUVEM (Henrique Montenegro) */}
         <div className="glass-card p-6 rounded-3xl border border-sky-500/30 bg-gradient-to-br from-sky-950/20 via-slate-900/60 to-indigo-950/20 shadow-2xl space-y-5">
