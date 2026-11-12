@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.49.2`  
-> **Última Atualização:** 11 de Novembro de 2026 (Pós-Sprint 66 de Emergência — Resgate Forense de Lançamentos de Set/Out/Nov, Des-inversão MDY e Persistência Universal YYYY-MM-DD no PostgreSQL)  
+> **Versão da Aplicação:** `0.49.3`  
+> **Última Atualização:** 11 de Novembro de 2026 (Pós-Sprint 67 — Paridade Nuvem 1:1, Recorte Circular de Avatar com Zoom/Arraste, Identidade 100% Coindex, Compactação de Controles e Background Sem Textura Noise)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1320,6 +1320,24 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Pilar 5 — Motor Forense Multi-Camadas e Botão de Ação nas Configurações (`runForensicCloudRecovery`):**
       - Criação da ferramenta de auditoria e restauração `runForensicCloudRecovery(userId, localCandidates)` que examina o estado de backup em `user_settings`, transações no Supabase com des-inversão e todas as chaves históricas do navegador, unificando e persistindo os lançamentos no banco com datas corrigidas.
       - Adicionado botão interativo `🩺 Resgatar Lançamentos (Set/Out/Nov)` com feedback em tempo real no card de Auditoria Cloud na aba Configurações.
+
+  - **Sprint 67 (Novembro de 2026 — Paridade Nuvem 1:1, Recorte Circular de Avatar com Zoom/Arraste, Identidade 100% Coindex, Compactação de Controles e Background Sem Textura Noise v0.49.3):**
+    - **Pilar 1 — Alinhamento de Paridade Nuvem 1:1 e Expurgo de Órfãs (`syncAndCleanOrphanTransactionsInCloud`):**
+      - Solução da divergência "Nuvem: 112 vs Na tela: 104": as 8 transações deletadas nas reconciliações passadas existiam como tombstones locais, mas permaneciam ativas na tabela física `transactions` do Supabase.
+      - A nova rotina `syncAndCleanOrphanTransactionsInCloud` compara o conjunto de IDs ativos e tombstones contra as linhas do Supabase (preservando estritamente o cofre `__COINDEX_CLOUD_VAULT__`), expurgando as órfãs em lotes seguros e alinhando perfeitamente a contagem tela vs nuvem para exibir `Sincronizado com a Nuvem: SIM ✅`.
+    - **Pilar 2 — Modal de Recorte Circular da Foto de Perfil (`AvatarCropModal.tsx`):**
+      - Componente desacoplado via `createPortal(..., document.body)` com visor circular centralizado de 240px × 240px, máscara escura 360°, suporte completo a arraste por mouse/touch com trava inteligente de limites (clamping), zoom suave de 1.0x a 3.0x (slider deslizante, botões e roda do mouse `onWheel`) e renderização em `<canvas width={256} height={256}>` exportando JPEG cristalino (0.92).
+      - Integrado tanto no `ProfileModal.tsx` quanto no botão "Foto de Perfil" na aba Configurações.
+    - **Pilar 3 — Remoção de Backup do Modal de Perfil:**
+      - A seção de backup e restauração foi removida do `ProfileModal.tsx`, centralizando a governança e segurança de dados exclusivamente na aba Configurações e no painel do Protocolo Caixa-Preta.
+    - **Pilar 4 — Identidade 100% Coindex & Despersonalização:**
+      - Remoção integral de assinaturas de nomes pessoais em comentários e elementos da interface, além da eliminação de menções a marcas de terceiros ("Apple Copilot Pure", "Apple Wallet").
+      - Card de nuvem renomeado para "Verificação de Computação em Nuvem (Coindex Cloud)" com subtítulo institucional e limpeza de emojis duplicados nos botões de ação.
+    - **Pilar 5 — Compactação dos Controles de Tema e Animações:**
+      - Compactação dos cards de "Tema da Interface" e "Reduzir Animações" em duas janelinhas lado a lado (`grid grid-cols-1 md:grid-cols-2 gap-4`), eliminando o bloco inferior de 144Hz que ocupava espaço vertical desnecessário.
+    - **Pilar 6 — Ajuste Fino do Motor de Background (`AmbientBackgroundFX.tsx`):**
+      - Remoção completa da camada de textura / SVG fractal noise anti-banding, eliminando ruído granulado.
+      - Aumento do número de partículas para 240 micro-partículas bem pequenas (raio entre 0.4px e 1.1px, opacidade 0.06 a 0.22), eliminando orbs gigantes de 4.5px e halos pesados de cruz, mantendo intactas as Ondas de Seda e a Aurora Camaleão.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

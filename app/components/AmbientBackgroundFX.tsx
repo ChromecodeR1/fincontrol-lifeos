@@ -258,56 +258,23 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
 
     window.addEventListener("resize", handleResize);
 
-    // SPRINT 64: Partículas calibradas para efeito super sutil (opacidade base 0.04 a 0.16)
+    // SPRINT 67: 240 micro-partículas bem pequenas (raio entre 0.4px e 1.1px, opacidade 0.06 a 0.22)
+    // Sem orbs gigantes ou ruídos pesados — elegância e nitidez cristalina
     const particles: StardustParticle[] = [];
-    // Camada 1: 75 partículas (65%) — Deep Space micro-suaves
-    for (let i = 0; i < 75; i++) {
+    for (let i = 0; i < 240; i++) {
+      const radius = 0.4 + Math.random() * 0.7; // Raio estrito entre 0.4px e 1.1px
       particles.push({
         x: Math.random() * width,
         y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.06,
-        vy: -0.08 - Math.random() * 0.10,
-        baseVy: -0.08 - Math.random() * 0.10,
-        radius: 0.5 + Math.random() * 0.5,
-        depth: 0.25,
+        vx: (Math.random() - 0.5) * 0.05,
+        vy: -0.06 - Math.random() * 0.09,
+        baseVy: -0.06 - Math.random() * 0.09,
+        radius,
+        depth: 0.2 + Math.random() * 0.5,
         layer: 1,
-        twinkleSpeed: 0.0015 + Math.random() * 0.002,
+        twinkleSpeed: 0.0012 + Math.random() * 0.002,
         phase: Math.random() * Math.PI * 2,
-        baseAlpha: 0.05 + Math.random() * 0.08
-      });
-    }
-
-    // Camada 2: 28 partículas (25%) — Crisp Starlight com Difração de 4 Pontas Micro-Sutil (raio máx 1.3px)
-    for (let i = 0; i < 28; i++) {
-      particles.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.08,
-        vy: -0.12 - Math.random() * 0.16,
-        baseVy: -0.12 - Math.random() * 0.16,
-        radius: 0.7 + Math.random() * 0.6, // Teto estrito de 1.3px
-        depth: 0.6,
-        layer: 2,
-        twinkleSpeed: 0.002 + Math.random() * 0.0025,
-        phase: Math.random() * Math.PI * 2,
-        baseAlpha: 0.08 + Math.random() * 0.08 // Faixa sutil 0.08 a 0.16
-      });
-    }
-
-    // Camada 3: 12 partículas (10%) — Foreground Bokeh Orbs suaves
-    for (let i = 0; i < 12; i++) {
-      particles.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.10,
-        vy: -0.18 - Math.random() * 0.18,
-        baseVy: -0.18 - Math.random() * 0.18,
-        radius: 2.5 + Math.random() * 2.0,
-        depth: 1.0,
-        layer: 3,
-        twinkleSpeed: 0.001 + Math.random() * 0.0015,
-        phase: Math.random() * Math.PI * 2,
-        baseAlpha: 0.04 + Math.random() * 0.05
+        baseAlpha: 0.06 + Math.random() * 0.12 // Faixa sutil 0.06 a 0.18
       });
     }
     particlesRef.current = particles;
@@ -488,84 +455,15 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
           if (p.x > width + 20) p.x = -15;
 
           const twinkle = 0.5 + 0.5 * Math.sin(timestamp * p.twinkleSpeed + p.phase);
-          // SPRINT 64: Teto absoluto de opacidade <= 0.22 mesmo no pico de brilho
-          const effectiveAlpha = Math.min(0.22, p.baseAlpha * twinkle * flareBoost * (isLight ? 0.75 : 1));
+          // SPRINT 67: Micro-partículas estelares sutis entre 0.06 e 0.22 de opacidade
+          const effectiveAlpha = Math.min(0.22, Math.max(0.06, p.baseAlpha * twinkle * flareBoost * (isLight ? 0.75 : 1)));
 
-          // ------------------------------------------------------------------
-          // CAMADA 1 — Deep Space (Partículas pontuais micro-suaves)
-          // ------------------------------------------------------------------
-          if (p.layer === 1) {
-            ctx.fillStyle = isLight
-              ? `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${effectiveAlpha * 0.6})`
-              : `rgba(235, 242, 255, ${effectiveAlpha})`;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-          // ------------------------------------------------------------------
-          // CAMADA 2 — Crisp Starlight com Difração de 4 Pontas (Star Flare Micro-Sutil)
-          // ------------------------------------------------------------------
-          else if (p.layer === 2) {
-            // SPRINT 64: Micro-halo radial calibrado para no máximo 0.06 de opacidade
-            const haloRadius = p.radius * 2.2 * flareBoost;
-            const haloGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, haloRadius);
-            haloGrad.addColorStop(0, `rgba(255, 255, 255, ${Math.min(0.06, effectiveAlpha * 0.4)})`);
-            haloGrad.addColorStop(0.4, `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${Math.min(0.04, effectiveAlpha * 0.25)})`);
-            haloGrad.addColorStop(1, `rgba(${ca[0]}, ${ca[1]}, ${ca[2]}, 0)`);
-
-            ctx.fillStyle = haloGrad;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, haloRadius, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Ponto central translúcido suave (sem branco estourado puro)
-            ctx.fillStyle = isLight
-              ? `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${Math.min(0.20, effectiveAlpha)})`
-              : `rgba(235, 242, 255, ${Math.min(0.18, effectiveAlpha)})`;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, Math.min(1.1, p.radius * 0.8), 0, Math.PI * 2);
-            ctx.fill();
-
-            // SPRINT 64: Brilho Estelar de 4 Pontas Micro-Sutil (2.5px a 4.5px, opacidade máx 0.10)
-            const flareLen = (2.2 + twinkle * 2.0) * flareBoost;
-            ctx.lineWidth = 0.55;
-            const crossAlpha = Math.min(0.10, effectiveAlpha * 0.55);
-            ctx.strokeStyle = isLight
-              ? `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${crossAlpha})`
-              : `rgba(225, 235, 255, ${crossAlpha})`;
-
-            // Linha horizontal
-            ctx.beginPath();
-            ctx.moveTo(p.x - flareLen, p.y);
-            ctx.lineTo(p.x + flareLen, p.y);
-            ctx.stroke();
-
-            // Linha vertical
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y - flareLen);
-            ctx.lineTo(p.x, p.y + flareLen);
-            ctx.stroke();
-          }
-
-          // ------------------------------------------------------------------
-          // CAMADA 3 — Foreground Bokeh Orbs (Esferas desfocadas cinematográficas)
-          // ------------------------------------------------------------------
-          else if (p.layer === 3) {
-            const bokehGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
-            bokehGrad.addColorStop(
-              0,
-              isLight
-                ? `rgba(${cs[0]}, ${cs[1]}, ${cs[2]}, ${effectiveAlpha * 0.6})`
-                : `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${effectiveAlpha * 0.8})`
-            );
-            bokehGrad.addColorStop(1, "transparent");
-
-            ctx.fillStyle = bokehGrad;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          ctx.fillStyle = isLight
+            ? `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${effectiveAlpha * 0.7})`
+            : `rgba(235, 242, 255, ${effectiveAlpha})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fill();
         });
 
         // ------------------------------------------------------------------
@@ -738,15 +636,7 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
         </div>
       )}
 
-      {/* 5. MICROTEXTURA MATTE ANTI-BANDING */}
-      <div
-        className="absolute inset-0 opacity-[0.022] pointer-events-none"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`
-        }}
-      />
-
-      {/* 6. INTERACTIVE CURSOR SPOTLIGHT (GPU Compositor 144Hz via CSS Custom Properties) */}
+      {/* 5. INTERACTIVE CURSOR SPOTLIGHT (GPU Compositor 144Hz via CSS Custom Properties) */}
       {showSpotlight && (
         <div
           ref={spotlightRef}

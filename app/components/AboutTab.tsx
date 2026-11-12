@@ -311,7 +311,7 @@ export function AboutTab() {
                 O Símbolo do Equilíbrio (The Equilibrium Link)
               </h4>
               <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                Os dois elos entrelaçados representam a simbiose essencial para uma vida plena: o <strong className="text-white">Elo Esquerdo em Titânio</strong> personifica a disciplina, a clareza e a fundação segura; o <strong className="text-white">Elo Direito em Apple Blue</strong> simboliza a expansão, os sonhos e o futuro. Ao se entrelaçarem continuamente, mostram que o controle financeiro sustenta a expansão, e a expansão dá propósito à disciplina.
+                Os dois elos entrelaçados representam a simbiose essencial para uma vida plena: o <strong className="text-white">Elo Esquerdo em Titânio</strong> personifica a disciplina, a clareza e a fundação segura; o <strong className="text-white">Elo Direito em Coindex Blue</strong> simboliza a expansão, os sonhos e o futuro. Ao se entrelaçarem continuamente, mostram que o controle financeiro sustenta a expansão, e a expansão dá propósito à disciplina.
               </p>
             </div>
           </div>

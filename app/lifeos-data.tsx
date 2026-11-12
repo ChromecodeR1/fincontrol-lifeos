@@ -400,13 +400,26 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.49.2";
-export const PREVIOUS_VERSION = "0.49.1";
-export const COINDEX_APP_VERSION = "0.49.2";
+export const APP_VERSION = "0.49.3";
+export const PREVIOUS_VERSION = "0.49.2";
+export const COINDEX_APP_VERSION = "0.49.3";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.49.3",
+    date: "Nov/2026",
+    title: "Sprint 67: Alinhamento de Paridade Nuvem 1:1, Recorte Circular de Foto de Perfil com Zoom e Arraste, Identidade 100% Coindex, Compactação de Controles e Background Sem Textura Noise",
+    highlights: [
+      "Alinhamento de Paridade Nuvem 1:1 ('Sincronizado com a Nuvem: SIM'): Função syncAndCleanOrphanTransactionsInCloud que expurga transações fantasmas e tombstones remanescentes do Supabase, alinhando a contagem de lançamentos (104 = 104) e atestando integridade total.",
+      "Modal de Prévia e Recorte Circular da Foto de Perfil (AvatarCropModal): Visor circular de 240px com arraste livre, trava inteligente de bordas, zoom de 1.0x a 3.0x via controle deslizante, botões e roda do mouse, exportando JPEG nítido e leve de 256x256.",
+      "Identidade 100% Coindex: Remoção total de assinaturas de nomes pessoais e menções a marcas de terceiros ('Apple Copilot Pure', 'Apple Wallet', etc.) na interface do usuário, com novo título do card de nuvem 'Verificação de Computação em Nuvem (Coindex Cloud)'.",
+      "Compactação dos Controles de Tema e Animações: Unificação dos cards de Tema da Interface e Reduzir Animações em duas janelinhas elegantes lado a lado (grid de 2 colunas), removendo o bloco inferior redundante de 144Hz.",
+      "Ajuste Fino do Motor de Background: Remoção completa da camada de textura/ruído SVG anti-banding e aumento para 240 micro-partículas estelares bem pequenas (raio entre 0.4px e 1.1px, opacidade 0.06 a 0.22) sem orbs gigantes ou cruzes pesadas, preservando as Ondas de Seda e a Aurora Camaleão.",
+      "Remoção de Backup do Modal de Perfil: Centralização definitiva da segurança de dados e backups exclusivamente na aba Configurações e no Protocolo Caixa-Preta."
+    ]
+  },
   {
     version: "0.49.2",
     date: "Nov/2026",
@@ -441,7 +454,7 @@ export const CHANGELOG_HISTORY: ChangelogEntry[] = [
       "Suavização da Poeira Estelar (Ambient Background FX): Redução da opacidade base para faixa super discreta (0.04 a 0.16) com teto estrito de 0.22, halos de difração limitados a 0.06 e estrelas cadentes elegantes (0.16 máx), preservando integralmente a Aurora Camaleão e as Ondas de Seda.",
       "Arquitetura 100% Nuvem Estrita (Zero LocalStorage): Erradicação definitiva da hidratação local para Lançamentos, Cartões, Bancos, Investimentos, Veículos e Notas; purga proativa de chaves legadas e garantia de dados idênticos em múltiplos computadores.",
       "Cross-PC Live Sync no Foco da Janela: Listeners globais de window focus e visibilitychange com throttle seguro de 15s que consultam o Supabase em segundo plano ao alternar abas sem necessidade de recarregar a página (F5).",
-      "Painel Oficial de Verificação Cloud nas Configurações: Diagnóstico verídico em tempo real assinado por Henrique Montenegro com status do servidor (ONLINE/OFFLINE), latência em ms, pílula de integridade 'Sincronizado com a Nuvem: SIM / NÃO' e auditoria de contagem tela vs. nuvem.",
+      "Painel Oficial de Verificação Cloud nas Configurações: Diagnóstico verídico em tempo real com status do servidor (ONLINE/OFFLINE), latência em ms, pílula de integridade 'Sincronizado com a Nuvem: SIM / NÃO' e auditoria de contagem tela vs. nuvem.",
       "Botões de Ação Imediata: Auditoria ao vivo sob demanda ('Testar e Verificar Nuvem Agora'), envio forçado ('Forçar Gravação na Nuvem') e download completo ('Recarregar Dados da Nuvem')."
     ]
   },

@@ -1,5 +1,6 @@
 import { createClient } from "../supabase/client";
 import { ChartWidgetSettings } from "../../components/ChartSettingsPopover";
+import { getTombstones } from "../domain/user-storage";
 import {
   formatDateBR,
   todayBR,
@@ -247,7 +248,7 @@ export function encodeTxForSupabase(tx: Transaction): {
 }
 
 /**
- * SPRINT 66 (Henrique Montenegro): Desinversão Forense de Datas PostgreSQL (MDY).
+ * SPRINT 66 (Coindex Cloud): Desinversão Forense de Datas PostgreSQL (MDY).
  * Exemplo: Lançamento salvo como "07-11-2026" (7 de nov) foi interpretado pelo PostgreSQL MDY
  * como mês 7 e dia 11 ("2026-07-11"). Esta função restaura a data original em "DD-MM-YYYY".
  */
@@ -374,7 +375,7 @@ export function decodeTxFromSupabase(row: Record<string, unknown>): Transaction 
 }
 
 /**
- * SPRINT 65 (Henrique Montenegro): Pontuação heurística de qualidade para desempate entre clones.
+ * SPRINT 65 (Coindex Cloud): Pontuação heurística de qualidade para desempate entre clones.
  * Prioriza registros com metadados mais ricos (investimentos, parcelamentos, telemetria)
  * e formato canônico UUID v4 válido gerado na Sprint 62.
  */
@@ -419,7 +420,7 @@ function normalizeTxDescription(desc: string): string {
 }
 
 /**
- * SPRINT 66 (Henrique Montenegro): Deduplicação Conservadora e Não-Destrutiva.
+ * SPRINT 66 (Coindex Cloud): Deduplicação Conservadora e Não-Destrutiva.
  * Agrupa exclusivamente registros com o mesmo ID ou colisão canônica UUID determinística,
  * preservando 100% dos lançamentos independentes e NUNCA disparando deleções automáticas.
  */
@@ -463,7 +464,7 @@ export function deduplicateCloudTransactions(txs: Transaction[]): {
 }
 
 /**
- * SPRINT 65 (Henrique Montenegro): Purga física e segura de transações duplicadas no Supabase PostgreSQL.
+ * SPRINT 65 (Coindex Cloud): Purga física e segura de transações duplicadas no Supabase PostgreSQL.
  * Processa em lotes de 50 registros por requisição para evitar timeouts de rede.
  * Protege estritamente o registro do Cofre Mestre V3 contra deleção acidental.
  */
@@ -1520,7 +1521,7 @@ export async function upsertTransactionInDb(
 }
 
 /**
- * SPRINT 65 (Henrique Montenegro): Medição física e verídica da latência de rede com o PostgreSQL do Supabase.
+ * SPRINT 65 (Coindex Cloud): Medição física e verídica da latência de rede com o PostgreSQL do Supabase.
  * Executa uma consulta HEAD ultra-leve com performance.now() em vez de rotas de terceiros.
  */
 export async function pingSupabaseDatabase(userId?: string | null): Promise<{
@@ -2057,7 +2058,85 @@ export interface LiveCloudSyncAuditResult {
 }
 
 /**
- * SPRINT 64: Auditoria Verídica de Nuvem (Henrique Montenegro).
+ * SPRINT 67: Sincronização e expurgo higiênico de transações órfãs na nuvem.
+ * Remove da tabela 'transactions' do Supabase as linhas cujos IDs:
+ * 1) Constam como tombstones (excluídos intencionalmente); OU
+ * 2) Não pertencem à lista de transações ativas exibidas na tela (quando activeTxs é fornecida e consistente).
+ * Nunca toca na linha do cofre master (__COINDEX_CLOUD_VAULT__).
+ */
+export async function syncAndCleanOrphanTransactionsInCloud(
+  userId: string,
+  activeTxs: Transaction[],
+  tombstonesList?: string[]
+): Promise<{ removedCount: number; removedIds: string[] }> {
+  if (!userId || !Array.isArray(activeTxs)) {
+    return { removedCount: 0, removedIds: [] };
+  }
+
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("id, description")
+      .eq("user_id", userId);
+
+    if (error || !data || !Array.isArray(data)) {
+      return { removedCount: 0, removedIds: [] };
+    }
+
+    const localTombstones = getTombstones(userId);
+    const tombstoneSet = new Set<string>();
+    localTombstones.forEach((id) => tombstoneSet.add(ensureValidUuid(id)));
+    if (Array.isArray(tombstonesList)) {
+      tombstonesList.forEach((id) => tombstoneSet.add(ensureValidUuid(id)));
+    }
+
+    const activeUuidSet = new Set<string>();
+    activeTxs.forEach((t) => {
+      if (t && t.id) {
+        activeUuidSet.add(ensureValidUuid(t.id));
+      }
+    });
+
+    const orphanIds: string[] = [];
+
+    for (const row of data) {
+      if (isCloudVaultRow(row, userId)) continue;
+      const rowId = String(row.id || "");
+      if (!rowId) continue;
+      const normalizedRowId = ensureValidUuid(rowId);
+
+      // É órfã se for tombstone OU se temos activeTxs e o ID não consta nelas
+      const isTombstone = tombstoneSet.has(normalizedRowId);
+      const notInActive = activeTxs.length > 0 && !activeUuidSet.has(normalizedRowId);
+
+      if (isTombstone || notInActive) {
+        orphanIds.push(rowId);
+      }
+    }
+
+    if (orphanIds.length > 0) {
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < orphanIds.length; i += CHUNK_SIZE) {
+        const chunk = orphanIds.slice(i, i + CHUNK_SIZE);
+        await supabase
+          .from("transactions")
+          .delete()
+          .eq("user_id", userId)
+          .in("id", chunk);
+      }
+      console.log(`[syncAndCleanOrphanTransactionsInCloud] Limpas ${orphanIds.length} transações órfãs do Supabase.`);
+    }
+
+    return { removedCount: orphanIds.length, removedIds: orphanIds };
+  } catch (err) {
+    console.error("[syncAndCleanOrphanTransactionsInCloud] Erro ao limpar órfãs:", err);
+    return { removedCount: 0, removedIds: [] };
+  }
+}
+
+/**
+ * SPRINT 64 / SPRINT 67: Auditoria Verídica de Nuvem (Coindex Cloud).
  * Consulta diretamente o Supabase PostgreSQL em tempo real, mede latência física,
  * compara contagens exatas de lançamentos e cartões entre a tela e o servidor,
  * e atesta a presença do Cofre Mestre V3.
@@ -2065,7 +2144,9 @@ export interface LiveCloudSyncAuditResult {
 export async function verifyLiveCloudSyncStatus(
   userId: string,
   localTxCount: number,
-  localCardsCount: number
+  localCardsCount: number,
+  activeTxs?: Transaction[],
+  tombstonesList?: string[]
 ): Promise<LiveCloudSyncAuditResult> {
   const t0 = performance.now();
   const checkedAt = new Date().toLocaleTimeString("pt-BR", {
@@ -2146,11 +2227,36 @@ export async function verifyLiveCloudSyncStatus(
       }
     }
 
-    // SPRINT 65 & 66: Decodificação e deduplicação não-destrutiva na nuvem
-    const decodedTxs = pureRows.map((r) => decodeTxFromSupabase(r));
+    // SPRINT 67: Expurga tombstones conhecidos antes de calcular contagem
+    const localTombstones = getTombstones(userId);
+    const tombstoneSet = new Set<string>();
+    localTombstones.forEach((id) => tombstoneSet.add(ensureValidUuid(id)));
+    if (Array.isArray(tombstonesList)) {
+      tombstonesList.forEach((id) => tombstoneSet.add(ensureValidUuid(id)));
+    }
+
+    const filteredRows = pureRows.filter((r) => {
+      const id = ensureValidUuid(String(r.id || ""));
+      return !tombstoneSet.has(id);
+    });
+
+    // Decodificação e deduplicação não-destrutiva na nuvem
+    const decodedTxs = filteredRows.map((r) => decodeTxFromSupabase(r));
     const { deduplicatedTxs } = deduplicateCloudTransactions(decodedTxs);
 
-    const cloudTxCount = deduplicatedTxs.length;
+    let cloudTxCount = deduplicatedTxs.length;
+
+    // SPRINT 67: Auto-higienização de órfãs caso a nuvem possua mais registros que a tela ativa
+    if (cloudTxCount > localTxCount && activeTxs && activeTxs.length === localTxCount) {
+      try {
+        const cleanup = await syncAndCleanOrphanTransactionsInCloud(userId, activeTxs, tombstonesList);
+        if (cleanup.removedCount > 0) {
+          cloudTxCount = Math.max(localTxCount, cloudTxCount - cleanup.removedCount);
+        }
+      } catch {
+        // não bloqueia resultado do teste
+      }
+    }
 
     // Determinação matemática estrita:
     // Está 100% sincronizado quando está online, possui o cofre mestre gravado
@@ -2206,7 +2312,7 @@ export interface ForensicRecoveryResult {
 }
 
 /**
- * SPRINT 66 (Henrique Montenegro): Motor Forense de Resgate Automático de Setembro, Outubro e Novembro.
+ * SPRINT 66 (Coindex Cloud): Motor Forense de Resgate Automático de Setembro, Outubro e Novembro.
  * Varre todas as fontes possíveis (Backup Snapshot em user_settings, linhas com datas invertidas MDY
  * na tabela transactions do Supabase e quaisquer chaves remanescentes de localStorage no navegador).
  * Consolida 100% dos lançamentos sem perda de dados e grava com datas ISO estritas YYYY-MM-DD no PostgreSQL.

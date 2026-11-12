@@ -47,6 +47,7 @@ import { SlidingSegmentedControl } from "./components/SlidingSegmentedControl";
 import { triggerAuraBurst } from "./components/MotionEngine144";
 import { verifyLiveCloudSyncStatus, LiveCloudSyncAuditResult, runForensicCloudRecovery } from "./lib/services/coindex-supabase";
 import { BlackboxSafetyPanel } from "./components/BlackboxSafetyPanel";
+import { AvatarCropModal } from "./components/AvatarCropModal";
 import { SafetySnapshotItem } from "./lib/domain/user-storage";
 
 /**
@@ -809,22 +810,26 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
     currentStatePayload, onRestoreSnapshot
   } = props;
 
-  // SPRINT 64: Estado da Auditoria Verídica de Nuvem (Henrique Montenegro)
+  // SPRINT 64 / SPRINT 67: Estado da Auditoria Verídica de Nuvem (Coindex Cloud)
   const [cloudAudit, setCloudAudit] = useState<LiveCloudSyncAuditResult | null>(null);
   const [isAuditingCloud, setIsAuditingCloud] = useState<boolean>(false);
+
+  // SPRINT 67: Modal de Recorte Circular da Foto de Perfil nas Configurações
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
   const runCloudAudit = React.useCallback(async () => {
     if (!currentUserId) return;
     setIsAuditingCloud(true);
     try {
-      const res = await verifyLiveCloudSyncStatus(currentUserId, transactions.length, cards.length);
+      const res = await verifyLiveCloudSyncStatus(currentUserId, transactions.length, cards.length, transactions);
       setCloudAudit(res);
     } catch (err) {
       console.error("[cloud-audit] Erro:", err);
     } finally {
       setIsAuditingCloud(false);
     }
-  }, [currentUserId, transactions.length, cards.length]);
+  }, [currentUserId, transactions, cards.length]);
 
   // SPRINT 66: Resgate Forense de Lançamentos de Set/Out/Nov
   const [isRecovering, setIsRecovering] = useState<boolean>(false);
@@ -4972,10 +4977,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-3 py-1.5 rounded-xl bg-[#0A84FF]/15 border border-[#0A84FF]/30 text-xs font-semibold text-[#0A84FF] flex items-center gap-1.5 shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-[#0A84FF]" /> Apple Copilot Pure
-            </span>
-            <button type="button" onClick={handleExportFullBackupJSON} className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-bold text-emerald-300 flex items-center gap-1.5 transition">
+            <button type="button" onClick={handleExportFullBackupJSON} className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-bold text-emerald-300 flex items-center gap-1.5 transition cursor-pointer">
               <Download className="w-3.5 h-3.5" /> Backup (.JSON)
             </button>
             <label className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-bold text-indigo-300 cursor-pointer flex items-center gap-1.5 transition">
@@ -4984,7 +4986,26 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </label>
             <label className="px-3 py-1.5 rounded-xl bg-[#0A84FF] hover:bg-[#0070E0] text-white text-xs font-medium cursor-pointer flex items-center gap-1.5 transition shadow-sm">
               <Camera className="w-3.5 h-3.5" /> Foto de Perfil
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpdateProfileAvatar(f); }} />
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      const res = event.target?.result as string;
+                      if (res) {
+                        setCropImageSrc(res);
+                        setIsCropModalOpen(true);
+                      }
+                    };
+                    reader.readAsDataURL(f);
+                    e.target.value = "";
+                  }
+                }}
+              />
             </label>
           </div>
         </div>
@@ -5013,7 +5034,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
           notify={notify}
         />
 
-        {/* SPRINT 64: CARD OFICIAL DE DIAGNÓSTICO DE COMPUTAÇÃO EM NUVEM (Henrique Montenegro) */}
+        {/* SPRINT 64 / SPRINT 67: CARD OFICIAL DE DIAGNÓSTICO DE COMPUTAÇÃO EM NUVEM (Coindex Cloud) */}
         <div className="glass-card p-6 rounded-3xl border border-sky-500/30 bg-gradient-to-br from-sky-950/20 via-slate-900/60 to-indigo-950/20 shadow-2xl space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-1">
@@ -5023,10 +5044,10 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 </span>
                 <div>
                   <h3 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
-                    ☁️ Verificação Oficial de Computação em Nuvem (Supabase PostgreSQL)
+                    Verificação de Computação em Nuvem (Coindex Cloud)
                   </h3>
                   <p className="text-[11px] font-mono text-sky-300">
-                    Arquitetura 100% Nuvem Estrita • Assinado por Henrique Montenegro (Principal Cloud Architect & DBA)
+                    Sincronização em tempo real conectada ao banco de dados em nuvem da Coindex.
                   </p>
                 </div>
               </div>
@@ -5166,7 +5187,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 ) : (
                   <Search className="w-3.5 h-3.5" />
                 )}
-                🔍 Testar e Verificar Nuvem Agora
+                Testar e Verificar Nuvem Agora
               </button>
 
               <button
@@ -5179,7 +5200,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 {isRecovering ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <span>🩺</span>
+                  <RefreshCw className="w-3.5 h-3.5" />
                 )}
                 Resgatar Lançamentos (Set/Out/Nov)
               </button>
@@ -5195,7 +5216,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-xs font-bold text-emerald-300 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
               >
                 <Upload className="w-3.5 h-3.5" />
-                ⬆️ Forçar Gravação na Nuvem
+                Forçar Gravação na Nuvem
               </button>
 
               <button
@@ -5209,26 +5230,27 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-xs font-bold text-indigo-300 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
               >
                 <Download className="w-3.5 h-3.5" />
-                ⬇️ Recarregar Dados da Nuvem
+                Recarregar Dados da Nuvem
               </button>
             </div>
           </div>
         </div>
 
-        {/* SPRINT 53: CONTROLE DE TEMA (CLARO / ESCURO) */}
-        <div className="glass-card p-6 rounded-3xl border border-[var(--cupertino-border)] space-y-4 shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        {/* SPRINT 67: CONTROLES COMPACTOS DE TEMA E ANIMAÇÕES LADO A LADO */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Card 1: Tema da Interface (Claro / Escuro) */}
+          <div className="glass-card p-5 rounded-3xl border border-[var(--cupertino-border)] space-y-3 shadow-lg flex flex-col justify-between">
             <div className="space-y-1">
-              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                <Sun className="w-4 h-4 text-amber-400" /> Tema da Interface (Claro / Escuro)
+              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                <Sun className="w-4 h-4 text-amber-400" /> Tema da Interface
               </h3>
-              <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
-                Alterne entre o tema Claro (Apple Cupertino Light Glass) e Escuro (Cyber-Glassmorphism Dark) com transição de alta fluidez.
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Alterne entre o tema Claro (Cupertino Light Glass) e Escuro (Cyber Dark).
               </p>
             </div>
 
-            <div className="flex flex-col sm:items-end gap-1.5">
-              <span className="text-[11px] font-semibold text-slate-400">Modo de Exibição:</span>
+            <div className="pt-2 flex items-center justify-between border-t border-white/5">
+              <span className="text-xs font-semibold text-slate-400">Modo:</span>
               <SlidingSegmentedControl
                 options={[
                   {
@@ -5249,24 +5271,20 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               />
             </div>
           </div>
-        </div>
 
-        {/* SPRINT 49 / SPRINT 53: CONTROLE UNIFICADO "REDUZIR ANIMAÇÕES: [SIM | NÃO]" */}
-        <div className="glass-card p-6 rounded-3xl border border-[var(--cupertino-border)] space-y-4 shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          {/* Card 2: Reduzir Animações (Atmosfera & Efeitos) */}
+          <div className="glass-card p-5 rounded-3xl border border-[var(--cupertino-border)] space-y-3 shadow-lg flex flex-col justify-between">
             <div className="space-y-1">
-              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#0A84FF]" /> Reduzir Animações (Atmosfera & Efeitos de Background)
+              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#0A84FF]" /> Reduzir Animações
               </h3>
-              <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
-                Alterne entre a experiência imersiva com efeitos atmosféricos Híbrido Copilot (Aurora + Micro-Grid + Spotlight) e o modo de alto rendimento sólido puro sem animações decorativas.
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Desative efeitos de ondas e partículas para modo de máximo rendimento.
               </p>
             </div>
 
-            <div className="flex flex-col sm:items-end gap-1.5">
-              <span className="text-[11px] font-semibold text-slate-400">
-                Reduzir Animações:
-              </span>
+            <div className="pt-2 flex items-center justify-between border-t border-white/5">
+              <span className="text-xs font-semibold text-slate-400">Reduzir Animações:</span>
               <SlidingSegmentedControl
                 options={[
                   { id: "sim", label: "Sim" },
@@ -5284,22 +5302,6 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
                 activeColor="bg-[#0A84FF] text-white"
               />
             </div>
-          </div>
-
-          <div className="p-3 rounded-2xl bg-slate-950/60 border border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
-            <div className="flex items-center gap-2">
-              <span className="text-base">
-                {bgFxMode === "none" ? "⬛" : "✨"}
-              </span>
-              <span>
-                {bgFxMode === "none"
-                  ? "Modo Econômico: Animações Reduzidas (Sólido Puro — efeitos decorativos e atmosferas desativados)"
-                  : "144Hz ATIVO — Híbrido Copilot (Aurora Cupertino + Micro-Grid + Spotlight ativo em 144Hz)"}
-              </span>
-            </div>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${bgFxMode !== "none" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-slate-800 text-slate-300 border border-white/10"}`}>
-              {bgFxMode !== "none" ? "144Hz ATIVO" : "ECONOMIA ATIVA"}
-            </span>
           </div>
         </div>
 
@@ -5901,6 +5903,27 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             </table>
           </div>
         </div>
+
+        {/* SPRINT 67: Modal de Recorte Circular da Foto de Perfil nas Configurações */}
+        <AvatarCropModal
+          isOpen={isCropModalOpen}
+          imageSrc={cropImageSrc}
+          onClose={() => {
+            setIsCropModalOpen(false);
+            setCropImageSrc(null);
+          }}
+          onCropComplete={(croppedBase64) => {
+            fetch(croppedBase64)
+              .then((res) => res.blob())
+              .then((blob) => {
+                const file = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+                handleUpdateProfileAvatar(file);
+              })
+              .catch((err) => {
+                console.error("[SecondaryTabs] Falha ao processar avatar recortado:", err);
+              });
+          }}
+        />
       </div>
     );
   }

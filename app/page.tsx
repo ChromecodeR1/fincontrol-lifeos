@@ -249,7 +249,8 @@ import {
   syncAlertRulesInDb,
   updateUserSettingsInDb,
   insertSystemLogInDb,
-  clearSystemLogsInDb
+  clearSystemLogsInDb,
+  syncAndCleanOrphanTransactionsInCloud
 } from "./lib/services/coindex-supabase";
 
 import ChartCard from "./components/ChartCard";
@@ -1626,7 +1627,7 @@ export default function CoindexApp() {
         const savedReadNotifs = localStorage.getItem("lifeos_read_notifications_v1");
         if (savedReadNotifs) setReadNotificationIds(JSON.parse(savedReadNotifs));
 
-        // SPRINT 66: PROTEÇÃO ABSOLUTA E RESGATE PREVENTIVO (Henrique Montenegro)
+        // SPRINT 66: PROTEÇÃO ABSOLUTA E RESGATE PREVENTIVO (Coindex Cloud)
         // Nunca apaga nem esvazia transações às cegas na inicialização.
         // Lê dados prévios do localStorage para exibição imediata e segurança contra falhas de rede.
         try {
@@ -7040,6 +7041,13 @@ export default function CoindexApp() {
           throw new Error(txRes.error || "Falha ao gravar transações");
         }
 
+        // SPRINT 67: Expurgo higiênico de transações órfãs na nuvem para garantir paridade 1:1 exata
+        try {
+          await syncAndCleanOrphanTransactionsInCloud(targetUserId, activeTxs, tombstonesArray);
+        } catch (cleanupErr) {
+          console.warn("[pushFullStateToCloud] Aviso na limpeza de órfãs:", cleanupErr);
+        }
+
         const nowTime = new Date().toLocaleTimeString("pt-BR");
         setSheetsSyncStatus({
           state: "success",
@@ -7077,7 +7085,7 @@ export default function CoindexApp() {
     [currentUserId, yieldMode, stravaStats, themeMode, dashboardLayout, notify]
   );
 
-  // SPRINT 65 (Henrique Montenegro): Auto-Sync Delta Ultra-Rápido (<100ms)
+  // SPRINT 65: Auto-Sync Delta Ultra-Rápido (<100ms)
   // O salvamento contínuo debounced (600ms) atualiza SOMENTE o Cofre Mestre V3 na tabela transactions,
   // mantendo configurações, saldos manuais, cartões, bancos, telemetria e notas 100% salvos.
   // Lançamentos individuais são salvos instantaneamente e de forma atômica no momento da ação (CRUD).
@@ -7188,7 +7196,7 @@ export default function CoindexApp() {
     dashboardLayout
   ]);
 
-  // SPRINT 65: Medição Real de Latência de Rede via Ping do PostgreSQL (Henrique Montenegro)
+  // SPRINT 65: Medição Real de Latência de Rede via Ping do PostgreSQL
   const runCloudDiagnostics = useCallback(async () => {
     try {
       const res = await pingSupabaseDatabase(currentUserId);
@@ -10644,7 +10652,7 @@ export default function CoindexApp() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">⚙️ Ordenar Meus Cartões</h3>
-                  <p className="text-[11px] text-slate-400">Defina a ordem de exibição na Apple Wallet e nos limites</p>
+                  <p className="text-[11px] text-slate-400">Defina a ordem de exibição no Stack de Cartões e nos limites</p>
                 </div>
               </div>
               <button
@@ -10657,7 +10665,7 @@ export default function CoindexApp() {
             </div>
 
             <p className="text-slate-300 text-[11px] leading-relaxed">
-              Use as setas para reposicionar seus cartões. Os <strong className="text-white">3 primeiros</strong> cartões serão exibidos em destaque inicial no stack da Apple Wallet.
+              Use as setas para reposicionar seus cartões. Os <strong className="text-white">3 primeiros</strong> cartões serão exibidos em destaque inicial no Stack de Cartões.
             </p>
 
             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
@@ -11190,7 +11198,7 @@ export default function CoindexApp() {
         document.body
       )}
 
-      {/* SPRINT 62 (Henrique Montenegro): Central de Sincronização & Inspetor Cloud (Supabase) */}
+      {/* SPRINT 62: Central de Sincronização & Inspetor Cloud (Supabase) */}
       {showCloudInspectorModal && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
