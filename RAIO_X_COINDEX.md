@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.50.0`  
-> **Última Atualização:** 13 de Novembro de 2026 (Pós-Sprint 68 — Extinção do Posto Express com Bloco Automático para Gasolina, Zero Recálculo de Valores, Correção Definitiva de Edição no Supabase, Cálculo Fiel de 838 km e Micro-Motions Fluidos)  
+> **Versão da Aplicação:** `0.50.1`  
+> **Última Atualização:** 13 de Novembro de 2026 (Pós-Sprint 69 — Motor Visual "Coindex Caustic Silk Sheet 3D": Lençol de Seda Paramétrico Tridimensional com 52 Filamentos, Dobras Cáusticas em Modo Screen e Bainhas Especulares a 144Hz)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1362,6 +1362,21 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
       - Aumento da densidade estelar para 420 micro-pontos com raio de 0.4px a 0.65px (média 0.5px) e opacidade sutil entre 0.05 e 0.20, sem textura granulada.
     - **Pilar 7 — Micro-Motions Fluidos (144Hz):**
       - Implementação de classes CSS `.gauge-progress-bar`, `.liquid-progress-shimmer` e `.tactile-hover` em `app/globals.css`.
+
+  - **Sprint 69 (Novembro de 2026 — Motor Visual "Coindex Caustic Silk Sheet 3D": Lençol de Seda Paramétrico Tridimensional com 52 Filamentos, Dobras Cáusticas em Modo Screen e Bainhas Especulares a 144Hz v0.50.1):**
+    - **Pilar 1 — Engenharia Geométrica Tridimensional do Tecido de Seda (`drawCausticSilkSheets` em `AmbientBackgroundFX.tsx`):**
+      - Substituição das antigas fitas 2D isoladas por uma superfície de lençol de seda contínua modelada matematicamente com 52 filamentos no Lençol 1 (Hero Sheet) e 28 filamentos no Lençol 2 (Deep Sub-Veil), totalizando 80 filamentos sincronizados em GPU.
+      - Cada filamento possui dispersão espacial `u` normalizada entre `0.0` e `1.0`, com curvatura Camber em arco parabólico côncavo/convexo, onda primária longitudinal, harmônico secundário transversal de torção 3D (`twist`) e micro-ondulação de textura de seda (`ripple`).
+    - **Pilar 2 — Interpolação Spline 144Hz via quadraticCurveTo:**
+      - Divisão horizontal em 40 segmentos discretos com traçado suave por pontos médios (`quadraticCurveTo`), eliminando qualquer aresta poligonal e assegurando curvatura de seda perfeitamente contínua sem peso computacional de splines de terceira ordem.
+    - **Pilar 3 — Modo de Mistura Aditiva 'screen' e Dobras Cáusticas Reais:**
+      - No tema escuro (`data-theme !== "light"`), os filamentos utilizam `ctx.globalCompositeOperation = "screen"`, permitindo que os pontos de cruzamento e alta densidade espacial gerem acúmulos luminosos de dobras cáusticas hiper-realistas.
+    - **Pilar 4 — Bainhas de Cetim Especulares (isRimEdge) e Gradiente Perolado:**
+      - Filamentos de contorno externo (`i === 0` e `i === N - 1`) recebem espessura ampliada (`lineWidth = 1.2px`) e multiplicador de densidade óptica de até `2.4x`, delimitando a silhueta da seda no ar.
+      - Gradiente horizontal conectando as cores da tríade camaleão ativa por aba com realce especular perolado central em branco translúcido (`rgba(240, 246, 255, alpha)`).
+    - **Pilar 5 — Deformação Elástica por Interação de Cursor (< 320px) & Zero GC:**
+      - Campo de deflexão suave do tecido com raio de influência de 320px ao redor de `smoothMouse`, gerando elevação e expansão de seda conforme o cursor navega pela tela.
+      - 100% livre de alocações dinâmicas de memória por frame dentro do loop de renderização a 144Hz.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

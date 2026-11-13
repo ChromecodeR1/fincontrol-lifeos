@@ -400,13 +400,27 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.50.0";
-export const PREVIOUS_VERSION = "0.49.3";
-export const COINDEX_APP_VERSION = "0.50.0";
+export const APP_VERSION = "0.50.1";
+export const PREVIOUS_VERSION = "0.50.0";
+export const COINDEX_APP_VERSION = "0.50.1";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.50.1",
+    date: "Nov/2026",
+    title: "Sprint 69: Motor Visual 'Coindex Caustic Silk Sheet 3D' (Lençol de Seda Paramétrico Tridimensional com 52 Filamentos, Dobras Cáusticas em Modo Screen e Bainhas Especulares a 144Hz)",
+    highlights: [
+      "Motor Caustic Silk Sheet 3D (AmbientBackgroundFX): Transição das antigas fitas 2D para um lençol de seda paramétrico tridimensional com física cáustica real, modelando a deformação de tecidos com curvatura Camber em arco côncavo/convexo e harmônicos senoidais duplos.",
+      "Duplo Lençol Sobreposto (52 + 28 Filamentos): Composição volumétrica refinada entre o Lençol 1 Hero (52 filamentos contínuos no terço central) e o Lençol 2 Deep Sub-Veil (28 filamentos com contra-camber e defasagem angular no terço inferior), conferindo profundidade espacial de tecido duplo translúcido.",
+      "Interpolação Spline 144Hz via quadraticCurveTo: 40 segmentos discretos conectados por curvas quadráticas suaves com pontos médios, eliminando qualquer aresta ou rigidez geométrica.",
+      "Acúmulo Cáustico Óptico em Modo 'screen': No tema escuro, a sobreposição dos filamentos convergentes gera concentrações naturais de luz cáustica sem artifícios de ruído ou rasterização.",
+      "Bainhas de Cetim Especulares (isRimEdge): Filamentos externos nas bordas superior e inferior renderizados com traço destacado (1.2px) e ganho de opacidade de até 2.4x, criando silhueta nítida e elegante.",
+      "Gradiente Horizontal Perolado: Transição fluida horizontal pelas cores da paleta camaleão contextual da aba com realce de crista perolado especular em branco-prata translúcido.",
+      "Interação Fluida com o Mouse (< 320px): Deformação elástica suave que eleva e expande os filamentos ao redor do cursor simulando vento e brisa com zero alocação de objetos em runtime."
+    ]
+  },
   {
     version: "0.50.0",
     date: "Nov/2026",
