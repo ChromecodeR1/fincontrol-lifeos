@@ -917,4 +917,130 @@ html[data-animations="off"] *::after {
   transform: scale(0.98);
 }
 
+/* ============================================================================
+   SPRINT 70: SUITE DE FÍSICA ÓPTICA COINDEX (144HZ GPU-ACCELERATED)
+   - Trilha de Fótons Viva & Cortina Laser nos Gráficos Recharts
+   - Borda de Safira Prismática nos Bento Cards (.coindex-sapphire-rim)
+   - Varredura de Feixe Laser no Topo dos Modais (.coindex-modal-laser-sweep)
+   ============================================================================ */
+
+/* 1. Pulso Fotônico e Bioluminescência nas Curvas Principais do Recharts */
+html:not([data-animations="off"]) .recharts-area-curve,
+html:not([data-animations="off"]) .recharts-line-curve {
+  filter: drop-shadow(0 0 6px rgba(10, 132, 255, 0.28));
+  animation: coindexCurveBioluminescence 5.5s ease-in-out infinite;
+}
+
+@keyframes coindexCurveBioluminescence {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px rgba(10, 132, 255, 0.20));
+  }
+  50% {
+    filter: drop-shadow(0 0 9px rgba(56, 189, 248, 0.42));
+  }
+}
+
+/* 2. Cortina Laser & Feixe Especular Horizontal nos Gráficos */
+.coindex-chart-photon-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  z-index: 10;
+}
+
+html:not([data-animations="off"]) .coindex-chart-photon-overlay::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 60%;
+  background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.06) 50%, transparent 100%);
+  animation: coindexPhotonSweep 6.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes coindexPhotonSweep {
+  0% {
+    transform: translateX(0%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(340%);
+    opacity: 0;
+  }
+}
+
+/* 3. Borda de Safira com Refração Prismática nos Bento Cards */
+.coindex-sapphire-rim {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  background: radial-gradient(
+    260px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(248, 250, 252, 0.55) 0%,
+    rgba(56, 189, 248, 0.35) 35%,
+    rgba(10, 132, 255, 0.15) 65%,
+    transparent 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  z-index: 5;
+}
+
+.group:hover .coindex-sapphire-rim,
+*:hover > .coindex-sapphire-rim {
+  opacity: 1;
+}
+
+html[data-animations="off"] .coindex-sapphire-rim {
+  display: none !important;
+}
+
+/* 4. Varredura de Feixe Laser no Topo dos Modais */
+.coindex-modal-laser-sweep {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, #0A84FF, #38BDF8, #F8FAFC, #38BDF8, transparent);
+  animation: coindexLaserSweep 4.5s ease-in-out infinite;
+}
+
+@keyframes coindexLaserSweep {
+  0% {
+    transform: translateX(0%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(200%);
+    opacity: 0;
+  }
+}
+
+html[data-animations="off"] .coindex-modal-laser-sweep {
+  display: none !important;
+}
+
 

@@ -1273,7 +1273,8 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
               >
                 {/* Gráfico 1: Evolução do Odômetro (KM) */}
                 {widget.id === "auto_odometer" && (
-                  <div className="h-64 select-none">
+                  <div className="h-64 select-none relative">
+                    <div className="coindex-chart-photon-overlay" />
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart accessibilityLayer={false} data={autoMetrics.kmRecords}>
                         <defs>
@@ -1292,7 +1293,7 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
                           tickFormatter={(v) => formatDateBR(v)}
                         />
                         <YAxis stroke="#64748b" fontSize={11} domain={["auto", "auto"]} />
-                        <Tooltip cursor={false} content={<CustomCyberTooltip isCurrency={false} />} />
+                        <Tooltip cursor={{ stroke: "rgba(56, 189, 248, 0.45)", strokeWidth: 1.5, strokeDasharray: "4 4" }} content={<CustomCyberTooltip isCurrency={false} />} />
                         <Area
                           type={cfg.curveType}
                           dataKey="km"

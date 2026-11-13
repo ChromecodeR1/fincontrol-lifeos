@@ -70,6 +70,11 @@ export function ProfileModal({
   const modalContent = (
     <div className="fixed inset-0 w-screen h-dvh z-[9999] bg-black/65 backdrop-blur-md flex items-center justify-center p-4 overflow-hidden">
       <div className="relative w-full max-w-md max-h-[86dvh] overflow-y-auto rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl p-6 space-y-6 text-xs custom-scrollbar my-auto">
+        {/* SPRINT 70: Varredura de Feixe Laser no Topo do Modal */}
+        <div className="absolute top-0 left-0 right-0 h-[1.5px] overflow-hidden pointer-events-none z-50">
+          <div className="coindex-modal-laser-sweep" />
+        </div>
+
         {/* Cabeçalho */}
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="space-y-0.5">

@@ -528,6 +528,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         onSubmit={handleFormSubmit}
         className="relative w-full max-w-lg max-h-[86dvh] flex flex-col overflow-hidden rounded-2xl bg-[var(--cupertino-card)] border border-[var(--cupertino-border)] shadow-2xl my-auto text-xs"
       >
+        {/* SPRINT 70: Varredura de Feixe Laser no Topo do Modal */}
+        <div className="absolute top-0 left-0 right-0 h-[1.5px] overflow-hidden pointer-events-none z-50">
+          <div className="coindex-modal-laser-sweep" />
+        </div>
+
         {isSavingTx && (
           <div className="absolute top-0 left-0 right-0 h-1 bg-[#0A84FF] cupertino-shimmer z-50" />
         )}

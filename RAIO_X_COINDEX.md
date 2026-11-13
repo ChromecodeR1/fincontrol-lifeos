@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.50.1`  
-> **Última Atualização:** 13 de Novembro de 2026 (Pós-Sprint 69 — Motor Visual "Coindex Caustic Silk Sheet 3D": Lençol de Seda Paramétrico Tridimensional com 52 Filamentos, Dobras Cáusticas em Modo Screen e Bainhas Especulares a 144Hz)  
+> **Versão da Aplicação:** `0.51.0`  
+> **Última Atualização:** 13 de Novembro de 2026 (Pós-Sprint 70 — Suite de Física Óptica Coindex: Ondulação Acústica no Lençol de Seda 3D, Feixe de Fótons nos Gráficos, Borda de Safira Prismática nos Cards e Micro-Cáustica nos KPIs & Modais)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1377,6 +1377,23 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Pilar 5 — Deformação Elástica por Interação de Cursor (< 320px) & Zero GC:**
       - Campo de deflexão suave do tecido com raio de influência de 320px ao redor de `smoothMouse`, gerando elevação e expansão de seda conforme o cursor navega pela tela.
       - 100% livre de alocações dinâmicas de memória por frame dentro do loop de renderização a 144Hz.
+
+  - **Sprint 70 (Novembro de 2026 — Suite de Física Óptica Coindex: Ondulação Acústica no Lençol de Seda 3D, Feixe de Fótons nos Gráficos, Borda de Safira Prismática nos Cards e Micro-Cáustica nos KPIs & Modais v0.51.0):**
+    - **Pilar 1 — Ondulação Acústica Física no Lençol 3D (`AmbientBackgroundFX.tsx`):**
+      - Captura global de eventos `pointerdown` no window mantendo no máximo as últimas 4 ondas ativas (< 1650ms), além de disparo suave no centro ao alternar de aba (`activeTab`).
+      - Blindagem contra raio negativo (`waveRadius = Math.max(0.5, elapsed * 0.42)`).
+      - Propagação harmônica radial amortecida modulando o eixo Y dos 52 filamentos de seda com envelope espacial e anel luminoso sutil (`decay * 0.08`) no epicentro.
+    - **Pilar 2 — Trilha de Fótons Viva & Cortina Laser nos Gráficos Recharts (`globals.css`, `page.tsx`, `SecondaryTabs.tsx`, `VehiclesTab.tsx`):**
+      - Bioluminescência fotônica nas curvas de área e linha (`.recharts-area-curve`, `.recharts-line-curve`) via filtro `drop-shadow` pulsante a cada 5.5s.
+      - Overlay `.coindex-chart-photon-overlay` com feixe especular horizontal suave percorrendo os gráficos de Patrimônio, Strava Progress e Odômetro a cada 6.5s.
+      - Mira laser nos tooltips com agulha vertical nítida (`stroke: "rgba(56, 189, 248, 0.45)", strokeWidth: 1.5, strokeDasharray: "4 4"`).
+    - **Pilar 3 — Borda de Safira com Refração Prismática nos Bento Cards (`ChartCard.tsx`, `MotionEngine144.tsx`, `globals.css`):**
+      - Rastreamento polar angular (`--mouse-angle`) via `useProximityBorderGlow` em 144Hz.
+      - Camada `.coindex-sapphire-rim` com máscara de borda 1px (`mask-composite: exclude`) e refração radial branco-perolada/ciano, preservando 100% intocados e nítidos os cartões de crédito e o card `wallet_limits`.
+    - **Pilar 4 — Micro-Cáustica Interna nos 4 Slim KPIs (`page.tsx`):**
+      - Refração dinâmica interna acompanhando o mouse nos 4 cards de topo (verde nas Entradas, coral nas Saídas, azul nos Aportes e ciano no Saldo Livre) com nitidez absoluta dos números `tabular-nums` em `relative z-10`.
+    - **Pilar 5 — Varredura de Feixe Laser no Topo dos Modais (`TransactionModal.tsx`, `KpiAuditModal.tsx`, `ProfileModal.tsx`, `globals.css`):**
+      - Filete de feixe laser `.coindex-modal-laser-sweep` de 1.5px na borda superior dos modais, respeitando 100% das diretrizes de acessibilidade (`data-animations="off"`).
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida

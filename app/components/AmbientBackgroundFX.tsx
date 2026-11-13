@@ -195,6 +195,13 @@ interface CausticSheetConfig {
   baseAlphaLight: number;
 }
 
+export interface SilkAcousticRipple {
+  x: number;
+  y: number;
+  startTime: number;
+  strength: number;
+}
+
 const CAUSTIC_SHEETS: CausticSheetConfig[] = [
   // Lençol 1: Hero Caustic Silk Sheet (52 filamentos)
   {
@@ -250,7 +257,8 @@ function drawCausticSilkSheets(
   accentRgb: [number, number, number],
   mouseX: number,
   mouseY: number,
-  isLight: boolean
+  isLight: boolean,
+  ripples: SilkAcousticRipple[] = []
 ) {
   ctx.save();
   ctx.lineCap = "round";
@@ -258,6 +266,28 @@ function drawCausticSilkSheets(
 
   if (!isLight) {
     ctx.globalCompositeOperation = "screen";
+  }
+
+  // SPRINT 70: Filtra ondas acústicas ativas (< 1650ms)
+  const activeRipples = ripples.filter((r) => timestamp - r.startTime < 1650);
+
+  // Desenha no canvas um anel luminoso ultra-sutil no epicentro de cada onda
+  if (activeRipples.length > 0) {
+    for (let rIdx = 0; rIdx < activeRipples.length; rIdx++) {
+      const rip = activeRipples[rIdx];
+      const elapsed = Math.max(0, timestamp - rip.startTime);
+      const waveRadius = Math.max(0.5, elapsed * 0.42);
+      const decay = Math.max(0, 1 - elapsed / 1650);
+      const ringAlpha = decay * 0.08;
+
+      if (ringAlpha > 0.001) {
+        ctx.beginPath();
+        ctx.arc(rip.x, rip.y, waveRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, ${ringAlpha})`;
+        ctx.lineWidth = 1.1;
+        ctx.stroke();
+      }
+    }
   }
 
   const segments = 40;
@@ -321,6 +351,29 @@ function drawCausticSilkSheets(
           const lift = Math.sin(normDist * (Math.PI * 0.5)) * 34 * (1 - Math.abs(uCentered) * 0.6);
           const dir = dy >= 0 ? 1 : -1;
           y += lift * dir * 0.55;
+        }
+
+        // 8. SPRINT 70: Ondulação acústica física propagada a partir dos cliques e trocas de aba
+        if (activeRipples.length > 0) {
+          for (let rIdx = 0; rIdx < activeRipples.length; rIdx++) {
+            const rip = activeRipples[rIdx];
+            const elapsed = Math.max(0, timestamp - rip.startTime);
+            const waveRadius = Math.max(0.5, elapsed * 0.42);
+            const distToRipple = Math.hypot(x - rip.x, yBase - rip.y);
+            const deltaDist = Math.abs(distToRipple - waveRadius);
+
+            if (deltaDist < 130) {
+              const decay = Math.max(0, 1 - elapsed / 1650);
+              const spatialEnvelope = 1 - deltaDist / 130;
+              const waveDisplacement =
+                Math.sin((distToRipple - waveRadius) * 0.065) *
+                rip.strength *
+                decay *
+                spatialEnvelope *
+                (0.7 + 0.3 * Math.cos(u * Math.PI));
+              y += waveDisplacement;
+            }
+          }
         }
 
         return y;
@@ -404,7 +457,11 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
   const shootingStarsRef = useRef<ShootingStar[]>([]);
   const nextShootingStarTimeRef = useRef<number>(0);
 
-  // Partículas de Poeira Estelar (115 partículas em 3 camadas)
+  // SPRINT 70: Ondas Acústicas Físicas no Lençol 3D (Captura de Cliques e Trocas de Aba)
+  const ripplesRef = useRef<SilkAcousticRipple[]>([]);
+  const firstTabRenderRef = useRef<boolean>(true);
+
+  // Partículas de Poeira Estelar (420 micro-partículas a 144Hz)
   const particlesRef = useRef<StardustParticle[]>([]);
 
   useEffect(() => {
@@ -444,6 +501,48 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
     window.addEventListener("mousemove", handleMouseMove, { passive: true });
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, [mounted, mode]);
+
+  // SPRINT 70: Captura Global de Ondas de Choque ao Clicar (PointerDown)
+  useEffect(() => {
+    if (!mounted || mode === "none") return;
+
+    const handlePointerDown = (e: PointerEvent) => {
+      const docAttr = document.documentElement.getAttribute("data-animations");
+      if (docAttr === "off") return;
+
+      const now = performance.now();
+      ripplesRef.current = [
+        ...ripplesRef.current.filter((r) => now - r.startTime < 1650),
+        { x: e.clientX, y: e.clientY, startTime: now, strength: 26 }
+      ].slice(-4);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, { passive: true });
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [mounted, mode]);
+
+  // SPRINT 70: Ondulação Suave Centralizada ao Trocar de Aba
+  useEffect(() => {
+    if (firstTabRenderRef.current) {
+      firstTabRenderRef.current = false;
+      return;
+    }
+    if (!mounted || mode === "none") return;
+
+    const docAttr = document.documentElement.getAttribute("data-animations");
+    if (docAttr === "off") return;
+
+    const now = performance.now();
+    ripplesRef.current = [
+      ...ripplesRef.current.filter((r) => now - r.startTime < 1650),
+      {
+        x: window.innerWidth * 0.5,
+        y: window.innerHeight * 0.38,
+        startTime: now,
+        strength: 30
+      }
+    ].slice(-4);
+  }, [activeTab, mounted, mode]);
 
   // SPRINT 63: Motor Cinemático Canvas 144Hz (Poeira Estelar 3D + Ondas de Seda Harmônicas + Aurora Camaleão)
   useEffect(() => {
@@ -541,9 +640,15 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
       // ======================================================================
       // PASSO 3: LENÇOL DE SEDA PARAMÉTRICO 3D (Coindex Caustic Silk Sheets)
       // Renderizado com 52 filamentos (Hero) + 28 filamentos (Deep Sub-Veil),
-      // dobras cáusticas em modo screen e bainhas especulares a 144Hz
+      // dobras cáusticas em modo screen, ondas acústicas por clique e bainhas especulares a 144Hz
       // ======================================================================
       if (mode === "hybrid" || mode === "aurora") {
+        if (!isReduced) {
+          ripplesRef.current = ripplesRef.current.filter((r) => timestamp - r.startTime < 1650);
+        } else {
+          ripplesRef.current = [];
+        }
+
         drawCausticSilkSheets(
           ctx,
           width,
@@ -554,7 +659,8 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
           curColors.accent,
           smoothMouse.current.x,
           smoothMouse.current.y,
-          isLight
+          isLight,
+          isReduced ? [] : ripplesRef.current
         );
       }
 

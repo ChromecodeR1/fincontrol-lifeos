@@ -400,13 +400,25 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.50.1";
-export const PREVIOUS_VERSION = "0.50.0";
-export const COINDEX_APP_VERSION = "0.50.1";
+export const APP_VERSION = "0.51.0";
+export const PREVIOUS_VERSION = "0.50.1";
+export const COINDEX_APP_VERSION = "0.51.0";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.51.0",
+    date: "Nov/2026",
+    title: "Sprint 70: Suite de Física Óptica Coindex (Ondulação Acústica no Lençol de Seda 3D, Feixe de Fótons nos Gráficos, Borda de Safira Prismática nos Cards e Micro-Cáustica nos KPIs & Modais)",
+    highlights: [
+      "Ondulação Acústica no Lençol 3D (AmbientBackgroundFX): Captura global de ondas de choque em ripplesRef via pointerdown e na troca de abas, propagando deflexão harmônica amortecida radialmente nos 52 filamentos de seda com blindagem contra raio negativo e anel luminoso sutil no epicentro.",
+      "Trilha de Fótons & Cortina Laser nos Gráficos (Recharts): Nova classe .coindex-chart-photon-overlay com feixe especular horizontal suave percorrendo os gráficos de Patrimônio, Strava Progress e Odômetro a cada 6.5s, acompanhado de bioluminescência fotônica nas curvas e mira laser nos tooltips.",
+      "Borda de Safira Prismática (.coindex-sapphire-rim): Shading de proximidade angular em 144Hz que ilumina apenas o filete de 1px da borda do card mais próximo ao cursor com refração branco-perolada e ciano, preservando 100% intactos e nítidos os cartões de crédito e o card wallet_limits.",
+      "Micro-Cáustica Interna nos 4 Slim KPIs (page.tsx): Efeito volumétrico de refração interna acompanhando o cursor do mouse em tempo real em cada um dos 4 cards de topo (verde nas Entradas, coral nas Saídas, azul nos Aportes e ciano no Saldo Livre) com nitidez absoluta dos números tabular-nums.",
+      "Varredura Laser nos Modais (.coindex-modal-laser-sweep): Filete de luz laser suave de 1.5px no topo dos modais de Transação, Auditoria KPI e Perfil, preservando a integridade de portais e acessibilidade de movimento."
+    ]
+  },
   {
     version: "0.50.1",
     date: "Nov/2026",

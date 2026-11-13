@@ -311,8 +311,10 @@ export function useProximityBorderGlow<T extends HTMLElement = HTMLDivElement>()
       const rect = el.getBoundingClientRect();
       const x = clientX - rect.left;
       const y = clientY - rect.top;
+      const angleDeg = Math.round(Math.atan2(y - rect.height / 2, x - rect.width / 2) * (180 / Math.PI) + 90);
       el.style.setProperty("--mouse-x", `${x}px`);
       el.style.setProperty("--mouse-y", `${y}px`);
+      el.style.setProperty("--mouse-angle", `${angleDeg}deg`);
     });
   }, []);
 

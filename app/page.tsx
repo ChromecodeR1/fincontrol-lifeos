@@ -8263,176 +8263,247 @@ export default function CoindexApp() {
                   {/* Card 1: Entradas */}
                   <div
                     onClick={() => setActiveKpiAudit("INCOME")}
+                    onMouseMove={(e) => {
+                      if (document.documentElement.getAttribute("data-animations") === "off") return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      e.currentTarget.style.setProperty("--kpi-x", `${e.clientX - rect.left}px`);
+                      e.currentTarget.style.setProperty("--kpi-y", `${e.clientY - rect.top}px`);
+                    }}
+                    style={{ "--kpi-caustic-color": "rgba(48, 209, 88, 0.085)" } as React.CSSProperties}
                     className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#30D158]/10 via-slate-900/80 to-slate-950 border border-[#30D158]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
                   >
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
-                          <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
-                            <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                            <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#30D158]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                              <strong className="text-[#30D158] mb-0.5">Fórmula de Entradas:</strong>
-                              <span>Soma de créditos e receitas ativas (FlowType = INCOME), excluindo transferências neutras e estornos.</span>
+                    {/* Micro-Cáustica Interna Fluida */}
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-0"
+                      style={{
+                        background: "radial-gradient(190px circle at var(--kpi-x, 50%) var(--kpi-y, 50%), var(--kpi-caustic-color, rgba(48, 209, 88, 0.085)), transparent 75%)"
+                      }}
+                      aria-hidden="true"
+                    />
+
+                    <div className="relative z-10 flex flex-col justify-between h-full">
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Entradas Totais (Geral)" : "Entradas do Mês"}</span>
+                            <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
+                              <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                              <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#30D158]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                <strong className="text-[#30D158] mb-0.5">Fórmula de Entradas:</strong>
+                                <span>Soma de créditos e receitas ativas (FlowType = INCOME), excluindo transferências neutras e estornos.</span>
+                              </div>
                             </div>
                           </div>
+                          <div className="p-1 rounded-lg bg-[#30D158]/15 text-[#30D158] border border-[#30D158]/25">
+                            <TrendingUp className="w-3.5 h-3.5" />
+                          </div>
                         </div>
-                        <div className="p-1 rounded-lg bg-[#30D158]/15 text-[#30D158] border border-[#30D158]/25">
-                          <TrendingUp className="w-3.5 h-3.5" />
-                        </div>
+                        <p className="kpi-val-income text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#30D158] leading-tight mt-0.5">
+                          +<AnimatedBRL value={monthSummary.income} />
+                        </p>
                       </div>
-                      <p className="kpi-val-income text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#30D158] leading-tight mt-0.5">
-                        +<AnimatedBRL value={monthSummary.income} />
-                      </p>
-                    </div>
-                    <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
-                      {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
-                        <span>Média mensal: {formatBRL(monthSummary.income / filterMonthsCount)}</span>
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <ArrowUpRight className="w-3.5 h-3.5 text-[#30D158]" />
-                          {monthSummary.incomeDiff >= 0
-                            ? `+${monthSummary.incomeDiff}%`
-                            : `${monthSummary.incomeDiff}%`}{" "}
-                          vs. anterior
-                        </span>
-                      )}
-                      <SparklineSvg data={kpiSparklines.income} color="#30D158" className="w-14 h-6 opacity-80" />
+                      <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
+                        {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
+                          <span>Média mensal: {formatBRL(monthSummary.income / filterMonthsCount)}</span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <ArrowUpRight className="w-3.5 h-3.5 text-[#30D158]" />
+                            {monthSummary.incomeDiff >= 0
+                              ? `+${monthSummary.incomeDiff}%`
+                              : `${monthSummary.incomeDiff}%`}{" "}
+                            vs. anterior
+                          </span>
+                        )}
+                        <SparklineSvg data={kpiSparklines.income} color="#30D158" className="w-14 h-6 opacity-80" />
+                      </div>
                     </div>
                   </div>
 
                   {/* Card 2: Saídas & Despesas */}
                   <div
                     onClick={() => setActiveKpiAudit("EXPENSE")}
+                    onMouseMove={(e) => {
+                      if (document.documentElement.getAttribute("data-animations") === "off") return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      e.currentTarget.style.setProperty("--kpi-x", `${e.clientX - rect.left}px`);
+                      e.currentTarget.style.setProperty("--kpi-y", `${e.clientY - rect.top}px`);
+                    }}
+                    style={{ "--kpi-caustic-color": "rgba(255, 69, 58, 0.085)" } as React.CSSProperties}
                     className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#FF453A]/10 via-slate-900/80 to-slate-950 border border-[#FF453A]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
                   >
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
-                          <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
-                            <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                            <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#FF453A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                              <strong className="text-[#FF453A] mb-0.5">Fórmula de Saídas:</strong>
-                              <span>Soma de débitos e faturas (FlowType = EXPENSE), deduzindo recebimentos de empréstimo e reembolsos como crédito.</span>
+                    {/* Micro-Cáustica Interna Fluida */}
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-0"
+                      style={{
+                        background: "radial-gradient(190px circle at var(--kpi-x, 50%) var(--kpi-y, 50%), var(--kpi-caustic-color, rgba(255, 69, 58, 0.085)), transparent 75%)"
+                      }}
+                      aria-hidden="true"
+                    />
+
+                    <div className="relative z-10 flex flex-col justify-between h-full">
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Saídas & Despesas (Geral)" : "Saídas & Despesas"}</span>
+                            <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
+                              <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                              <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#FF453A]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                <strong className="text-[#FF453A] mb-0.5">Fórmula de Saídas:</strong>
+                                <span>Soma de débitos e faturas (FlowType = EXPENSE), deduzindo recebimentos de empréstimo e reembolsos como crédito.</span>
+                              </div>
                             </div>
                           </div>
+                          <div className="p-1 rounded-lg bg-[#FF453A]/15 text-[#FF453A] border border-[#FF453A]/25">
+                            <TrendingDown className="w-3.5 h-3.5" />
+                          </div>
                         </div>
-                        <div className="p-1 rounded-lg bg-[#FF453A]/15 text-[#FF453A] border border-[#FF453A]/25">
-                          <TrendingDown className="w-3.5 h-3.5" />
-                        </div>
+                        <p className="kpi-val-expense text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#FF453A] leading-tight mt-0.5">
+                          -<AnimatedBRL value={monthSummary.expense} />
+                        </p>
                       </div>
-                      <p className="kpi-val-expense text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#FF453A] leading-tight mt-0.5">
-                        -<AnimatedBRL value={monthSummary.expense} />
-                      </p>
-                    </div>
-                    <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
-                      {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
-                        <span>Média mensal: {formatBRL(monthSummary.expense / filterMonthsCount)}</span>
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <ArrowDownRight className="w-3.5 h-3.5 text-[#FF453A]" />
-                          {monthSummary.expenseDiff >= 0
-                            ? `+${monthSummary.expenseDiff}%`
-                            : `${monthSummary.expenseDiff}%`}{" "}
-                          vs. anterior
-                        </span>
-                      )}
-                      <SparklineSvg data={kpiSparklines.expense} color="#FF453A" className="w-14 h-6 opacity-80" />
+                      <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
+                        {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
+                          <span>Média mensal: {formatBRL(monthSummary.expense / filterMonthsCount)}</span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <ArrowDownRight className="w-3.5 h-3.5 text-[#FF453A]" />
+                            {monthSummary.expenseDiff >= 0
+                              ? `+${monthSummary.expenseDiff}%`
+                              : `${monthSummary.expenseDiff}%`}{" "}
+                            vs. anterior
+                          </span>
+                        )}
+                        <SparklineSvg data={kpiSparklines.expense} color="#FF453A" className="w-14 h-6 opacity-80" />
+                      </div>
                     </div>
                   </div>
 
                   {/* Card 3: Aportes Brutos */}
                   <div
                     onClick={() => setActiveKpiAudit("INVESTMENT")}
+                    onMouseMove={(e) => {
+                      if (document.documentElement.getAttribute("data-animations") === "off") return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      e.currentTarget.style.setProperty("--kpi-x", `${e.clientX - rect.left}px`);
+                      e.currentTarget.style.setProperty("--kpi-y", `${e.clientY - rect.top}px`);
+                    }}
+                    style={{ "--kpi-caustic-color": "rgba(10, 132, 255, 0.085)" } as React.CSSProperties}
                     className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#0A84FF]/10 via-slate-900/80 to-slate-950 border border-[#0A84FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
                   >
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
-                          <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
-                            <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                            <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#0A84FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                              <strong className="text-[#0A84FF] mb-0.5">Fórmula de Aportes:</strong>
-                              <span>Soma bruta de lançamentos de investimento e caixinhas (Aportes ≥ 0). Resgates não reduzem o aporte bruto.</span>
+                    {/* Micro-Cáustica Interna Fluida */}
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-0"
+                      style={{
+                        background: "radial-gradient(190px circle at var(--kpi-x, 50%) var(--kpi-y, 50%), var(--kpi-caustic-color, rgba(10, 132, 255, 0.085)), transparent 75%)"
+                      }}
+                      aria-hidden="true"
+                    />
+
+                    <div className="relative z-10 flex flex-col justify-between h-full">
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Aportes Brutos (Geral)" : "Aportes no Mês"}</span>
+                            <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
+                              <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                              <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-56 p-2 rounded-xl bg-slate-900/95 border border-[#0A84FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                <strong className="text-[#0A84FF] mb-0.5">Fórmula de Aportes:</strong>
+                                <span>Soma bruta de lançamentos de investimento e caixinhas (Aportes ≥ 0). Resgates não reduzem o aporte bruto.</span>
+                              </div>
                             </div>
                           </div>
+                          <div className="p-1 rounded-lg bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/25">
+                            <PiggyBank className="w-3.5 h-3.5" />
+                          </div>
                         </div>
-                        <div className="p-1 rounded-lg bg-[#0A84FF]/15 text-[#0A84FF] border border-[#0A84FF]/25">
-                          <PiggyBank className="w-3.5 h-3.5" />
-                        </div>
+                        <p className="kpi-val-invest text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#0A84FF] leading-tight mt-0.5">
+                          +<AnimatedBRL value={monthSummary.aportes} />
+                        </p>
                       </div>
-                      <p className="kpi-val-invest text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums text-[#0A84FF] leading-tight mt-0.5">
-                        +<AnimatedBRL value={monthSummary.aportes} />
-                      </p>
-                    </div>
-                    <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
-                      {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
-                        <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)}`}>
-                          Reserva: <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong>
-                        </span>
-                      ) : (
-                        <span>Meta: {formatBRL(monthlyInvestmentGoal)}</span>
-                      )}
-                      <SparklineSvg data={kpiSparklines.aportes} color="#0A84FF" className="w-14 h-6 opacity-80" />
+                      <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 tabular-nums">
+                        {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
+                          <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)}`}>
+                            Reserva: <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong>
+                          </span>
+                        ) : (
+                          <span>Meta: {formatBRL(monthlyInvestmentGoal)}</span>
+                        )}
+                        <SparklineSvg data={kpiSparklines.aportes} color="#0A84FF" className="w-14 h-6 opacity-80" />
+                      </div>
                     </div>
                   </div>
 
                   {/* Card 4: Saldo Livre Líquido */}
                   <div
                     onClick={() => setActiveKpiAudit("BALANCE")}
+                    onMouseMove={(e) => {
+                      if (document.documentElement.getAttribute("data-animations") === "off") return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      e.currentTarget.style.setProperty("--kpi-x", `${e.clientX - rect.left}px`);
+                      e.currentTarget.style.setProperty("--kpi-y", `${e.clientY - rect.top}px`);
+                    }}
+                    style={{ "--kpi-caustic-color": "rgba(100, 210, 255, 0.085)" } as React.CSSProperties}
                     className="kpi-slim-card px-3.5 py-2.5 rounded-2xl bg-gradient-to-br from-[#64D2FF]/10 via-slate-900/80 to-slate-950 border border-[#64D2FF]/20 flex flex-col justify-between shadow-sm relative overflow-hidden group cupertino-card-hover cursor-pointer"
                   >
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
-                          <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
-                            <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
-                            <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-60 p-2 rounded-xl bg-slate-900/95 border border-[#64D2FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
-                              <strong className="text-[#64D2FF] mb-0.5">Resultado Operacional:</strong>
-                              <span>Entradas - (Despesas Operacionais + Investimento Líquido do período). Indica a folga de caixa líquida.</span>
+                    {/* Micro-Cáustica Interna Fluida */}
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-0"
+                      style={{
+                        background: "radial-gradient(190px circle at var(--kpi-x, 50%) var(--kpi-y, 50%), var(--kpi-caustic-color, rgba(100, 210, 255, 0.085)), transparent 75%)"
+                      }}
+                      aria-hidden="true"
+                    />
+
+                    <div className="relative z-10 flex flex-col justify-between h-full">
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wider text-slate-400 mb-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="kpi-title">{selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? "Balanço Operacional Líquido" : "Saldo Livre Líquido"}</span>
+                            <div className="relative group/tip inline-flex items-center hover:z-[9999]" onClick={(e) => e.stopPropagation()}>
+                              <Info className="w-3 h-3 text-slate-400 hover:text-slate-200 transition-colors cursor-help" />
+                              <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:flex flex-col z-[9999] w-60 p-2 rounded-xl bg-slate-900/95 border border-[#64D2FF]/30 text-[11px] normal-case tracking-normal text-slate-300 shadow-2xl backdrop-blur-md pointer-events-none">
+                                <strong className="text-[#64D2FF] mb-0.5">Resultado Operacional:</strong>
+                                <span>Entradas - (Despesas Operacionais + Investimento Líquido do período). Indica a folga de caixa líquida.</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="p-1 rounded-lg bg-[#64D2FF]/15 text-[#64D2FF] border border-[#64D2FF]/25">
-                          <Wallet className="w-3.5 h-3.5" />
-                        </div>
-                      </div>
-                      <p
-                        className={`kpi-val-balance text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums leading-tight mt-0.5 ${
-                          monthSummary.balance >= 0 ? "text-[#30D158]" : "text-[#FF453A]"
-                        }`}
-                      >
-                        {monthSummary.balance >= 0 ? "+" : ""}<AnimatedBRL value={monthSummary.balance} />
-                      </p>
-                    </div>
-
-                    <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] tabular-nums">
-                      {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
-                        <div className="flex items-center gap-2 text-slate-400 font-sans">
-                          <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)}`}>
-                            Caixinhas: <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong>
-                          </span>
-                          <span>•</span>
-                          <div className="flex items-center gap-1 text-slate-400">
-                            <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
-                            <span>Safe:</span>
-                            <span
-                              className={`font-semibold px-1 py-0.2 rounded text-[10px] border tabular-nums ${
-                                safeToSpend.projected > 200
-                                  ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
-                                  : safeToSpend.projected >= 0
-                                  ? "bg-[#FF9F0A]/15 text-[#FF9F0A] border-[#FF9F0A]/30"
-                                  : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
-                              }`}
-                            >
-                              {formatBRL(safeToSpend.projected)}
-                            </span>
+                          <div className="p-1 rounded-lg bg-[#64D2FF]/15 text-[#64D2FF] border border-[#64D2FF]/25">
+                            <Wallet className="w-3.5 h-3.5" />
                           </div>
                         </div>
-                      ) : (
+                        <p
+                          className={`kpi-val-balance text-lg sm:text-xl font-semibold tracking-[-0.03em] tabular-nums leading-tight mt-0.5 ${
+                            monthSummary.balance >= 0 ? "text-[#30D158]" : "text-[#FF453A]"
+                          }`}
+                        >
+                          {monthSummary.balance >= 0 ? "+" : ""}<AnimatedBRL value={monthSummary.balance} />
+                        </p>
+                      </div>
+
+                      <div className="pt-1.5 mt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-[11px] tabular-nums">
+                        {selectedMonth === "ALL" || selectedMonth === "THIS_YEAR" || selectedMonth === "LAST_30_DAYS" || selectedMonth === "CUSTOM" ? (
+                          <div className="flex items-center gap-2 text-slate-400 font-sans">
+                            <span className="truncate" title={`Em Reserva (Líquido): ${formatBRL(allTimeReserva.liquido)}`}>
+                              Caixinhas: <strong className="text-white">{formatBRL(allTimeReserva.liquido)}</strong>
+                            </span>
+                            <span>•</span>
+                            <div className="flex items-center gap-1 text-slate-400">
+                              <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
+                              <span>Safe:</span>
+                              <span
+                                className={`font-semibold px-1 py-0.2 rounded text-[10px] border tabular-nums ${
+                                  safeToSpend.projected > 200
+                                    ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
+                                    : safeToSpend.projected >= 0
+                                    ? "bg-[#FF9F0A]/15 text-[#FF9F0A] border-[#FF9F0A]/30"
+                                    : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
+                                }`}
+                              >
+                                {formatBRL(safeToSpend.projected)}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
                         <div className="flex items-center gap-1 text-slate-400 font-sans">
                           <Sparkles className="w-3 h-3 text-[#0A84FF] shrink-0" />
                           <span>Safe:</span>
@@ -8454,6 +8525,7 @@ export default function CoindexApp() {
                   </div>
                 </div>
               </div>
+            </div>
 
               {/* GRID UNIFICADO 100% ORDENÁVEL (SPRINT 32) */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
@@ -8831,7 +8903,8 @@ export default function CoindexApp() {
                                   </div>
                                 )}
 
-                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("patrimony", 175)}px` }}>
+                                <div className="w-full select-none transition-all duration-300 relative" style={{ height: `${getChartHeightPx("patrimony", 175)}px` }}>
+                                  <div className="coindex-chart-photon-overlay" />
                                   <ResponsiveContainer width="100%" height="100%">
                                     {effectiveChartType === "line" ? (
                                       <LineChart
@@ -8860,7 +8933,7 @@ export default function CoindexApp() {
                                             return `R$ ${num}`;
                                           }}
                                         />
-                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} cdiPercentage={patrimonyEvolution.appliedCdiPercentage || 115} />} cursor={false} />
+                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} cdiPercentage={patrimonyEvolution.appliedCdiPercentage || 115} />} cursor={{ stroke: "rgba(56, 189, 248, 0.45)", strokeWidth: 1.5, strokeDasharray: "4 4" }} />
                                         {milestones.map((m) => (
                                           <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
                                         ))}
@@ -8942,7 +9015,7 @@ export default function CoindexApp() {
                                             return `R$ ${num}`;
                                           }}
                                         />
-                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} cdiPercentage={patrimonyEvolution.appliedCdiPercentage || 115} />} cursor={false} />
+                                        <Tooltip content={<PatrimonyCyberTooltip moneyBlur={moneyBlur} cdiPercentage={patrimonyEvolution.appliedCdiPercentage || 115} />} cursor={{ stroke: "rgba(56, 189, 248, 0.45)", strokeWidth: 1.5, strokeDasharray: "4 4" }} />
                                         {milestones.map((m) => (
                                           <ReferenceLine key={m.id} y={m.value} stroke={m.color} strokeDasharray="3 3" />
                                         ))}

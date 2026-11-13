@@ -520,8 +520,9 @@ const StravaProgressGrid = React.memo(function StravaProgressGrid(props: StravaP
         {/* Área do Gráfico Recharts Estilo Strava Progress */}
         <div
           style={{ height: getChartHeightPx(stravaChartSettings.height, 240), width: "100%" }}
-          className="w-full select-none"
+          className="w-full select-none relative"
         >
+          <div className="coindex-chart-photon-overlay" />
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={stravaProgressPoints}
@@ -570,7 +571,7 @@ const StravaProgressGrid = React.memo(function StravaProgressGrid(props: StravaP
 
               <Tooltip
                 content={() => null}
-                cursor={{ stroke: "#FC4C02", strokeWidth: 1.5, strokeDasharray: "3 3" }}
+                cursor={{ stroke: "rgba(56, 189, 248, 0.45)", strokeWidth: 1.5, strokeDasharray: "4 4" }}
               />
 
               {activeStravaPoint?.xLabel && (
@@ -2959,7 +2960,7 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
             />
           )}
-          <Tooltip content={<CustomCyberTooltip isCurrency={false} />} cursor={false} />
+          <Tooltip content={<CustomCyberTooltip isCurrency={false} />} cursor={{ stroke: "rgba(56, 189, 248, 0.45)", strokeWidth: 1.5, strokeDasharray: "4 4" }} />
           {bioSettings.showLegend !== false && <Legend wrapperStyle={{ fontSize: "11px" }} />}
           {showTarget && (
             <ReferenceLine
@@ -3221,8 +3222,9 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
             {/* Gráfico Recharts Dinâmico */}
             <div
               style={{ height: getChartHeightPx(bioSettings.height, 220) }}
-              className="w-full select-none"
+              className="w-full select-none relative"
             >
+              <div className="coindex-chart-photon-overlay" />
               <ResponsiveContainer width="100%" height="100%">
                 {renderBioChart()}
               </ResponsiveContainer>

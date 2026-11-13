@@ -333,6 +333,11 @@ export default function KpiAuditModal({
       }}
     >
       <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl bg-slate-900/95 border border-white/10 shadow-2xl backdrop-blur-2xl overflow-hidden kpi-modal-expand">
+        {/* SPRINT 70: Varredura de Feixe Laser no Topo do Modal */}
+        <div className="absolute top-0 left-0 right-0 h-[1.5px] overflow-hidden pointer-events-none z-50">
+          <div className="coindex-modal-laser-sweep" />
+        </div>
+
         {/* CABEÇALHO EXECUTIVO */}
         <div className="p-4 sm:p-5 border-b border-white/10 shrink-0 bg-gradient-to-r from-white/[0.03] to-transparent">
           <div className="flex items-start justify-between gap-4">

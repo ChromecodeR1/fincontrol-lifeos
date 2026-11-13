@@ -130,7 +130,12 @@ export default function ChartCard({
         popoverOpen ? "z-[80] overflow-visible" : "z-10 focus-within:z-[80]"
       } bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm ${className}`}
     >
-      <div className="mb-4 flex items-start justify-between gap-3">
+      {/* SPRINT 70: Borda de Safira Prismática (Exceto Cartões de Crédito / wallet_limits) */}
+      {id !== "wallet_limits" && (
+        <div className="coindex-sapphire-rim" aria-hidden="true" />
+      )}
+
+      <div className="mb-4 flex items-start justify-between gap-3 relative z-10">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {icon}
@@ -213,7 +218,7 @@ export default function ChartCard({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-between">{children}</div>
+      <div className="flex-1 flex flex-col justify-between relative z-10">{children}</div>
     </div>
   );
 }
