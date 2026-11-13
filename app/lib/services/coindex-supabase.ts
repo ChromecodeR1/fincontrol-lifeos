@@ -451,7 +451,18 @@ export function deduplicateCloudTransactions(txs: Transaction[]): {
     if (group.length === 1) {
       deduplicatedTxs.push(group[0]);
     } else {
-      group.sort((a, b) => scoreTransactionQuality(b) - scoreTransactionQuality(a));
+      // SPRINT 68: Desempate determinístico de clones: 1) updatedAt mais recente, 2) maior rev, 3) score de qualidade
+      group.sort((a, b) => {
+        const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        if (timeB !== timeA) return timeB - timeA;
+
+        const revA = a.rev ?? 0;
+        const revB = b.rev ?? 0;
+        if (revB !== revA) return revB - revA;
+
+        return scoreTransactionQuality(b) - scoreTransactionQuality(a);
+      });
       deduplicatedTxs.push(group[0]);
     }
   }

@@ -481,188 +481,40 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
   };
 
-  // Auto-cálculo e inicialização de Preço por Litro caso já existam valor e litros ao abrir
-  useEffect(() => {
-    if (isPostoExpress && formState.amount && formState.liters && !formState.pricePerLiter) {
-      const a = parseFloat(evaluateMathExpression(formState.amount) || "0");
-      const l = parseFloat(formState.liters.replace(",", ".") || "0");
-      if (!isNaN(a) && !isNaN(l) && a > 0 && l > 0) {
-        setFormState((prev) => ({
-          ...prev,
-          pricePerLiter: (a / l).toFixed(2)
-        }));
-      }
-    }
-  }, [isPostoExpress, formState.amount, formState.liters, formState.pricePerLiter, setFormState]);
-
-  // Cálculos bidirecionais no Posto Express: Valor Total (R$), Litros (L) e Preço/Litro (R$/L)
-  const handleExpressAmountChange = (val: string) => {
-    setFormState((prev) => {
-      const nextAmount = val;
-      const numAmount = parseFloat(nextAmount.replace(",", "."));
-      const numLiters = parseFloat(prev.liters?.replace(",", ".") || "0");
-      const numPrice = parseFloat(prev.pricePerLiter?.replace(",", ".") || "0");
-
-      let nextPrice = prev.pricePerLiter;
-      let nextLiters = prev.liters;
-
-      if (!isNaN(numAmount) && numAmount > 0) {
-        if (!isNaN(numLiters) && numLiters > 0) {
-          nextPrice = (numAmount / numLiters).toFixed(2);
-        } else if (!isNaN(numPrice) && numPrice > 0) {
-          nextLiters = (numAmount / numPrice).toFixed(2);
-        }
-      }
-
-      return {
-        ...prev,
-        amount: nextAmount,
-        liters: nextLiters,
-        pricePerLiter: nextPrice
-      };
-    });
-  };
-
-  const handleExpressAmountBlur = () => {
-    setFormState((prev) => {
-      const evaluated = evaluateMathExpression(prev.amount);
-      const numAmount = parseFloat(evaluated);
-      const numLiters = parseFloat(prev.liters?.replace(",", ".") || "0");
-      const numPrice = parseFloat(prev.pricePerLiter?.replace(",", ".") || "0");
-
-      let nextPrice = prev.pricePerLiter;
-      let nextLiters = prev.liters;
-
-      if (!isNaN(numAmount) && numAmount > 0) {
-        if (!isNaN(numLiters) && numLiters > 0) {
-          nextPrice = (numAmount / numLiters).toFixed(2);
-        } else if (!isNaN(numPrice) && numPrice > 0) {
-          nextLiters = (numAmount / numPrice).toFixed(2);
-        }
-      }
-
-      return {
-        ...prev,
-        amount: evaluated,
-        liters: nextLiters,
-        pricePerLiter: nextPrice
-      };
-    });
-  };
-
-  const handleExpressLitersChange = (val: string) => {
-    setFormState((prev) => {
-      const nextLiters = val;
-      const numLiters = parseFloat(nextLiters.replace(",", "."));
-      const numPrice = parseFloat(prev.pricePerLiter?.replace(",", ".") || "0");
-      const numAmount = parseFloat(prev.amount?.replace(",", ".") || "0");
-
-      let nextAmount = prev.amount;
-      let nextPrice = prev.pricePerLiter;
-
-      if (!isNaN(numLiters) && numLiters > 0) {
-        if (!isNaN(numPrice) && numPrice > 0) {
-          nextAmount = (numLiters * numPrice).toFixed(2);
-        } else if (!isNaN(numAmount) && numAmount > 0) {
-          nextPrice = (numAmount / numLiters).toFixed(2);
-        }
-      }
-
-      return {
-        ...prev,
-        liters: nextLiters,
-        amount: nextAmount,
-        pricePerLiter: nextPrice
-      };
-    });
-  };
-
-  const handleExpressPriceChange = (val: string) => {
-    setFormState((prev) => {
-      const nextPrice = val;
-      const numPrice = parseFloat(nextPrice.replace(",", "."));
-      const numLiters = parseFloat(prev.liters?.replace(",", ".") || "0");
-      const numAmount = parseFloat(prev.amount?.replace(",", ".") || "0");
-
-      let nextAmount = prev.amount;
-      let nextLiters = prev.liters;
-
-      if (!isNaN(numPrice) && numPrice > 0) {
-        if (!isNaN(numLiters) && numLiters > 0) {
-          nextAmount = (numLiters * numPrice).toFixed(2);
-        } else if (!isNaN(numAmount) && numAmount > 0) {
-          nextLiters = (numAmount / numPrice).toFixed(2);
-        }
-      }
-
-      return {
-        ...prev,
-        pricePerLiter: nextPrice,
-        amount: nextAmount,
-        liters: nextLiters
-      };
-    });
-  };
-
+  // SPRINT 68: Submissão Limpa sem recálculos artificiais ou bifurcação de Posto Express
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedDate = formatDateBR(formState.date) || todayBR();
+    const isFuel =
+      formState.category === "Gasolina" ||
+      formState.category.toLowerCase().includes("gasolina") ||
+      formState.category.toLowerCase().includes("combustível") ||
+      formState.category.toLowerCase().includes("combustivel");
 
-    if (isPostoExpress) {
-      let finalAmount = formState.amount;
-      const parsedAmount = parseFloat(evaluateMathExpression(formState.amount) || "0") || 0;
-      const parsedLiters = parseFloat(formState.liters?.replace(",", ".") || "0") || 0;
-      const parsedPrice = parseFloat(formState.pricePerLiter?.replace(",", ".") || "0") || 0;
-
-      if (parsedAmount <= 0 && parsedLiters > 0 && parsedPrice > 0) {
-        finalAmount = (parsedLiters * parsedPrice).toFixed(2);
-      }
-
-      setFormState((prev) => ({
-        ...prev,
-        amount: finalAmount,
-        date: normalizedDate,
-        category: "Gasolina",
-        status: prev.status || "Pago",
-        fuelType: expressFuelType
-      }));
-    } else {
-      setFormState((prev) => ({
-        ...prev,
-        date: normalizedDate
-      }));
-    }
+    setFormState((prev) => ({
+      ...prev,
+      date: normalizedDate,
+      fuelType: isFuel ? "Gasolina" : prev.fuelType,
+      fullTank: isFuel ? prev.fullTank !== false : prev.fullTank
+    }));
     onSubmit(e);
   };
 
   const handleSaveAndNewClick = (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedDate = formatDateBR(formState.date) || todayBR();
+    const isFuel =
+      formState.category === "Gasolina" ||
+      formState.category.toLowerCase().includes("gasolina") ||
+      formState.category.toLowerCase().includes("combustível") ||
+      formState.category.toLowerCase().includes("combustivel");
 
-    if (isPostoExpress) {
-      let finalAmount = formState.amount;
-      const parsedAmount = parseFloat(evaluateMathExpression(formState.amount) || "0") || 0;
-      const parsedLiters = parseFloat(formState.liters?.replace(",", ".") || "0") || 0;
-      const parsedPrice = parseFloat(formState.pricePerLiter?.replace(",", ".") || "0") || 0;
-
-      if (parsedAmount <= 0 && parsedLiters > 0 && parsedPrice > 0) {
-        finalAmount = (parsedLiters * parsedPrice).toFixed(2);
-      }
-
-      setFormState((prev) => ({
-        ...prev,
-        amount: finalAmount,
-        date: normalizedDate,
-        category: "Gasolina",
-        status: prev.status || "Pago",
-        fuelType: expressFuelType
-      }));
-    } else {
-      setFormState((prev) => ({
-        ...prev,
-        date: normalizedDate
-      }));
-    }
+    setFormState((prev) => ({
+      ...prev,
+      date: normalizedDate,
+      fuelType: isFuel ? "Gasolina" : prev.fuelType,
+      fullTank: isFuel ? prev.fullTank !== false : prev.fullTank
+    }));
     if (onSaveAndNew) {
       onSaveAndNew(e);
     }
@@ -687,11 +539,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <>
                   <ArrowLeftRight className="w-4 h-4 text-sky-400" />
                   <span>{editingTxId ? "Editar Transferência" : "Transferência entre Contas"}</span>
-                </>
-              ) : isPostoExpress ? (
-                <>
-                  <Fuel className="w-4 h-4 text-amber-400" />
-                  <span>{editingTxId ? "Editar Abastecimento" : "Posto Express (Abastecimento)"}</span>
                 </>
               ) : (
                 <span>{editingTxId ? "Editar Lançamento" : "Novo Lançamento"}</span>
@@ -740,18 +587,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           )}
 
-          {/* Seletor de Modo Deslizante: Padrão vs Posto Express vs Transferência */}
+          {/* Seletor de Modo Deslizante: Despesa / Receita vs Transferência */}
           <SlidingSegmentedControl
             options={[
               {
                 id: "standard",
-                label: "Padrão",
+                label: "Despesa / Receita",
                 icon: <Wallet className="w-3.5 h-3.5 shrink-0" />
-              },
-              {
-                id: "fuel",
-                label: "Posto Express ⛽",
-                icon: <Fuel className="w-3.5 h-3.5 shrink-0" />
               },
               {
                 id: "transfer",
@@ -759,7 +601,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 icon: <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" />
               }
             ]}
-            value={formState.isTransfer ? "transfer" : isPostoExpress ? "fuel" : "standard"}
+            value={formState.isTransfer ? "transfer" : "standard"}
             onChange={(val) => {
               if (val === "standard") {
                 setIsPostoExpress(false);
@@ -767,17 +609,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   ...prev,
                   isTransfer: false,
                   category: prev.category === "Transferência entre Contas" ? "Alimentação" : prev.category
-                }));
-              } else if (val === "fuel") {
-                setIsPostoExpress(true);
-                setFormState((prev) => ({
-                  ...prev,
-                  isTransfer: false,
-                  category: "Gasolina",
-                  description:
-                    !prev.description || prev.description.toLowerCase().includes("abastecimento")
-                      ? "Abastecimento - Gasolina"
-                      : prev.description
                 }));
               } else if (val === "transfer") {
                 setIsPostoExpress(false);
@@ -801,8 +632,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             activeColor={
               formState.isTransfer
                 ? "bg-sky-600 text-white shadow-lg shadow-sky-600/30"
-                : isPostoExpress
-                ? "bg-amber-600 text-white shadow-lg shadow-amber-600/30"
                 : "bg-[#0A84FF] text-white shadow-sm"
             }
           />
@@ -947,380 +776,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 </select>
               </div>
             </div>
-          ) : isPostoExpress ? (
-          <div className="space-y-3.5">
-            {/* 1. Tipo de Combustível */}
-            <div>
-              <label className="text-slate-300 font-bold block mb-1.5">Tipo de Combustível</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExpressFuelType("Gasolina");
-                    setFormState((prev) => ({
-                      ...prev,
-                      category: "Gasolina",
-                      fuelType: "Gasolina",
-                      description:
-                        !prev.description || prev.description.toLowerCase().includes("abastecimento")
-                          ? "Abastecimento - Gasolina"
-                          : prev.description
-                    }));
-                  }}
-                  className={`min-h-[44px] py-2.5 px-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition ${
-                    expressFuelType === "Gasolina"
-                      ? "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-lg shadow-amber-500/10"
-                      : "bg-slate-950 border-white/10 text-slate-400 hover:border-white/20 hover:text-white"
-                  }`}
-                >
-                  <Fuel className="w-4 h-4 text-amber-400" />
-                  <span>Gasolina Comum</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExpressFuelType("Etanol");
-                    setFormState((prev) => ({
-                      ...prev,
-                      category: "Gasolina",
-                      fuelType: "Etanol",
-                      description:
-                        !prev.description || prev.description.toLowerCase().includes("abastecimento")
-                          ? "Abastecimento Etanol"
-                          : prev.description
-                    }));
-                  }}
-                  className={`min-h-[44px] py-2.5 px-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition ${
-                    expressFuelType === "Etanol"
-                      ? "bg-emerald-500/20 border-emerald-500/60 text-emerald-300 shadow-lg shadow-emerald-500/10"
-                      : "bg-slate-950 border-white/10 text-slate-400 hover:border-white/20 hover:text-white"
-                  }`}
-                >
-                  <span className="text-base">🌱</span>
-                  <span>Etanol (Álcool)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 2. Valor Total Pago, Litros Abastecidos e Preço por Litro (Cálculo Bidirecional) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-slate-300 font-bold block mb-1">Valor Total (R$)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">R$</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    required
-                    placeholder="0,00 ou ex: 150 + 20"
-                    value={formState.amount}
-                    onChange={(e) => handleExpressAmountChange(e.target.value)}
-                    onBlur={handleExpressAmountBlur}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleExpressAmountBlur();
-                      }
-                    }}
-                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-slate-300 font-bold block mb-1">Litros (L)</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Ex: 40.50"
-                    value={formState.liters}
-                    onChange={(e) => handleExpressLitersChange(e.target.value)}
-                    className="w-full pl-3.5 pr-8 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">L</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-slate-300 font-bold block mb-1">Preço / Litro (R$/L)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">R$</span>
-                  <input
-                    type="number"
-                    step="0.001"
-                    placeholder="Ex: 5.89"
-                    value={formState.pricePerLiter || ""}
-                    onChange={(e) => handleExpressPriceChange(e.target.value)}
-                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Preço por Litro Calculado em Tempo Real */}
-            {Number(formState.amount) > 0 && Number(formState.liters) > 0 ? (
-              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-slate-900 to-indigo-500/15 border border-amber-500/30 flex items-center justify-between shadow-lg">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300">
-                    <Gauge className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">
-                      Preço por Litro Calculado
-                    </span>
-                    <strong className="text-base font-extrabold text-amber-300 font-mono tabular-nums">
-                      {formatBRL(Number(formState.amount) / Number(formState.liters))} / litro
-                    </strong>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-slate-400 block font-mono">
-                    {expressFuelType === "Etanol" ? "Etanol Flex" : "Gasolina Comum"}
-                  </span>
-                  <span className="text-[11px] font-bold text-slate-300 font-mono tabular-nums">
-                    {Number(formState.liters).toFixed(2)} L abastecidos
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="p-3 rounded-2xl bg-slate-950/70 border border-white/5 text-slate-400 text-[11px] flex items-center gap-2">
-                <Fuel className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span>Preencha 2 campos (Valor Total, Litros ou Preço/L) para calcular o 3º automaticamente.</span>
-              </div>
-            )}
-
-            {/* 4. Odômetro / KM e Data */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-slate-300 font-bold block">Odômetro / KM Atual</label>
-                  {autoMetrics.maxKm > 0 && (
-                    <span className="text-[10px] text-indigo-400 font-mono tabular-nums">
-                      Ant.: {autoMetrics.maxKm.toLocaleString("pt-BR")} km
-                    </span>
-                  )}
-                </div>
-                <div className="relative">
-                  <input
-                    type="number"
-                    placeholder="Ex: 49120"
-                    value={formState.km}
-                    onChange={(e) => setFormState((prev) => ({ ...prev, km: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">km</span>
-                </div>
-                {formState.km && autoMetrics.maxKm > 0 && Number(formState.km) < autoMetrics.maxKm && (
-                  <span className="text-[10px] text-amber-400 font-semibold block mt-1 leading-tight">
-                    ⚠️ Atenção: Odômetro digitado ({Number(formState.km).toLocaleString("pt-BR")} km) é menor que o registro anterior ({autoMetrics.maxKm.toLocaleString("pt-BR")} km).
-                  </span>
-                )}
-                {formState.km && autoMetrics.maxKm > 0 && Number(formState.km) > autoMetrics.maxKm && Number(formState.liters) > 0 && (
-                  <span className="text-[10px] text-emerald-400 block mt-1 font-mono tabular-nums">
-                    ⚡ +{Number(formState.km) - autoMetrics.maxKm} km (
-                    {((Number(formState.km) - autoMetrics.maxKm) / Number(formState.liters)).toFixed(2)} km/L estimados)
-                  </span>
-                )}
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-slate-300 font-bold block text-xs">Data</label>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setFormState((prev) => ({ ...prev, date: todayBR() }))}
-                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
-                    >
-                      Hoje
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormState((prev) => ({ ...prev, date: getYesterdayBR() }))}
-                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition cursor-pointer"
-                    >
-                      Ontem
-                    </button>
-                  </div>
-                </div>
-                <SmartDateInputBR
-                  value={formState.date}
-                  onChange={(brDate) => setFormState((prev) => ({ ...prev, date: brDate }))}
-                  required
-                  focusBorderColor="amber"
-                />
-              </div>
-            </div>
-
-            {/* Checkbox Tanque Cheio */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-white/10">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={formState.fullTank !== false}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, fullTank: e.target.checked }))}
-                  className="w-4 h-4 rounded border-amber-500/50 bg-slate-900 text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
-                />
-                <span className="text-xs font-semibold text-slate-200">
-                  Abastecimento de Tanque Cheio
-                </span>
-              </label>
-              <span className="text-[10px] text-slate-400 font-mono">
-                {formState.fullTank !== false ? "Cálculo exato de km/L" : "Abastecimento parcial"}
-              </span>
-            </div>
-
-            {/* 5. Posto / Descrição */}
-            <div>
-              <label className="text-slate-400 block mb-1">Posto / Descrição</label>
-              <input
-                type="text"
-                required
-                placeholder="Ex: Posto Ipiranga, Shell, Abastecimento..."
-                value={formState.description}
-                onChange={(e) => setFormState((prev) => ({ ...prev, description: e.target.value }))}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500"
-              />
-            </div>
-
-            {/* 6. Método de Pagamento & Conta / Cartão */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-slate-400 block mb-1">Forma de Pagamento</label>
-                <select
-                  value={formState.paymentMethod}
-                  onChange={(e) => {
-                    const m = e.target.value as PaymentMethod;
-                    const isCredit = m === "Cartão de Crédito";
-                    let nextCardUsed = formState.cardUsed;
-                    let nextBankAccount = formState.bankAccount;
-                    if (isCredit) {
-                      nextCardUsed = nextCardUsed || cards[0]?.name || "";
-                      const matched = cards.find((c) => c.name === nextCardUsed);
-                      nextBankAccount =
-                        matched?.bankName ||
-                        (matched?.bankId ? banks.find((b) => b.id === matched.bankId)?.name : "") ||
-                        "";
-                    } else {
-                      nextBankAccount = nextBankAccount || banks[0]?.name || "";
-                    }
-                    setFormState((prev) => ({
-                      ...prev,
-                      paymentMethod: m,
-                      cardUsed: nextCardUsed,
-                      bankAccount: nextBankAccount,
-                      status: getAutomaticStatus(m, "Gasolina")
-                    }));
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500"
-                >
-                  {paymentMethods.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {formState.paymentMethod === "Cartão de Crédito" ? (
-                <div>
-                  <label className="text-slate-400 block mb-1">Qual Cartão de Crédito</label>
-                  <select
-                    value={formState.cardUsed}
-                    onChange={(e) => {
-                      const cName = e.target.value;
-                      const matched = cards.find((c) => c.name === cName);
-                      const bName =
-                        matched?.bankName ||
-                        (matched?.bankId ? banks.find((b) => b.id === matched.bankId)?.name : "") ||
-                        "";
-                      setFormState((prev) => ({ ...prev, cardUsed: cName, bankAccount: bName }));
-                    }}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500"
-                  >
-                    <option value="">Selecione o cartão...</option>
-                    {cards.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name} {c.bankName ? `(${c.bankName})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {(() => {
-                    const matched = cards.find((c) => c.name === formState.cardUsed);
-                    if (!matched?.closingDay) return null;
-                    const comp = getCardInvoiceCompetence(formState.date, matched.closingDay, matched.dueDay);
-                    const purchaseMonth = getYearMonthKey(formState.date);
-                    if (!comp || comp <= purchaseMonth) return null;
-                    const [compY, compM] = comp.split("-");
-                    return (
-                      <div className="mt-1.5 p-2 rounded-xl bg-violet-500/10 border border-violet-500/25 text-violet-300 text-[10px] flex items-center gap-1.5 font-medium">
-                        <CreditCard className="w-3 h-3 text-violet-400 shrink-0" />
-                        <span>
-                          Cai na fatura de <strong className="text-white font-mono tabular-nums">{compM}/{compY}</strong> devido ao fechamento dia {matched.closingDay}
-                        </span>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : (
-                <div>
-                  <label className="text-slate-400 block mb-1">Qual Banco / Conta</label>
-                  <select
-                    value={formState.bankAccount}
-                    onChange={(e) => setFormState((prev) => ({ ...prev, bankAccount: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-500"
-                  >
-                    <option value="">Selecione o banco...</option>
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.name}>
-                        {b.name} {b.accountType ? `(${b.accountType})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          /* MODO PADRÃO */
-          <div className="space-y-4">
-            {(formState.category.toLowerCase().includes("combustível") ||
-              formState.category.toLowerCase().includes("combustivel") ||
-              formState.category.toLowerCase().includes("gasolina") ||
-              formState.category.toLowerCase().includes("veículo") ||
-              formState.category.toLowerCase().includes("veiculo")) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsPostoExpress(true);
-                  setFormState((prev) => ({
-                    ...prev,
-                    category:
-                      prev.category.toLowerCase().includes("veículo") ||
-                      prev.category.toLowerCase().includes("combustível") ||
-                      prev.category.toLowerCase().includes("gasolina")
-                        ? prev.category
-                        : "Gasolina",
-                    description:
-                      !prev.description || prev.description.toLowerCase().includes("abastecimento")
-                        ? `Abastecimento ${expressFuelType === "Etanol" ? "Etanol" : "Gasolina Comum"}`
-                        : prev.description
-                  }));
-                }}
-                className="w-full p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 text-xs font-bold flex items-center justify-between transition"
-              >
-                <span className="flex items-center gap-2">
-                  <Fuel className="w-4 h-4 text-amber-400" />
-                  Ativar Modo Posto Express para abastecimentos
-                </span>
-                <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/30 font-mono">
-                  Calcular R$/L ⛽
-                </span>
-              </button>
-            )}
-
+          ) : (
+            /* FORMULÁRIO DE LANÇAMENTO (DESPESA / RECEITA) */
+            <div className="space-y-4">
             {/* 1. Descrição com Smart Auto-Fill e Memória Inteligente (Sprint 14) */}
             <div className="relative">
               <div className="flex items-center justify-between mb-1">
@@ -1635,6 +1093,126 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               </div>
             )}
 
+            {/* SPRINT 68: Bloco Automático de Combustível quando Categoria for Gasolina */}
+            {(formState.category === "Gasolina" ||
+              formState.category.toLowerCase().includes("gasolina") ||
+              formState.category.toLowerCase().includes("combustível") ||
+              formState.category.toLowerCase().includes("combustivel")) && (
+              <div className="rounded-2xl p-4 bg-gradient-to-br from-amber-950/20 via-slate-900/80 to-indigo-950/20 border border-amber-500/30 space-y-3.5 shadow-lg animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+                  <label className="text-amber-300 font-extrabold text-xs flex items-center gap-2">
+                    <Fuel className="w-4 h-4 text-amber-400" />
+                    <span>⛽ Dados do Abastecimento (Veículo)</span>
+                  </label>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold">
+                    Telemetria Automotiva
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-slate-300 font-bold block text-xs">Odômetro Atual (km)</label>
+                      {autoMetrics.maxKm > 0 && (
+                        <span className="text-[10px] text-indigo-400 font-mono tabular-nums">
+                          Ant.: {autoMetrics.maxKm.toLocaleString("pt-BR")} km
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="Ex: 203960"
+                        value={formState.km}
+                        onChange={(e) => setFormState((prev) => ({ ...prev, km: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500 transition"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">km</span>
+                    </div>
+                    {formState.km && autoMetrics.maxKm > 0 && Number(formState.km) < autoMetrics.maxKm && (
+                      <span className="text-[10px] text-amber-400 font-semibold block mt-1 leading-tight">
+                        ⚠️ Odômetro digitado ({Number(formState.km).toLocaleString("pt-BR")} km) é menor que o registro anterior ({autoMetrics.maxKm.toLocaleString("pt-BR")} km).
+                      </span>
+                    )}
+                    {formState.km && autoMetrics.maxKm > 0 && Number(formState.km) > autoMetrics.maxKm && (
+                      <span className="text-[10px] text-emerald-400 block mt-1 font-mono tabular-nums">
+                        ⚡ +{(Number(formState.km) - autoMetrics.maxKm).toLocaleString("pt-BR")} km rodados
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1 text-xs">Litros Abastecidos (L)</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Ex: 35.50"
+                        value={formState.liters}
+                        onChange={(e) => setFormState((prev) => ({ ...prev, liters: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-sm tabular-nums outline-none focus:border-amber-500 transition"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">L</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tanque Cheio [Sim | Parcial] */}
+                <div>
+                  <label className="text-slate-400 block mb-1.5 text-xs font-semibold">Tipo do Abastecimento</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormState((prev) => ({ ...prev, fullTank: true }))}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                        formState.fullTank !== false
+                          ? "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm"
+                          : "bg-slate-950 border-white/10 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <span>満 Tanque Cheio (Recomendado)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormState((prev) => ({ ...prev, fullTank: false }))}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                        formState.fullTank === false
+                          ? "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm"
+                          : "bg-slate-950 border-white/10 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <span>⛽ Parcial / Reserva</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Badge Passivo Informativo de Preço por Litro (Somente Leitura — ZERO Recálculo) */}
+                {(() => {
+                  const amt = parseFloat(evaluateMathExpression(formState.amount) || "0") || 0;
+                  const lit = parseFloat(formState.liters?.replace(",", ".") || "0") || 0;
+                  if (amt > 0 && lit > 0) {
+                    const pricePerL = amt / lit;
+                    return (
+                      <div className="p-2.5 rounded-xl bg-slate-950/70 border border-amber-500/20 flex items-center justify-between text-xs">
+                        <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                          <Gauge className="w-3.5 h-3.5 text-amber-400" />
+                          Preço implícito na bomba:
+                        </span>
+                        <strong className="text-amber-300 font-mono font-bold tabular-nums">
+                          {formatBRL(pricePerL)} / L
+                        </strong>
+                      </div>
+                    );
+                  }
+                  return (
+                    <p className="text-[11px] text-slate-500 italic">
+                      Preencha o Valor Total (R$) e os Litros (L) para ver o preço implícito por litro.
+                    </p>
+                  );
+                })()}
+              </div>
+            )}
+
             {formState.category === "A Receber" && (
               <div>
                 <label className="text-amber-300 font-bold block mb-1">Nome da Pessoa (Devedor)</label>
@@ -1944,41 +1522,46 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-slate-400 block">Odômetro / KM (Opcional)</label>
-                  {autoMetrics.maxKm > 0 && (
-                    <span className="text-[10px] text-indigo-400 font-mono tabular-nums">
-                      Ant.: {autoMetrics.maxKm.toLocaleString("pt-BR")} km
+            {!(formState.category === "Gasolina" ||
+              formState.category.toLowerCase().includes("gasolina") ||
+              formState.category.toLowerCase().includes("combustível") ||
+              formState.category.toLowerCase().includes("combustivel")) && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-400 block">Odômetro / KM (Opcional)</label>
+                    {autoMetrics.maxKm > 0 && (
+                      <span className="text-[10px] text-indigo-400 font-mono tabular-nums">
+                        Ant.: {autoMetrics.maxKm.toLocaleString("pt-BR")} km
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    placeholder="Ex: 49120"
+                    value={formState.km}
+                    onChange={(e) => setFormState((prev) => ({ ...prev, km: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono tabular-nums"
+                  />
+                  {formState.km && autoMetrics.maxKm > 0 && Number(formState.km) < autoMetrics.maxKm && (
+                    <span className="text-[10px] text-amber-400 font-semibold block mt-1 leading-tight">
+                      ⚠️ Odômetro informado menor que o anterior ({autoMetrics.maxKm.toLocaleString("pt-BR")} km).
                     </span>
                   )}
                 </div>
-                <input
-                  type="number"
-                  placeholder="Ex: 49120"
-                  value={formState.km}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, km: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono tabular-nums"
-                />
-                {formState.km && autoMetrics.maxKm > 0 && Number(formState.km) < autoMetrics.maxKm && (
-                  <span className="text-[10px] text-amber-400 font-semibold block mt-1 leading-tight">
-                    ⚠️ Odômetro informado menor que o anterior ({autoMetrics.maxKm.toLocaleString("pt-BR")} km).
-                  </span>
-                )}
+                <div>
+                  <label className="text-slate-400 block mb-1">Litros Abastecidos (Opcional)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="Ex: 42.5"
+                    value={formState.liters}
+                    onChange={(e) => setFormState((prev) => ({ ...prev, liters: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono tabular-nums"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-slate-400 block mb-1">Litros Abastecidos (Opcional)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="Ex: 42.5"
-                  value={formState.liters}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, liters: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white font-mono tabular-nums"
-                />
-              </div>
-            </div>
+            )}
 
             {/* Situação / Status do Lançamento */}
             <div>
@@ -2039,7 +1622,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             className={`min-h-[44px] px-5 py-2.5 rounded-xl text-white font-extrabold flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer apple-press ${
               formState.isTransfer
                 ? "bg-sky-600 hover:bg-sky-500 shadow-lg shadow-sky-600/25"
-                : isPostoExpress
+                : (formState.category === "Gasolina" || formState.category.toLowerCase().includes("gasolina"))
                 ? "bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-600/20"
                 : "bg-[#0A84FF] hover:bg-[#0070E0] shadow-sm font-medium"
             }`}
@@ -2050,7 +1633,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 ? "Salvando..."
                 : formState.isTransfer
                 ? "Salvar Transferência"
-                : isPostoExpress
+                : (formState.category === "Gasolina" || formState.category.toLowerCase().includes("gasolina"))
                 ? "Salvar Abastecimento"
                 : "Salvar Lançamento"}
             </span>

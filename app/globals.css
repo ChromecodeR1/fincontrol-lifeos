@@ -878,3 +878,43 @@ html[data-animations="off"] *::after {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ============================================================================
+   SPRINT 68: MICRO-MOTIONS FLUIDOS & LIQUID PROGRESS SHIMMER
+   ============================================================================ */
+
+/* Gauge Progress Sweep com transição elástica 700ms */
+.gauge-progress-bar {
+  transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+}
+
+/* Brilho especular na ponta da barra de progresso */
+.liquid-progress-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.liquid-progress-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  border-radius: 9999px;
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+/* Tactile Card & Button Micro-Motion (Golden Rule: 100% transform none) */
+.tactile-hover {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms ease, border-color 200ms ease;
+}
+.tactile-hover:hover {
+  transform: translateY(-2px);
+}
+.tactile-hover:active {
+  transform: scale(0.98);
+}
+
+

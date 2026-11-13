@@ -3879,7 +3879,35 @@ export default function CoindexApp() {
   const autoMetrics = useMemo(() => {
     const autoCategories = new Set(categoriesCatalog.filter((c) => c.isAuto).map((c) => c.name));
     const autoTxs = transactions
-      .filter((t) => autoCategories.has(t.category) || t.km != null || isFuelTransaction(t))
+      .filter((t) => {
+        if (t.deletedAt) return false;
+        const cat = (t.category || "").toLowerCase();
+        const desc = (t.description || "").toLowerCase();
+        const isAutoCat =
+          cat.includes("gasolina") ||
+          cat.includes("etanol") ||
+          cat.includes("combustível") ||
+          cat.includes("combustivel") ||
+          cat.includes("veículo") ||
+          cat.includes("veiculo") ||
+          cat.includes("manutenção") ||
+          cat.includes("manutencao") ||
+          cat.includes("troca de óleo") ||
+          cat.includes("troca de oleo") ||
+          cat.includes("oficina") ||
+          cat.includes("revisão") ||
+          cat.includes("revisao") ||
+          cat.includes("ipva") ||
+          cat.includes("licenciamento") ||
+          cat.includes("seguro auto") ||
+          cat.includes("estacionamento") ||
+          cat.includes("pedágio") ||
+          cat.includes("pedagio") ||
+          desc.includes("abastecimento") ||
+          desc.includes("troca de óleo") ||
+          desc.includes("oficina");
+        return autoCategories.has(t.category) || isAutoCat || t.km != null || isFuelTransaction(t);
+      })
       .sort((a, b) => compareDatesBR(a.date, b.date));
 
     const inmetroCfg = autoInmetroConfig || DEFAULT_AUTO_INMETRO_CONFIG;
@@ -5256,6 +5284,7 @@ export default function CoindexApp() {
       const updatedItem: Transaction = {
         ...target,
         ...patch,
+        rev: (target.rev ?? 0) + 1,
         updatedAt: new Date().toISOString()
       };
       const nextList = transactions.map((t) => (t.id === txId ? updatedItem : t));

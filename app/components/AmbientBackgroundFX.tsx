@@ -258,23 +258,23 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
 
     window.addEventListener("resize", handleResize);
 
-    // SPRINT 67: 240 micro-partículas bem pequenas (raio entre 0.4px e 1.1px, opacidade 0.06 a 0.22)
-    // Sem orbs gigantes ou ruídos pesados — elegância e nitidez cristalina
+    // SPRINT 68: 420 micro-partículas bem pequenas de 0.5px (raio entre 0.4px e 0.65px, opacidade 0.05 a 0.20)
+    // Poeira estelar uniforme, fluida e nítida em 144Hz — elegância cinematográfica pura
     const particles: StardustParticle[] = [];
-    for (let i = 0; i < 240; i++) {
-      const radius = 0.4 + Math.random() * 0.7; // Raio estrito entre 0.4px e 1.1px
+    for (let i = 0; i < 420; i++) {
+      const radius = 0.4 + Math.random() * 0.25; // Raio estrito entre 0.4px e 0.65px (média ~0.5px)
       particles.push({
         x: Math.random() * width,
         y: Math.random() * height,
         vx: (Math.random() - 0.5) * 0.05,
-        vy: -0.06 - Math.random() * 0.09,
-        baseVy: -0.06 - Math.random() * 0.09,
+        vy: -0.05 - Math.random() * 0.08,
+        baseVy: -0.05 - Math.random() * 0.08,
         radius,
-        depth: 0.2 + Math.random() * 0.5,
+        depth: 0.15 + Math.random() * 0.55,
         layer: 1,
         twinkleSpeed: 0.0012 + Math.random() * 0.002,
         phase: Math.random() * Math.PI * 2,
-        baseAlpha: 0.06 + Math.random() * 0.12 // Faixa sutil 0.06 a 0.18
+        baseAlpha: 0.05 + Math.random() * 0.12 // Faixa sutil 0.05 a 0.17 (com pico máximo de 0.20)
       });
     }
     particlesRef.current = particles;

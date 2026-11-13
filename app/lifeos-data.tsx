@@ -400,13 +400,27 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.49.3";
-export const PREVIOUS_VERSION = "0.49.2";
-export const COINDEX_APP_VERSION = "0.49.3";
+export const APP_VERSION = "0.50.0";
+export const PREVIOUS_VERSION = "0.49.3";
+export const COINDEX_APP_VERSION = "0.50.0";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.50.0",
+    date: "Nov/2026",
+    title: "Sprint 68: Extinção do Posto Express com Bloco Automático para Gasolina, Zero Recálculo de Valores, Correção Definitiva de Edição no Supabase, Cálculo Fiel de 838 km e Micro-Motions Fluidos",
+    highlights: [
+      "Extinção do 'Posto Express ⛽' e Formulário Unificado: Remoção da aba bifurcada no TransactionModal; seleção da categoria 'Gasolina' expande automaticamente bloco elegante com Odômetro, Litros, Tanque Cheio [Sim | Parcial] e badge passivo de preço/litro somente leitura.",
+      "Trava Estrita contra Recálculo Cruzado: O campo de Valor Total (R$) e Litros Abastecidos são 100% independentes — digitar litros nunca mais altera o valor total nem o preço da bomba.",
+      "Correção Definitiva do Salvamento no Supabase ao Editar: Incremento garantido de 'rev = rev + 1', timestamp 'updatedAt' atualizado e ordenação determinística em deduplicateCloudTransactions por updatedAt desc e rev desc, eliminando retorno de valores antigos após F5.",
+      "Cálculo Matemático Fiel de Quilometragem (838 km): Odômetro atual e distância percorrida passam a considerar todos os lançamentos veiculares (203.960 km - 203.122 km = 838 km reais) e ignoram testes de valor irrelevante.",
+      "Reforma Limpa da Aba Meus Veículos: Remoção de duplicidades, exclusão da Calculadora Flex e menções a Etanol, botão único 'Registrar Abastecimento' integrado ao modal oficial, correção do botão 'Novo Item Preventivo' sem duplo '+' e organização em 4 linhas harmoniosas.",
+      "Micro-Partículas Estelares Discretas (420 partículas): Densidade ampliada para 420 micro-pontos de luz com raio de 0.4px a 0.65px (média 0.5px) e opacidade sutil (0.05 a 0.20), sem textura granulada.",
+      "Micro-Motions Fluidos (144Hz): Novas classes CSS .gauge-progress-bar com transição elástica de 700ms, efeito .liquid-progress-shimmer e feedback tátil .tactile-hover."
+    ]
+  },
   {
     version: "0.49.3",
     date: "Nov/2026",

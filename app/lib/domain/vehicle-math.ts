@@ -137,18 +137,24 @@ export function calculateVehicleConsumption(
   transactions: VehicleTransactionLike[],
   inmetroCfg: InmetroReferenceConfig
 ): VehicleConsumptionResult {
+  // SPRINT 68: Todos os lançamentos que possuem km > 0 (odômetro) determinam minKm, maxKm e distanceDriven
+  const allKmTxs = transactions
+    .filter((t) => !t.deletedAt && typeof t.km === "number" && t.km > 0)
+    .sort((a, b) => (a.km || 0) - (b.km || 0));
+
+  const allKms = allKmTxs.map((t) => t.km as number);
+  const maxKm = allKms.length ? Math.max(...allKms) : 0;
+  const minKm = allKms.length ? Math.min(...allKms) : 0;
+  const distanceDriven = Math.max(0, maxKm - minKm);
+
+  // Abastecimentos reais ordenados por data cronológica (ignora testes irrelevantes <= R$ 2,00)
   const fuelTxs = transactions
-    .filter((t) => !t.deletedAt && isFuelTransaction(t))
+    .filter((t) => !t.deletedAt && isFuelTransaction(t) && (t.amount || 0) > 2)
     .sort((a, b) => compareDatesBR(a.date, b.date));
 
   const fuelWithKmAndLiters = fuelTxs.filter(
     (t) => typeof t.km === "number" && t.km > 0 && typeof t.liters === "number" && t.liters > 0
   );
-
-  const kms = fuelWithKmAndLiters.map((t) => t.km as number);
-  const maxKm = kms.length ? Math.max(...kms) : 0;
-  const minKm = kms.length ? Math.min(...kms) : 0;
-  const distanceDriven = Math.max(0, maxKm - minKm);
 
   const totalFuelLiters = fuelTxs.reduce((acc, t) => acc + (t.liters || 0), 0);
   const totalFuelCost = fuelTxs.reduce((acc, t) => acc + (t.amount || 0), 0);
@@ -322,11 +328,15 @@ export function calculateVehicleTco(
       cat.includes("lavagem") ||
       cat.includes("multa") ||
       cat.includes("acessórios") ||
+      cat.includes("acessorios") ||
       desc.includes("oficina") ||
       desc.includes("mecanico") ||
+      desc.includes("mecânico") ||
       desc.includes("pneu") ||
       desc.includes("óleo") ||
-      desc.includes("oleo")
+      desc.includes("oleo") ||
+      desc.includes("revisão") ||
+      desc.includes("revisao")
     ) {
       maintCents += amtC;
     }

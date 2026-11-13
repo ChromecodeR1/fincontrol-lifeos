@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.49.3`  
-> **Última Atualização:** 11 de Novembro de 2026 (Pós-Sprint 67 — Paridade Nuvem 1:1, Recorte Circular de Avatar com Zoom/Arraste, Identidade 100% Coindex, Compactação de Controles e Background Sem Textura Noise)  
+> **Versão da Aplicação:** `0.50.0`  
+> **Última Atualização:** 13 de Novembro de 2026 (Pós-Sprint 68 — Extinção do Posto Express com Bloco Automático para Gasolina, Zero Recálculo de Valores, Correção Definitiva de Edição no Supabase, Cálculo Fiel de 838 km e Micro-Motions Fluidos)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1338,6 +1338,30 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Pilar 6 — Ajuste Fino do Motor de Background (`AmbientBackgroundFX.tsx`):**
       - Remoção completa da camada de textura / SVG fractal noise anti-banding, eliminando ruído granulado.
       - Aumento do número de partículas para 240 micro-partículas bem pequenas (raio entre 0.4px e 1.1px, opacidade 0.06 a 0.22), eliminando orbs gigantes de 4.5px e halos pesados de cruz, mantendo intactas as Ondas de Seda e a Aurora Camaleão.
+
+  - **Sprint 68 (Novembro de 2026 — Extinção do Posto Express com Bloco Automático para Gasolina, Zero Recálculo de Valores, Correção Definitiva de Edição no Supabase, Cálculo Fiel de 838 km e Micro-Motions Fluidos v0.50.0):**
+    - **Pilar 1 — Extinção do "Posto Express ⛽" e Formulário Unificado:**
+      - Remoção da aba bifurcada no `TransactionModal.tsx`, mantendo o fluxo coeso de Despesa / Receita e Transferência.
+      - Ao selecionar ou abrir o modal com categoria "Gasolina", o bloco expansivo `⛽ Dados do Abastecimento (Veículo)` abre automaticamente contendo: Odômetro Atual (km), Litros Abastecidos (L), Tanque Cheio [満 Sim | ⛽ Parcial] e badge passivo de preço/litro em tempo real.
+    - **Pilar 2 — Trava Estrita Contra Recálculo de Valores:**
+      - Independência matemática total entre Valor Total (R$) e Litros (L). O campo de Valor Total não é mais recalculado ao preencher litros, e o preço por litro é apresentado exclusivamente como badge passivo informativo somente leitura.
+    - **Pilar 3 — Correção Definitiva do Salvamento ao Editar no Supabase:**
+      - Edição de lançamentos agora incrementa `rev = (tx.rev || 0) + 1` e atualiza `updatedAt = new Date().toISOString()`.
+      - Persistência imediata no `localStorage` antes de chamadas de rede.
+      - Na deduplicação de clones (`deduplicateCloudTransactions`), a ordenação prioriza estritamente `updatedAt` mais recente e maior `rev`, eliminando retorno de valores antigos após F5.
+    - **Pilar 4 — Cálculo Fiel de Quilometragem (838 km reais) e Telemetria Limpa:**
+      - `calculateVehicleConsumption` agora considera todos os lançamentos com `km > 0` (inclusive revisões preventivas), garantindo `maxKm = 203.960 km`, `minKm = 203.122 km` e `distanceDriven = 838 km`.
+      - Ignora lançamentos de teste com valor `<= R$ 2,00` no cálculo de consumo para evitar distorções de média.
+      - Filtro de categorias veiculares abrangente no `autoMetrics` para capturar todas as manutenções e revisões.
+    - **Pilar 5 — Reforma Limpa da Aba Meus Veículos:**
+      - Unificação para o botão oficial "Registrar Abastecimento", removendo botão redundante "Abastecer no Posto Express".
+      - Remoção da Calculadora Flex e menções a Etanol, focando 100% no perfil monocombustível Gasolina.
+      - Correção do botão roxo de Manutenção Preventiva removendo o duplo `+` (`<Plus ... /> Novo Item Preventivo`).
+      - Organização limpa: 6 KPIs Slim -> 2 Gráficos Lado a Lado (Gasto Mensal e Evolução do Odômetro com engrenagem de cor) -> Plano de Manutenção Preventiva por Odômetro -> Tabela de Histórico com Editar e Excluir.
+    - **Pilar 6 — Micro-Partículas de 0.5px no Motor de Background (`AmbientBackgroundFX.tsx`):**
+      - Aumento da densidade estelar para 420 micro-pontos com raio de 0.4px a 0.65px (média 0.5px) e opacidade sutil entre 0.05 e 0.20, sem textura granulada.
+    - **Pilar 7 — Micro-Motions Fluidos (144Hz):**
+      - Implementação de classes CSS `.gauge-progress-bar`, `.liquid-progress-shimmer` e `.tactile-hover` em `app/globals.css`.
 
 ---
 ## 8. Comandos de Manutenção & Verificação Rápida
