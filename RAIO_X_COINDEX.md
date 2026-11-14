@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.51.0`  
-> **Última Atualização:** 13 de Novembro de 2026 (Pós-Sprint 70 — Suite de Física Óptica Coindex: Ondulação Acústica no Lençol de Seda 3D, Feixe de Fótons nos Gráficos, Borda de Safira Prismática nos Cards e Micro-Cáustica nos KPIs & Modais)  
+> **Versão da Aplicação:** `0.51.1`  
+> **Última Atualização:** 14 de Novembro de 2026 (Pós-Sprint 71 — Extermínio Definitivo do Bug de Recálculo/Retorno dos R$ 3.084,98 na Gasolina, Desacoplamento de Caches Paralelos, Deduplicação Semântica no Supabase e Desbloqueio de Alto Contraste do Lençol de Seda 3D no Background)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1377,6 +1377,26 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Pilar 5 — Deformação Elástica por Interação de Cursor (< 320px) & Zero GC:**
       - Campo de deflexão suave do tecido com raio de influência de 320px ao redor de `smoothMouse`, gerando elevação e expansão de seda conforme o cursor navega pela tela.
       - 100% livre de alocações dinâmicas de memória por frame dentro do loop de renderização a 144Hz.
+
+  - **Sprint 71 (Novembro de 2026 — Extermínio Definitivo do Bug de Recálculo na Gasolina, Desacoplamento de Caches Paralelos, Deduplicação Semântica no Supabase e Desbloqueio de Alto Contraste do Lençol de Seda 3D v0.51.1):**
+    - **Pilar 1 — Extermínio Definitivo do Retorno dos R$ 3.084,98 na Gasolina (`TransactionModal.tsx`, `page.tsx`, `VehiclesTab.tsx`, `coindex-supabase.ts`):**
+      - Desacoplamento absoluto entre o campo `amount` (R$) e `liters` (L): a digitação de litros ou km nunca altera o valor total digitado ou editado pelo usuário.
+      - Extinção total do cache paralelo legadíssimo `lifeos_fuel_logs_v1` e de `refuels` no Cloud Vault: purga permanente em `localStorage.removeItem`, impedindo qualquer ressurreição zumbi de valores antigos de abastecimento.
+      - O pool de transações oficial (`transactions` / `lifeos_txs_v8`) é a fonte única da verdade (SSOT) para toda a telemetria automotiva, consumo km/L e TCO.
+    - **Pilar 2 — Deduplicação Semântica de Combustível & Rastreamento dbRowId no Supabase (`coindex-supabase.ts`, `page.tsx`):**
+      - Rastreamento canônico da linha física no PostgreSQL através de `dbRowId: String(row.id)`.
+      - Deduplicação semântica automática para transações de combustível: quando duas linhas divergirem no ID mas possuírem mesma data, categoria `"Gasolina"` e mesmo odômetro `km`, o registro com `updatedAt` mais recente e maior revisão (`rev`) vence deterministicamente, descartando clones desatualizados.
+      - Ao salvar edições de transações, se o `dbRowId` original divergir do ID canônico atualizado, a linha antiga é eliminada atomicamente no banco sem deixar registros órfãos.
+    - **Pilar 3 — Desbloqueio de Camada Opaca no Background (`page.tsx`, `globals.css`):**
+      - Remoção da classe `bg-[var(--cupertino-bg)]` do elemento `<main ref={mainScrollRef}>` e aplicação de transparência pura (`bg-transparent dashboard-main-content`).
+      - Regra arquitetural unificada em `globals.css` garantindo `main, .dashboard-root-wrapper, .dashboard-main-content { background-color: transparent !important; }`.
+      - Substrato de cor sólida `#0B0E14` (dark) e `#F2F4F8` (light) movido exclusivamente para a camada mais profunda (`-z-10`) do `AmbientBackgroundFX.tsx`, preservando visualização 100% desobstruída do motor visual a 144Hz.
+      - Opacidade de `--cupertino-card` ajustada no tema escuro para `rgba(16, 21, 33, 0.64)` com `backdrop-filter: blur(18px) saturate(165%)`.
+    - **Pilar 4 — Motor Visual "Coindex Caustic Silk Sheet 3D — Envelope Cross-Over" (`AmbientBackgroundFX.tsx`):**
+      - Nova geometria paramétrica com 2 lençóis de 64 filamentos cada e 80 subdivisões com curvas `edgeTopY` e `edgeBottomY` que se cruzam formando dobras tridimensionais autênticas.
+      - Modo de fusão `screen` no tema escuro, filamentos internos com traço `0.85px` e opacidade calibrada entre `0.065` e `0.150`.
+      - Bainhas externas (`i === 0` e `63`) com traço `1.65px`, opacidade `0.52` e `shadowBlur = 10` com difração suave ciano/safira.
+      - Ativação permanente do motor visual quando `reduceAnimations` for falso (limpando overrides legados `"none"`).
 
   - **Sprint 70 (Novembro de 2026 — Suite de Física Óptica Coindex: Ondulação Acústica no Lençol de Seda 3D, Feixe de Fótons nos Gráficos, Borda de Safira Prismática nos Cards e Micro-Cáustica nos KPIs & Modais v0.51.0):**
     - **Pilar 1 — Ondulação Acústica Física no Lençol 3D (`AmbientBackgroundFX.tsx`):**

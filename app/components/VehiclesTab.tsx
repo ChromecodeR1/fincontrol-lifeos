@@ -447,25 +447,10 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
       updatedAt: new Date().toISOString()
     };
 
-    // Salva na telemetria local (lifeos_fuel_logs_v1)
+    // SPRINT 71: Purga definitiva de caches paralelos de telemetria legada
     try {
-      const raw = localStorage.getItem("lifeos_fuel_logs_v1");
-      const list = raw ? JSON.parse(raw) : [];
-      const entry = {
-        id: txId,
-        date: normDate,
-        liters: newTx.liters || 0,
-        pricePerLiter: newTx.liters && newTx.liters > 0 ? numA / newTx.liters : numP || 0,
-        totalAmount: numA,
-        odometer: newTx.km || 0,
-        fuelType: quickFuelType,
-        fullTank: quickFuelFullTank,
-        createdAt: new Date().toISOString()
-      };
-      localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify([entry, ...list.filter((l: any) => l.id !== txId)]));
-    } catch (err) {
-      console.error("Erro ao salvar telemetria lifeos_fuel_logs_v1", err);
-    }
+      localStorage.removeItem("lifeos_fuel_logs_v1");
+    } catch {}
 
     try {
       if (onAddTransaction) {

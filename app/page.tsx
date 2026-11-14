@@ -631,8 +631,12 @@ export default function CoindexApp() {
   useEffect(() => {
     try {
       const savedBgFx = localStorage.getItem("coindex_bg_fx_mode") as AmbientFxMode | null;
-      if (savedBgFx && ["hybrid", "aurora", "grid", "rays", "spotlight", "none"].includes(savedBgFx)) {
+      if (savedBgFx && ["hybrid", "aurora", "grid", "rays", "spotlight"].includes(savedBgFx)) {
         setBgFxMode(savedBgFx);
+      } else {
+        // SPRINT 71: Limpa overrides legados "none" e garante modo híbrido ativo a 144Hz
+        setBgFxMode("hybrid");
+        localStorage.setItem("coindex_bg_fx_mode", "hybrid");
       }
     } catch {}
   }, []);
@@ -1960,7 +1964,8 @@ export default function CoindexApp() {
         return t;
       });
 
-      // 2. Scan de chaves de telemetria veicular em localStorage
+      // 2. SPRINT 71: Purga definitiva de caches paralelos de telemetria veicular
+      // (Elimina na raiz a re-injeção do abastecimento fantasma de R$ 3.084,98)
       const candidateKeys = [
         "lifeos_fuel_logs_v1",
         "fuelLogs",
@@ -1968,90 +1973,18 @@ export default function CoindexApp() {
         "vehicles",
         "lifeos_vehicles"
       ];
-
-      const orphanFuelTxs: Transaction[] = [];
-
       for (const key of candidateKeys) {
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
         try {
-          const parsed = JSON.parse(raw);
-          let entries: any[] = [];
-          if (Array.isArray(parsed)) {
-            entries = parsed;
-          } else if (parsed && Array.isArray(parsed.fuelLogs)) {
-            entries = parsed.fuelLogs;
-          } else if (parsed && typeof parsed === "object") {
-            for (const val of Object.values(parsed)) {
-              if (Array.isArray(val)) {
-                entries.push(...val);
-              }
-            }
-          }
-
-          for (const entry of entries) {
-            if (!entry) continue;
-            const entryDate = formatDateBR(entry.date || entry.createdAt) || todayBR();
-            const entryAmount = parseFloat(entry.totalAmount || entry.amount || entry.valor || "0") || 0;
-            const entryLiters = parseFloat(entry.liters || entry.litros || "0") || 0;
-            const entryKm = parseFloat(entry.odometer || entry.km || "0") || undefined;
-            const entryFuelType = entry.fuelType || entry.tipo || "Gasolina";
-
-            if (entryAmount <= 0 && entryLiters <= 0) continue;
-
-            const entryId = entry.id ? `fuel_tx_${entry.id}` : `fuel_tx_${entryDate}_${Math.round(entryAmount * 100)}`;
-
-            // Verifica se já existe em normalizedTxs ou orphanFuelTxs
-            const alreadyExists = normalizedTxs.some(
-              (t) =>
-                t.id === entry.id ||
-                t.id === entryId ||
-                (t.date === entryDate &&
-                  Math.round(t.amount * 100) === Math.round(entryAmount * 100) &&
-                  (t.category === "Gasolina" || t.category === "Combustível (Gasolina / Etanol)"))
-            ) || orphanFuelTxs.some((o) => o.id === entryId || o.id === entry.id);
-
-            if (!alreadyExists && entryAmount > 0) {
-              orphanFuelTxs.push({
-                id: entryId,
-                date: entryDate,
-                description: entry.description || `Abastecimento - Posto Express (${entryFuelType})`,
-                amount: entryAmount,
-                category: "Gasolina",
-                flowType: "EXPENSE",
-                costType: "Variável",
-                paymentMethod: entry.paymentMethod || "PIX",
-                bankAccount: entry.bankAccount || banks[0]?.name || "Nubank",
-                status: "Pago",
-                km: entryKm,
-                liters: entryLiters > 0 ? entryLiters : undefined,
-                fuelType: entryFuelType === "Etanol" ? "Etanol" : "Gasolina",
-                fullTank: entry.fullTank !== false,
-                updatedAt: new Date().toISOString()
-              });
-            }
-          }
-        } catch {
-          // Ignora JSON mal formatado na chave
-        }
+          localStorage.removeItem(key);
+        } catch {}
       }
 
-      if (orphanFuelTxs.length > 0 || hasChanges) {
-        const reconciledTxs = [...orphanFuelTxs, ...normalizedTxs];
-        setTransactions(reconciledTxs);
-        localStorage.setItem("lifeos_txs_v8", JSON.stringify(reconciledTxs));
-        if (orphanFuelTxs.length > 0) {
-          upsertTransactionsInDb(orphanFuelTxs, debtorMap).catch(console.error);
-          notify(
-            "Reconciliação de Abastecimentos",
-            `${orphanFuelTxs.length} abastecimento(s) órfão(s) recuperado(s) e integrado(s) aos Lançamentos.`,
-            "info",
-            "FINANCE"
-          );
-        }
+      if (hasChanges) {
+        setTransactions(normalizedTxs);
+        localStorage.setItem("lifeos_txs_v8", JSON.stringify(normalizedTxs));
       }
     } catch (err) {
-      console.error("Erro na auto-reconciliação de abastecimentos", err);
+      console.error("Erro na auto-reconciliação de transações", err);
     }
   }, [isHydrated, transactions, banks, debtorMap, notify]);
 
@@ -4682,6 +4615,10 @@ export default function CoindexApp() {
           if (updatedParentDebt) itemsToDb.push(updatedParentDebt);
           if (itemsToDb.length > 0) {
             await upsertTransactionsInDb(itemsToDb, nextDebtorMap);
+            // SPRINT 71: Eliminação de clone órfão se o dbRowId for diferente do ID canônico editado
+            if (existingTx?.dbRowId && existingTx.dbRowId !== editingTxId) {
+              deleteTransactionInDb(existingTx.dbRowId).catch(console.error);
+            }
             setSheetsSyncStatus({
               state: "success",
               message: "Sincronizado na Nuvem",
@@ -4689,27 +4626,11 @@ export default function CoindexApp() {
             });
           }
 
-          // Sincroniza telemetria de combustível se aplicável
-          if (isPostoExpress || (newTx.liters && Number(newTx.liters) > 0)) {
-            try {
-              const rawLogs = localStorage.getItem("lifeos_fuel_logs_v1");
-              const logs = rawLogs ? JSON.parse(rawLogs) : [];
-              const fuelEntry = {
-                id: editingTxId,
-                date: normalizedDate,
-                liters: newTx.liters ? Number(newTx.liters) : 0,
-                pricePerLiter: newTx.liters && Number(newTx.liters) > 0 ? totalAmount / Number(newTx.liters) : parsedPrice || 0,
-                totalAmount: totalAmount,
-                odometer: newTx.km ? Number(newTx.km) : 0,
-                fuelType: resolvedFuelType || "Gasolina",
-                fullTank: resolvedFullTank,
-                updatedAt: nowIso
-              };
-              localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify([fuelEntry, ...logs.filter((l: any) => l.id !== editingTxId)]));
-            } catch (fuelErr) {
-              console.error("Erro ao sincronizar telemetria no edit", fuelErr);
-            }
-          }
+          // SPRINT 71: Purga definitiva de caches paralelos de telemetria legada
+          try {
+            localStorage.removeItem("lifeos_fuel_logs_v1");
+          } catch {}
+
           if (isPostoExpress && newTx.liters && Number(newTx.liters) > 0) {
             const priceL = (totalAmount / Number(newTx.liters)).toFixed(2);
             notify("Abastecimento Atualizado!", `${newTx.description} — ${newTx.liters}L a R$ ${priceL}/L`, "success", "FINANCE");
@@ -4883,30 +4804,10 @@ export default function CoindexApp() {
           timestamp: new Date().toLocaleTimeString("pt-BR")
         });
 
-        // Registro Atômico na Telemetria de Combustível (lifeos_fuel_logs_v1)
-        if (isPostoExpress || (item.liters && item.liters > 0)) {
-          try {
-            const rawLogs = localStorage.getItem("lifeos_fuel_logs_v1");
-            const logs = rawLogs ? JSON.parse(rawLogs) : [];
-            const fuelEntry = {
-              id: item.id,
-              date: normalizedDate,
-              liters: item.liters || 0,
-              pricePerLiter: item.liters && item.liters > 0 ? totalAmount / item.liters : parsedPrice || 0,
-              totalAmount: totalAmount,
-              odometer: item.km || 0,
-              fuelType: resolvedFuelType || "Gasolina",
-              fullTank: resolvedFullTank,
-              createdAt: nowIso
-            };
-            localStorage.setItem(
-              "lifeos_fuel_logs_v1",
-              JSON.stringify([fuelEntry, ...logs.filter((l: any) => l.id !== item.id)])
-            );
-          } catch (fuelErr) {
-            console.error("Erro ao salvar telemetria lifeos_fuel_logs_v1", fuelErr);
-          }
-        }
+        // SPRINT 71: Purga definitiva de caches paralelos de telemetria legada
+        try {
+          localStorage.removeItem("lifeos_fuel_logs_v1");
+        } catch {}
         if (isPostoExpress && newTx.liters && Number(newTx.liters) > 0) {
           const priceL = (totalAmount / Number(newTx.liters)).toFixed(2);
           notify("Abastecimento Registrado!", `${item.description} — ${newTx.liters}L a R$ ${priceL}/L`, "success", "FINANCE");
@@ -4959,28 +4860,10 @@ export default function CoindexApp() {
         updatedAt: new Date().toISOString()
       };
 
-      // 1. Telemetria do Veículo em localStorage (lifeos_fuel_logs_v1)
+      // SPRINT 71: Purga definitiva de caches paralelos de telemetria legada
       try {
-        const existingFuelLogs = JSON.parse(localStorage.getItem("lifeos_fuel_logs_v1") || "[]");
-        const fuelEntry = {
-          id: normalizedTx.id,
-          date: normalizedDate,
-          liters: normalizedTx.liters || 0,
-          pricePerLiter:
-            normalizedTx.liters && normalizedTx.liters > 0
-              ? normalizedTx.amount / normalizedTx.liters
-              : 0,
-          totalAmount: normalizedTx.amount,
-          odometer: normalizedTx.km || 0,
-          fuelType: normalizedTx.fuelType || "Gasolina",
-          fullTank: normalizedTx.fullTank !== false,
-          createdAt: new Date().toISOString()
-        };
-        const updatedFuelLogs = [fuelEntry, ...existingFuelLogs.filter((l: any) => l.id !== normalizedTx.id)];
-        localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify(updatedFuelLogs));
-      } catch (err) {
-        console.error("Erro ao salvar telemetria lifeos_fuel_logs_v1", err);
-      }
+        localStorage.removeItem("lifeos_fuel_logs_v1");
+      } catch {}
 
       // 2. Na Coleção Central de Lançamentos (transactions):
       setTransactions((prev) => {
@@ -5223,19 +5106,10 @@ export default function CoindexApp() {
         setUserItem("lifeos_txs_v8", JSON.stringify(updated), currentUserId);
         localStorage.setItem("lifeos_txs_v8", JSON.stringify(updated));
 
-        // Sincroniza exclusão de abastecimento no fuelLogs
-        if (tx.category === "Gasolina" || tx.liters || tx.km) {
-          try {
-            const rawLogs = localStorage.getItem("lifeos_fuel_logs_v1");
-            if (rawLogs) {
-              const logs = JSON.parse(rawLogs);
-              const filteredLogs = logs.filter((l: any) => l.id !== id);
-              localStorage.setItem("lifeos_fuel_logs_v1", JSON.stringify(filteredLogs));
-            }
-          } catch (e) {
-            console.error("Erro ao sincronizar exclusão em lifeos_fuel_logs_v1", e);
-          }
-        }
+        // SPRINT 71: Purga residual de cache paralelo de abastecimento
+        try {
+          localStorage.removeItem("lifeos_fuel_logs_v1");
+        } catch {}
 
         await deleteTransactionInDb(id);
         if (childId) {
@@ -7007,20 +6881,18 @@ export default function CoindexApp() {
         // Carrega dados de veículos e manutenção do localStorage
         let vehicleMaintenanceHistory: Record<string, number> = {};
         let vehicleCustomItems: unknown[] = [];
-        let fuelLogs: unknown[] = [];
         try {
           const rawHist = localStorage.getItem("lifeos_vehicle_maintenance_v1");
           if (rawHist) vehicleMaintenanceHistory = JSON.parse(rawHist);
           const rawItems = localStorage.getItem("lifeos_vehicle_maintenance_items_v2");
           if (rawItems) vehicleCustomItems = JSON.parse(rawItems);
-          const rawFuel = localStorage.getItem("lifeos_fuel_logs_v1");
-          if (rawFuel) fuelLogs = JSON.parse(rawFuel);
+          localStorage.removeItem("lifeos_fuel_logs_v1");
         } catch {}
 
         const tombstonesArray = Array.from(getTombstones(targetUserId));
 
         const vaultPayload: Partial<CoindexCloudVaultState> = {
-          version: "0.47.0",
+          version: "0.51.1",
           syncedAt: new Date().toISOString(),
           cards: state.cards,
           banks: state.banks,
@@ -7034,7 +6906,7 @@ export default function CoindexApp() {
             simulatorMonthlyContribution: state.simulatorMonthlyContribution
           },
           vehiclesState: {
-            refuels: fuelLogs as any,
+            refuels: [],
             customPlans: { default: vehicleCustomItems as any }
           },
           vehicleMaintenance: {
@@ -7137,20 +7009,18 @@ export default function CoindexApp() {
       try {
         let vehicleMaintenanceHistory: Record<string, number> = {};
         let vehicleCustomItems: unknown[] = [];
-        let fuelLogs: unknown[] = [];
         try {
           const rawHist = localStorage.getItem("lifeos_vehicle_maintenance_v1");
           if (rawHist) vehicleMaintenanceHistory = JSON.parse(rawHist);
           const rawItems = localStorage.getItem("lifeos_vehicle_maintenance_items_v2");
           if (rawItems) vehicleCustomItems = JSON.parse(rawItems);
-          const rawFuel = localStorage.getItem("lifeos_fuel_logs_v1");
-          if (rawFuel) fuelLogs = JSON.parse(rawFuel);
+          localStorage.removeItem("lifeos_fuel_logs_v1");
         } catch {}
 
         const tombstonesArray = Array.from(getTombstones(targetUserId));
 
         const vaultPayload: Partial<CoindexCloudVaultState> = {
-          version: "0.49.1",
+          version: "0.51.1",
           syncedAt: new Date().toISOString(),
           cards: state.cards,
           banks: state.banks,
@@ -7164,7 +7034,7 @@ export default function CoindexApp() {
             simulatorMonthlyContribution: state.simulatorMonthlyContribution
           },
           vehiclesState: {
-            refuels: fuelLogs as any,
+            refuels: [],
             customPlans: { default: vehicleCustomItems as any }
           },
           vehicleMaintenance: {
@@ -8167,7 +8037,7 @@ export default function CoindexApp() {
           </header>
 
         {/* CORPO PRINCIPAL */}
-        <main ref={mainScrollRef} className="max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24 bg-[var(--cupertino-bg)]">
+        <main ref={mainScrollRef} className="max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24 bg-transparent dashboard-main-content">
           {activeTab === "dashboard" ? (
             <div key="tab-dashboard" className="space-y-6 animate-cupertino-in">
               <div className="flex flex-wrap items-center justify-between gap-4">

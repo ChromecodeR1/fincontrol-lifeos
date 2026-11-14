@@ -147,6 +147,7 @@ export interface Transaction {
   iconUrl?: string;
   wishlistId?: string;
   updatedAt?: string;
+  dbRowId?: string;
   installmentInfo?: string;
   installmentGroupId?: string;
   installmentSeriesId?: string;
@@ -400,13 +401,25 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.51.0";
-export const PREVIOUS_VERSION = "0.50.1";
-export const COINDEX_APP_VERSION = "0.51.0";
+export const APP_VERSION = "0.51.1";
+export const PREVIOUS_VERSION = "0.51.0";
+export const COINDEX_APP_VERSION = "0.51.1";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.51.1",
+    date: "Nov/2026",
+    title: "Sprint 71: Extermínio do Bug de Recálculo na Gasolina, Desacoplamento de Caches Paralelos e Desbloqueio de Alto Contraste do Lençol de Seda 3D",
+    highlights: [
+      "Extermínio do Retorno de Valores Antigos na Gasolina: Desacoplamento absoluto entre valor (amount) e litros no modal de lançamentos, remoção definitiva do cache paralelo obsoleto lifeos_fuel_logs_v1 e de refuels no Cloud Vault, garantindo que o pool de transações seja a única fonte de verdade.",
+      "Deduplicação Semântica de Combustível no Supabase: Rastreamento nativo de dbRowId com desempate por updatedAt mais recente e maior revisão (rev desc), eliminando registros clonados que persistiam simultaneamente no banco.",
+      "Desbloqueio de Camada Opaca no Background (page.tsx): Remoção da classe bg-[var(--cupertino-bg)] do elemento <main> e aplicação de transparência pura em .dashboard-main-content e .dashboard-root-wrapper, permitindo a visualização desobstruída do motor visual no fundo da tela.",
+      "Lençol de Seda 3D Envelope Cross-Over: Nova geometria com 2 lençóis de 64 filamentos e 80 subdivisões com curvas paramétricas cruzadas gerando dobras tridimensionais, modo screen e bainhas especulares com shadowBlur e traço de 1.65px.",
+      "Camada Base Sólida do Tema: Integração da cor de fundo #0B0E14 / #F2F4F8 diretamente na base do AmbientBackgroundFX, mantendo cards cyber-glassmorphism translúcidos e nítidos a 144Hz."
+    ]
+  },
   {
     version: "0.51.0",
     date: "Nov/2026",

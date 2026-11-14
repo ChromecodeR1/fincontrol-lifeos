@@ -12,7 +12,7 @@ export interface AmbientBackgroundFXProps {
 export const AMBIENT_FX_OPTIONS: { id: AmbientFxMode; label: string; icon: string; desc: string }[] = [
   {
     id: "hybrid",
-    label: "Híbrido Copilot (Padrão)",
+    label: "Híbrido Coindex (Padrão)",
     icon: "✨",
     desc: "Fusão Aurora Camaleão + Ondas de Seda + Poeira Estelar 3D"
   },
@@ -58,7 +58,7 @@ export interface TabMoodPalette {
 export const TAB_MOOD_PALETTES: Record<string, TabMoodPalette> = {
   // 1. Padrão Cupertino (Dashboard, Transações, Status, Configurações, Sobre)
   default: {
-    primary: [10, 132, 255],     // #0A84FF (Apple Blue)
+    primary: [10, 132, 255],     // #0A84FF (Coindex Blue)
     secondary: [94, 92, 230],    // #5E5CE6 (Cupertino Indigo)
     accent: [56, 189, 248]       // #38BDF8 (Sky Blue)
   },
@@ -247,6 +247,13 @@ const CAUSTIC_SHEETS: CausticSheetConfig[] = [
   }
 ];
 
+/**
+ * SPRINT 71: Motor Visual "Coindex Caustic Silk Sheet 3D — Envelope Cross-Over"
+ * 2 Lençóis paramétricos com 64 filamentos cada e 80 subdivisões spline a 144Hz.
+ * Curvas limites edgeTopY e edgeBottomY que se cruzam em profundidade espacial (Cross-Over Twist),
+ * gerando dobras cáusticas tridimensionais autênticas com bojo volumétrico silkBelly, modo screen
+ * e bainhas externas destacadas com glow difuso shadowBlur = 10.
+ */
 function drawCausticSilkSheets(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -268,7 +275,7 @@ function drawCausticSilkSheets(
     ctx.globalCompositeOperation = "screen";
   }
 
-  // SPRINT 70: Filtra ondas acústicas ativas (< 1650ms)
+  // Filtra ondas acústicas ativas (< 1650ms)
   const activeRipples = ripples.filter((r) => timestamp - r.startTime < 1650);
 
   // Desenha no canvas um anel luminoso ultra-sutil no epicentro de cada onda
@@ -290,62 +297,97 @@ function drawCausticSilkSheets(
     }
   }
 
-  const segments = 40;
+  const segments = 80;
   const stepX = width / segments;
+  const NUM_SHEETS = 2;
+  const NUM_STRANDS = 64;
 
-  for (let sIdx = 0; sIdx < CAUSTIC_SHEETS.length; sIdx++) {
-    const sheet = CAUSTIC_SHEETS[sIdx];
-    const N = sheet.numFilaments;
-    const baseSheetY = height * sheet.baseYPct;
-    const spreadY = height * sheet.spreadYPct;
-    const camberAmp = height * sheet.camberAmpPct;
-    const baseAlpha = isLight ? sheet.baseAlphaLight : sheet.baseAlphaDark;
+  for (let sIdx = 0; sIdx < NUM_SHEETS; sIdx++) {
+    const isHero = sIdx === 0;
+    const baseY = height * (isHero ? 0.45 : 0.60);
+    const sheetFactor = isHero ? 1.0 : 0.82;
 
-    for (let i = 0; i < N; i++) {
-      const u = N > 1 ? i / (N - 1) : 0.5; // [0, 1]
+    for (let i = 0; i < NUM_STRANDS; i++) {
+      const u = i / (NUM_STRANDS - 1); // [0, 1]
       const uCentered = u - 0.5; // [-0.5, 0.5]
-      const isRimEdge = i === 0 || i === N - 1;
+      const isRimEdge = i === 0 || i === NUM_STRANDS - 1;
 
-      // Cálculo de espessura de traço e multiplicador de densidade óptica
+      // Calibração de brilho, contraste e espessura
       let lineWidth: number;
-      let alphaMult: number;
+      let alpha: number;
 
       if (isRimEdge) {
-        lineWidth = isLight ? 1.0 : 1.2;
-        alphaMult = isLight ? 1.9 : 2.4;
+        lineWidth = isLight ? 1.35 : 1.65;
+        alpha = isLight ? 0.38 : 0.52;
+        if (!isLight) {
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.45)`;
+        } else {
+          ctx.shadowBlur = 0;
+        }
       } else {
-        lineWidth = isLight ? 0.6 : 0.75;
-        // Filamentos centrais ganham densidade para acúmulo cáustico natural
-        alphaMult = 1.0 + Math.sin(u * Math.PI) * 0.35;
+        lineWidth = isLight ? 0.70 : 0.85;
+        // Filamentos internos com alpha calibrado entre 0.065 e 0.150
+        const centerBell = Math.sin(u * Math.PI); // [0..1]
+        alpha = (0.065 + centerBell * 0.085) * sheetFactor;
+        ctx.shadowBlur = 0;
       }
 
       // Função inline de cálculo de Y para este filamento no ponto x
       const computeY = (x: number): number => {
-        // 1. Posição base + dispersão no plano
-        const yBase = baseSheetY + uCentered * spreadY;
+        let edgeTopY: number;
+        let edgeBottomY: number;
+        let silkBelly: number;
+        let ripple: number;
 
-        // 2. Curvatura Camber tridimensional em arco côncavo/convexo
-        const camber = Math.sin((x / width) * Math.PI) * camberAmp;
+        if (isHero) {
+          // Lençol 1 (Hero Envelope Sheet): dobras amplas e cruzamento central
+          const camberTop = Math.sin((x / width) * Math.PI) * height * 0.095;
+          const camberBot = Math.sin((x / width) * Math.PI) * height * 0.055;
 
-        // 3. Onda primária ondulante longitudinal
-        const wave1 = Math.sin(x * sheet.freq1 + timestamp * sheet.speed1 + u * sheet.twistPhase1) * sheet.amp1;
+          const w1Top = Math.sin(x * 0.0017 + timestamp * 0.00045) * 54;
+          const w1Bot = Math.sin(x * 0.0019 + timestamp * 0.00040 + 1.25) * 46;
 
-        // 4. Harmônico secundário para dobras cáusticas transversais
-        const wave2 = Math.cos(x * sheet.freq2 - timestamp * sheet.speed2 + u * sheet.twistPhase2) * sheet.amp2;
+          const w2Top = Math.cos(x * 0.0035 - timestamp * 0.00032) * 30;
+          const w2Bot = Math.cos(x * 0.0029 - timestamp * 0.00028 + 1.7) * 34;
 
-        // 5. Modulação de torção 3D espacial (Twist / Roll)
-        const twist = Math.sin(x * 0.0018 + timestamp * 0.0004) * uCentered * sheet.twistAmp;
+          // Cross-Over Twist: faz as bordas superior e inferior se cruzarem formando laço 3D
+          const crossOver = Math.sin(x * 0.0023 + timestamp * 0.00028);
+          const halfSpan = 42 + 36 * crossOver;
 
-        // 6. Micro-ondulação de seda (Silk Ripple)
-        const ripple = Math.sin(x * sheet.rippleFreq + timestamp * sheet.rippleSpeed + u * 2.5) * sheet.rippleAmp;
+          edgeTopY = baseY - halfSpan + camberTop + w1Top + w2Top;
+          edgeBottomY = baseY + (84 - halfSpan) + camberBot + w1Bot + w2Bot;
 
-        let y = yBase + camber + wave1 + wave2 + twist + ripple;
+          silkBelly = Math.sin(u * Math.PI) * Math.cos(x * 0.0020 + timestamp * 0.00034) * 26;
+          ripple = Math.sin(x * 0.0058 + timestamp * 0.0011 + u * 3.0) * 4.0;
+        } else {
+          // Lençol 2 (Deep Cross-Over Sub-Veil): contra-curvatura e defasagem espacial
+          const camber2 = -Math.sin((x / width) * Math.PI) * height * 0.065;
 
-        // 7. Deformação elástica fluida por aproximação do cursor (< 320px)
+          const w1bTop = Math.sin(x * 0.0013 - timestamp * 0.00036 + 2.1) * 40;
+          const w1bBot = Math.sin(x * 0.0016 - timestamp * 0.00032 + 0.9) * 44;
+
+          const w2bTop = Math.cos(x * 0.0027 + timestamp * 0.00024 + 1.4) * 26;
+          const w2bBot = Math.cos(x * 0.0025 + timestamp * 0.00021 + 2.5) * 28;
+
+          const crossOver2 = Math.cos(x * 0.0019 + timestamp * 0.00022);
+          const halfSpan2 = 36 + 30 * crossOver2;
+
+          edgeTopY = baseY - halfSpan2 + camber2 + w1bTop + w2bTop;
+          edgeBottomY = baseY + (72 - halfSpan2) + camber2 + w1bBot + w2bBot;
+
+          silkBelly = Math.sin(u * Math.PI) * Math.sin(x * 0.0016 - timestamp * 0.00028) * 18;
+          ripple = Math.sin(x * 0.0044 + timestamp * 0.00085 + u * 2.8) * 2.8;
+        }
+
+        // Interpolação linear no envelope tridimensional
+        let y = edgeTopY * (1 - u) + edgeBottomY * u + silkBelly + ripple;
+
+        // Deformação elástica fluida por aproximação do cursor (< 320px)
         const dx = x - mouseX;
         const dy = y - mouseY;
         const distSq = dx * dx + dy * dy;
-        if (distSq < 102400) { // 320^2 = 102400
+        if (distSq < 102400) {
           const dist = Math.sqrt(distSq);
           const normDist = 1 - dist / 320;
           const lift = Math.sin(normDist * (Math.PI * 0.5)) * 34 * (1 - Math.abs(uCentered) * 0.6);
@@ -353,13 +395,13 @@ function drawCausticSilkSheets(
           y += lift * dir * 0.55;
         }
 
-        // 8. SPRINT 70: Ondulação acústica física propagada a partir dos cliques e trocas de aba
+        // Ondulação acústica física propagada a partir dos cliques e trocas de aba
         if (activeRipples.length > 0) {
           for (let rIdx = 0; rIdx < activeRipples.length; rIdx++) {
             const rip = activeRipples[rIdx];
             const elapsed = Math.max(0, timestamp - rip.startTime);
             const waveRadius = Math.max(0.5, elapsed * 0.42);
-            const distToRipple = Math.hypot(x - rip.x, yBase - rip.y);
+            const distToRipple = Math.hypot(x - rip.x, baseY - rip.y);
             const deltaDist = Math.abs(distToRipple - waveRadius);
 
             if (deltaDist < 130) {
@@ -379,7 +421,7 @@ function drawCausticSilkSheets(
         return y;
       };
 
-      // Inicia o desenho da fita contínua via spline por pontos médios (quadraticCurveTo)
+      // Inicia o desenho da fita contínua via spline por pontos médios (quadraticCurveTo em 80 segmentos)
       ctx.beginPath();
       let prevX = 0;
       let prevY = computeY(0);
@@ -396,26 +438,24 @@ function drawCausticSilkSheets(
       }
       ctx.lineTo(prevX, prevY);
 
-      // Gradiente horizontal tricolor com realce perolado na crista
-      const effAlpha = Math.min(1.0, baseAlpha * alphaMult);
+      // Gradiente horizontal com realce perolado na crista
       const grad = ctx.createLinearGradient(0, 0, width, 0);
-
       const r1 = primaryRgb[0], g1 = primaryRgb[1], b1 = primaryRgb[2];
       const r2 = secondaryRgb[0], g2 = secondaryRgb[1], b2 = secondaryRgb[2];
       const r3 = accentRgb[0], g3 = accentRgb[1], b3 = accentRgb[2];
 
       if (isLight) {
         grad.addColorStop(0, `rgba(${r1}, ${g1}, ${b1}, 0)`);
-        grad.addColorStop(0.2, `rgba(${r1}, ${g1}, ${b1}, ${effAlpha * 0.75})`);
-        grad.addColorStop(0.5, `rgba(${r2}, ${g2}, ${b2}, ${effAlpha})`);
-        grad.addColorStop(0.8, `rgba(${r3}, ${g3}, ${b3}, ${effAlpha * 0.8})`);
+        grad.addColorStop(0.2, `rgba(${r1}, ${g1}, ${b1}, ${alpha * 0.8})`);
+        grad.addColorStop(0.5, `rgba(${r2}, ${g2}, ${b2}, ${alpha})`);
+        grad.addColorStop(0.8, `rgba(${r3}, ${g3}, ${b3}, ${alpha * 0.8})`);
         grad.addColorStop(1, `rgba(${r3}, ${g3}, ${b3}, 0)`);
       } else {
-        const pearlAlpha = Math.min(1.0, effAlpha * 1.6);
+        const pearlAlpha = Math.min(1.0, alpha * 1.5);
         grad.addColorStop(0, `rgba(${r1}, ${g1}, ${b1}, 0)`);
-        grad.addColorStop(0.22, `rgba(${r1}, ${g1}, ${b1}, ${effAlpha * 0.85})`);
+        grad.addColorStop(0.22, `rgba(${r1}, ${g1}, ${b1}, ${alpha * 0.9})`);
         grad.addColorStop(0.48, `rgba(240, 246, 255, ${pearlAlpha})`); // Realce Perolado Cáustico
-        grad.addColorStop(0.72, `rgba(${r2}, ${g2}, ${b2}, ${effAlpha})`);
+        grad.addColorStop(0.72, `rgba(${r2}, ${g2}, ${b2}, ${alpha})`);
         grad.addColorStop(1, `rgba(${r3}, ${g3}, ${b3}, 0)`);
       }
 
@@ -785,7 +825,13 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
   }, [mounted, mode, activeTab]);
 
   if (mode === "none") {
-    return null;
+    return (
+      <div
+        className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none bg-[#F2F4F8] dark:bg-[#0B0E14]"
+        aria-hidden="true"
+        style={{ transform: "none" }}
+      />
+    );
   }
 
   const showAurora = mode === "aurora" || mode === "hybrid";
@@ -806,6 +852,8 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
       aria-hidden="true"
       style={{ transform: "none" }}
     >
+      {/* CAMADA BASE SÓLIDA DO TEMA (Substrato definitivo, permitindo main e dashboard-root 100% transparentes) */}
+      <div className="absolute inset-0 bg-[#F2F4F8] dark:bg-[#0B0E14] pointer-events-none -z-10" />
       {/* 1. AURORA CAMALEÃO CONTEXTUAL (Mesh com 3 Esferas Fluidas e Transição de 1600ms) */}
       {showAurora && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden [contain:strict]">

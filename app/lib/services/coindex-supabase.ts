@@ -326,6 +326,7 @@ export function decodeTxFromSupabase(row: Record<string, unknown>): Transaction 
 
   const tx: Transaction = {
     id: (meta.originalId ? String(meta.originalId) : undefined) ?? String(row.id),
+    dbRowId: String(row.id),
     date: finalDate,
     description: cleanDescription,
     amount: Number(row.amount ?? 0),
@@ -467,9 +468,52 @@ export function deduplicateCloudTransactions(txs: Transaction[]): {
     }
   }
 
+  // SPRINT 71: Deduplicação Semântica de Combustível (Extermínio do bug de recálculo dos R$ 3.084,98)
+  // Se existirem dois registros com IDs diferentes mas mesma data, categoria 'Gasolina' e mesmo odômetro km > 0,
+  // trata-se de um clone órfão gerado durante edição ou migração. O registro com updatedAt mais recente prevalece estritamente.
+  const fuelOdometerMap = new Map<string, Transaction[]>();
+  const nonFuelTxs: Transaction[] = [];
+
+  for (const tx of deduplicatedTxs) {
+    const isFuel = tx.category === "Gasolina" || tx.category === "Combustível (Gasolina / Etanol)";
+    if (isFuel && tx.km && tx.km > 0) {
+      const fuelKey = `${tx.date.trim()}_KM_${tx.km}`;
+      const list = fuelOdometerMap.get(fuelKey);
+      if (list) {
+        list.push(tx);
+      } else {
+        fuelOdometerMap.set(fuelKey, [tx]);
+      }
+    } else {
+      nonFuelTxs.push(tx);
+    }
+  }
+
+  const finalFuelTxs: Transaction[] = [];
+  for (const group of fuelOdometerMap.values()) {
+    if (group.length === 1) {
+      finalFuelTxs.push(group[0]);
+    } else {
+      group.sort((a, b) => {
+        const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        if (timeB !== timeA) return timeB - timeA;
+
+        const revA = a.rev ?? 0;
+        const revB = b.rev ?? 0;
+        if (revB !== revA) return revB - revA;
+
+        return scoreTransactionQuality(b) - scoreTransactionQuality(a);
+      });
+      finalFuelTxs.push(group[0]);
+    }
+  }
+
+  const finalTxs = [...nonFuelTxs, ...finalFuelTxs];
+
   // Retorna lista deduplicada com array de deleção VAZIO (Proibição de Deleção Automática)
   return {
-    deduplicatedTxs,
+    deduplicatedTxs: finalTxs,
     duplicateIdsToDelete: []
   };
 }
@@ -2445,14 +2489,22 @@ export async function runForensicCloudRecovery(
         "lifeos_txs_v8",
         "coindex_guest_lifeos_txs_v8",
         `coindex_usr_${userId}_lifeos_txs_v8`,
-        "lifeos_fuel_logs_v1",
         "coindex_txs_backup",
         "coindex_backup_txs",
         "lifeos_offline_txs"
       ];
       explicitKeys.forEach((k) => scannedKeys.add(k));
 
+      // SPRINT 71: Purgar caches zumbis de telemetria veicular paralela
+      ["lifeos_fuel_logs_v1", "lifeos_fuel_logs", "fuelLogs"].forEach((k) => {
+        try { window.localStorage.removeItem(k); } catch {}
+      });
+
       for (const k of scannedKeys) {
+        if (k.includes("fuel_logs") || k === "lifeos_fuel_logs_v1") {
+          try { window.localStorage.removeItem(k); } catch {}
+          continue;
+        }
         try {
           const raw = window.localStorage.getItem(k);
           if (!raw || !raw.startsWith("[")) continue;
@@ -2468,30 +2520,6 @@ export async function runForensicCloudRecovery(
                   ...item,
                   date: normDate,
                   amount: Number(item.amount || 0)
-                });
-                rescuedFromLocalStorageCount++;
-              }
-            }
-          }
-          // Se for telemetria de combustível (lifeos_fuel_logs_v1)
-          else if (k.includes("fuel_logs") && parsed[0] && parsed[0].liters !== undefined) {
-            for (const f of parsed) {
-              if (f && f.id && f.totalAmount) {
-                const normDate = formatDateBR(f.date) || todayBR();
-                candidatePool.push({
-                  id: String(f.id),
-                  date: normDate,
-                  description: `Gasolina (${f.liters || 0}L)`,
-                  amount: Number(f.totalAmount || 0),
-                  category: "Gasolina",
-                  costType: "Variável",
-                  paymentMethod: "Outro",
-                  status: "Pago",
-                  km: f.odometer ? Number(f.odometer) : undefined,
-                  liters: f.liters ? Number(f.liters) : undefined,
-                  fuelType: f.fuelType || "Gasolina",
-                  fullTank: f.fullTank !== false,
-                  flowType: "EXPENSE"
                 });
                 rescuedFromLocalStorageCount++;
               }
