@@ -402,13 +402,27 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.51.2";
-export const PREVIOUS_VERSION = "0.51.1";
-export const COINDEX_APP_VERSION = "0.51.2";
+export const APP_VERSION = "0.51.3";
+export const PREVIOUS_VERSION = "0.51.2";
+export const COINDEX_APP_VERSION = "0.51.3";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.51.3",
+    date: "Nov/2026",
+    title: "Sprint 73: Remoção de Ondas de Clique e Interação de Mouse no Fundo, Suavização do Lençol 3D, 780 Micro-Partículas, Compressão Vertical da Linha Principal e Correção das Cores dos Cartões",
+    highlights: [
+      "Fundo 100% Autônomo e Suave: Remoção completa de ouvintes pointerdown, anéis de onda (ripples) em cliques ou trocas de abas e qualquer distorção elástica por proximidade do cursor no lençol de seda 3D e nas partículas.",
+      "Lençol de Seda 3D Mais Translúcido e Discreto: Redução da opacidade dos filamentos internos para a faixa ultra-sutil de 0.014 a 0.034 com traço de 0.6px, e bainhas externas calibradas para alpha 0.11 sem shadowBlur.",
+      "Card Glassmorphism Refinado: Ajuste de --cupertino-card no modo escuro para rgba(15, 20, 30, 0.88) com blur(22px) saturate(150%), assegurando contraste impecável e zero interferência de fundo na leitura de números e gráficos.",
+      "Aumento para 780 Micro-Partículas Estelares: Densidade aprimorada para 780 partículas (480 no mobile) de tamanho 0.35px a 0.68px (média 0.5px), cintilando de forma lenta e elegante.",
+      "Compressão Vertical da Central Analítica: Valor principal e badges na esquerda e seletor [Bruto | Líquido IR | Só Aportes] na direita na mesma linha flex compacta, altura do gráfico reduzida para 155px e faixa inferior de 4 métricas compactada com py-2 px-2.5.",
+      "Cartões & Limites Compacto e Cores Autênticas: Redução do padding interno para p-3, sobreposição compacta em -mt-11, eliminação das barras repetidas em favor de barra slim única de utilização global, e garantia estrita de cores por banco (Nubank Roxo, Inter Laranja, Itaú Azul/Âmbar, BTG Azul Imperial).",
+      "Harmonização da Linha Seguinte: Calibração da altura compacta padrão dos gráficos de Despesas e Fluxo de Caixa para 160px e redução do padding dos ChartCards para p-4 sm:p-5."
+    ]
+  },
   {
     version: "0.51.2",
     date: "Nov/2026",
@@ -1679,10 +1693,10 @@ export function getCardBrandGradient(cardName: string, bankName?: string, custom
   // 3. Itaú Platinum / Personnalité / Uniclass (Azul Meia-Noite Profundo com reflexo Âmbar/Titânio)
   if (text.includes("itaú") || text.includes("itau") || text.includes("personnalite") || text.includes("uniclass")) {
     return {
-      background: "linear-gradient(135deg, #1E293B 0%, #0F172A 60%, #9A3412 100%)",
+      background: "linear-gradient(135deg, #1E293B 0%, #0F172A 60%, #7C2D12 100%)",
       borderColor: "rgba(251, 146, 60, 0.30)",
       dotColor: "#EA580C",
-      gradientClass: "from-[#1E293B] via-[#0F172A] to-[#9A3412]"
+      gradientClass: "from-[#1E293B] via-[#0F172A] to-[#7C2D12]"
     };
   }
 

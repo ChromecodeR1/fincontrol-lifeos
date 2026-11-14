@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.51.2`  
-> **Última Atualização:** 14 de Novembro de 2026 (Pós-Sprint 72 — Feixe de Luz Real na Linha do Gráfico Recharts, Paleta Autêntica por Banco nos Cartões Nubank/Inter/Itaú/BTG, Eliminação do Espaço Vazio na Central Analítica, Higienização da Lista de Limites e Consistência na Barra de Alocação 50/30/20)  
+> **Versão da Aplicação:** `0.51.3`  
+> **Última Atualização:** 14 de Novembro de 2026 (Pós-Sprint 73 — Remoção de Ondas de Clique e Interação de Mouse no Fundo, Suavização de Transparência do Lençol 3D, Aumento para 780 Micro-Partículas, Compressão Vertical da Linha Principal do Dashboard e Cores Autênticas dos Cartões)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1377,6 +1377,27 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Pilar 5 — Deformação Elástica por Interação de Cursor (< 320px) & Zero GC:**
       - Campo de deflexão suave do tecido com raio de influência de 320px ao redor de `smoothMouse`, gerando elevação e expansão de seda conforme o cursor navega pela tela.
       - 100% livre de alocações dinâmicas de memória por frame dentro do loop de renderização a 144Hz.
+
+  - **Sprint 73 (Novembro de 2026 — Remoção de Ondas de Clique e Interação de Mouse no Fundo, Suavização de Transparência do Lençol 3D, Aumento para 780 Micro-Partículas, Compressão Vertical da Linha Principal do Dashboard e Cores Autênticas dos Cartões v0.51.3):**
+    - **Pilar 1 — Fundo 100% Autônomo e Suave (`AmbientBackgroundFX.tsx`):**
+      - Extinção total de ouvintes `pointerdown` e do estado `ripplesRef`, eliminando anéis de choque ou deformações provocadas por cliques do usuário ou alternância de abas.
+      - Remoção integral da distorção elástica por proximidade do cursor (`lift`, `distToMouse < 320px`), garantindo que os lençóis de seda e as micro-partículas fluam de forma puramente orgânica e autônoma a 144Hz.
+    - **Pilar 2 — Lençol 3D Hiper-Translúcido e Ajuste de Cartões (`AmbientBackgroundFX.tsx`, `globals.css`):**
+      - Redução da espessura dos filamentos internos para `lineWidth = 0.6` e opacidade na faixa ultra-translúcida entre `0.014` e `0.034` (4x mais discreto), com bainhas externas em `alpha = 0.11` sem `shadowBlur`.
+      - Calibração de `--cupertino-card` no dark mode para `rgba(15, 20, 30, 0.88)` com `backdrop-filter: blur(22px) saturate(150%)`, impedindo que linhas do fundo concorram com textos ou gráficos nos cards.
+    - **Pilar 3 — Densidade Estelar Aprimorada para 780 Micro-Partículas (`AmbientBackgroundFX.tsx`):**
+      - Elevação do enxame de poeira estelar de 420 para 780 partículas (480 no mobile `< 768px`) com tamanho diminuto (`0.35px` a `0.68px`, média 0.5px) e opacidade sutil (`0.06` a `0.22`) com cintilação desacelerada.
+    - **Pilar 4 — Compressão Vertical da Central Analítica de Patrimônio (`page.tsx`):**
+      - Alinhamento em linha flex única (`flex flex-wrap items-center justify-between gap-2 mb-2`): valor consolidado e badges à esquerda e seletor `[Bruto | Líquido IR | Só Aportes]` à direita.
+      - Altura compacta do gráfico travada em `155px` (`getChartHeightPx("patrimony", 155)` onde `"compact"` = `150px`, `"normal"` = `180px`, `"tall"` = `230px`), removendo `min-h-[235px] flex-1`.
+      - Faixa inferior das 4 métricas compactada com `py-2 px-2.5` e `mt-2 pt-2`.
+    - **Pilar 5 — Cartões & Limites Compacto e Cores Autênticas na Pilha (`page.tsx`, `lifeos-data.tsx`):**
+      - Redução do padding dos cartões para `p-3` e sobreposição enxuta em `-mt-11`.
+      - Extinção da lista inferior de 3 barras repetidas de limite por cartão em favor de uma única Barra Slim de Utilização Global integrada (`h-1.5 rounded-full`) abaixo dos 3 indicadores consolidados.
+      - Cores autênticas por banco injetadas diretamente no estilo inline do cartão: Nubank (Roxo `#7C3AED` / `#2E1065`), Inter (Laranja `#EA580C` / `#431407`), Itaú (Azul Meia-Noite c/ Âmbar `#1E293B` / `#7C2D12`), BTG (Azul Imperial `#1E3A8A` / `#020617`).
+    - **Pilar 6 — Harmonização Vertical dos Gráficos Subsequentes (`page.tsx`, `ChartCard.tsx`):**
+      - Calibração de `getChartHeightPx` padrão para `160px` em Despesas e Fluxo de Caixa.
+      - Padding dos containers `ChartCard` reduzido para `p-4 sm:p-5` com margem de cabeçalho `mb-3`.
 
   - **Sprint 72 (Novembro de 2026 — Feixe de Luz Real na Linha do Gráfico Recharts, Paleta Autêntica por Banco nos Cartões, Eliminação do Espaço Vazio na Central Analítica, Higienização da Lista de Limites e Consistência na Barra de Alocação 50/30/20 v0.51.2):**
     - **Pilar 1 — Feixe de Luz Real na Linha do Gráfico Recharts (`globals.css`, `page.tsx`, `SecondaryTabs.tsx`, `VehiclesTab.tsx`):**

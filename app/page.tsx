@@ -1034,13 +1034,13 @@ export default function CoindexApp() {
     return saved ? { ...base, ...saved } : base;
   };
 
-  // SPRINT 35: Helper Reativo de Altura dos Gráficos com Compactação (175px / 220px / 290px)
-  const getChartHeightPx = (chartId: string, defaultPx = 175): number => {
+  // SPRINT 73: Helper Reativo de Altura dos Gráficos com Compactação (150-160px / 180px / 230px)
+  const getChartHeightPx = (chartId: string, defaultPx = 160): number => {
     const cfg = getWidgetSettings(chartId, "auto", curveType);
     const h = cfg.height || "compact";
-    if (h === "compact") return 175;
-    if (h === "normal") return 220;
-    if (h === "tall" || (h as string) === "expanded") return 290;
+    if (h === "compact") return chartId === "patrimony" || chartId === "patrimony_chart" ? 150 : 160;
+    if (h === "normal") return 180;
+    if (h === "tall" || (h as string) === "expanded") return 230;
     return defaultPx;
   };
 
@@ -8664,7 +8664,7 @@ export default function CoindexApp() {
                                   </div>
                                 )}
 
-                                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                                   <div className="flex flex-wrap items-center gap-2.5">
                                     <div className="flex flex-wrap items-baseline gap-2">
                                       <span className={`text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums tracking-tight ${moneyBlur}`}>
@@ -8764,7 +8764,7 @@ export default function CoindexApp() {
                                   </div>
                                 )}
 
-                                <div className="w-full flex-1 min-h-[235px] select-none transition-all duration-300 relative" style={{ height: chartConfigs?.patrimony?.height ? `${getChartHeightPx("patrimony", 235)}px` : undefined }}>
+                                <div className="w-full select-none transition-all duration-300 relative" style={{ height: `${getChartHeightPx("patrimony", 155)}px` }}>
                                   <ResponsiveContainer width="100%" height="100%">
                                     {effectiveChartType === "line" ? (
                                       <LineChart
@@ -8982,7 +8982,7 @@ export default function CoindexApp() {
                                   </span>
                                 </div>
 
-                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("patrimony", 175)}px` }}>
+                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("patrimony", 155)}px` }}>
                                   <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart
                                       data={paceChartData.data}
@@ -9064,7 +9064,7 @@ export default function CoindexApp() {
                                   )}
                                 </div>
 
-                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("patrimony", 175)}px` }}>
+                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("patrimony", 155)}px` }}>
                                   <ResponsiveContainer width="100%" height="100%">
                                     <BarChart
                                       data={forecast6MData.months}
@@ -9097,15 +9097,15 @@ export default function CoindexApp() {
                               </div>
                             )}
 
-                            {/* SPRINT 34: Faixa Executiva de Telemetria Patrimonial (4 Métricas Compactas) */}
-                            <div className="mt-auto pt-3.5 border-t border-[var(--cupertino-border)] grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
+                            {/* SPRINT 73: Faixa Executiva de Telemetria Patrimonial (4 Métricas Compactas) */}
+                            <div className="mt-2 pt-2 border-t border-[var(--cupertino-border)] grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <div className="py-2 px-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
                                 <span className="text-[10px] text-slate-400 font-medium">Média de Aporte/Mês</span>
                                 <span className={`text-xs sm:text-sm font-semibold font-mono tabular-nums text-emerald-400 mt-0.5 ${moneyBlur}`}>
                                   {formatBRL(patrimonyTelemetry.avgAporte)}
                                 </span>
                               </div>
-                              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
+                              <div className="py-2 px-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
                                 <span className="text-[10px] text-slate-400 font-medium">Melhor Mês da Série</span>
                                 <div className="flex items-baseline gap-1 mt-0.5 truncate">
                                   <span className="text-[10px] sm:text-xs text-slate-300 font-semibold shrink-0">{patrimonyTelemetry.bestMonth.label}:</span>
@@ -9114,13 +9114,13 @@ export default function CoindexApp() {
                                   </span>
                                 </div>
                               </div>
-                              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
+                              <div className="py-2 px-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
                                 <span className="text-[10px] text-slate-400 font-medium">Rendimento Médio CDI</span>
                                 <span className={`text-xs sm:text-sm font-semibold font-mono tabular-nums text-emerald-300 mt-0.5 ${moneyBlur}`}>
                                   +{formatBRL(patrimonyTelemetry.avgYieldMonth)}/mês
                                 </span>
                               </div>
-                              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
+                              <div className="py-2 px-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex flex-col justify-between">
                                 <span className="text-[10px] text-slate-400 font-medium">Projeção 12 Meses</span>
                                 <span className={`text-xs sm:text-sm font-semibold font-mono tabular-nums text-[#64D2FF] mt-0.5 ${moneyBlur}`}>
                                   {formatBRL(patrimonyTelemetry.projected12M)}
@@ -9134,7 +9134,7 @@ export default function CoindexApp() {
                         {(widget.id === "expenses" || widget.id === "category_chart") && (
                           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
                             {/* Donut Moderno com Rótulo Centralizado Total Gasto - col-span-12 lg:col-span-5 */}
-                            <div className="relative select-none flex items-center justify-center lg:col-span-5" style={{ height: `${getChartHeightPx("expenses", 175)}px` }}>
+                            <div className="relative select-none flex items-center justify-center lg:col-span-5" style={{ height: `${getChartHeightPx("expenses", 160)}px` }}>
                               <ResponsiveContainer width="100%" height="100%">
                                 <PieChart accessibilityLayer={false}>
                                   <Pie
@@ -9642,7 +9642,32 @@ export default function CoindexApp() {
                                   )}
                                   {visibleCards.map((card, idx) => {
                                     const exposure = calculateCardExposure(card, transactions, selectedMonth);
-                                    const brandVisual = getCardBrandGradient(card.name, card.bankName, card.color);
+                                    const cardNameLower = (card.name || "").toLowerCase();
+                                    const cardBankLower = (card.bankName || "").toLowerCase();
+                                    const cardCombined = `${cardNameLower} ${cardBankLower}`;
+
+                                    // SPRINT 73: Cores autênticas estritas por marca/banco diretamente no background
+                                    let cardBg = "linear-gradient(135deg, #1E293B 0%, #0F172A 65%, #020617 100%)";
+                                    let cardBorder = "rgba(255, 255, 255, 0.15)";
+
+                                    if (cardCombined.includes("inter") || cardCombined.includes("laranja")) {
+                                      cardBg = "linear-gradient(135deg, #EA580C 0%, #C2410C 55%, #431407 100%)";
+                                      cardBorder = "rgba(251, 146, 60, 0.35)";
+                                    } else if (cardCombined.includes("itaú") || cardCombined.includes("itau") || cardCombined.includes("personnalite") || cardCombined.includes("uniclass")) {
+                                      cardBg = "linear-gradient(135deg, #1E293B 0%, #0F172A 60%, #7C2D12 100%)";
+                                      cardBorder = "rgba(251, 146, 60, 0.30)";
+                                    } else if (cardCombined.includes("btg") || cardCombined.includes("pactual")) {
+                                      cardBg = "linear-gradient(135deg, #1E3A8A 0%, #0F172A 65%, #020617 100%)";
+                                      cardBorder = "rgba(96, 165, 250, 0.30)";
+                                    } else if (cardCombined.includes("nubank") || cardCombined.includes("roxo") || cardCombined.includes("ultravioleta")) {
+                                      cardBg = "linear-gradient(135deg, #7C3AED 0%, #5B21B6 55%, #2E1065 100%)";
+                                      cardBorder = "rgba(192, 132, 252, 0.32)";
+                                    } else {
+                                      const fallbackVisual = getCardBrandGradient(card.name, card.bankName, card.color);
+                                      cardBg = fallbackVisual.background;
+                                      cardBorder = fallbackVisual.borderColor;
+                                    }
+
                                     const isFirst = idx === 0;
 
                                     return (
@@ -9650,17 +9675,17 @@ export default function CoindexApp() {
                                         key={card.id}
                                         style={{ zIndex: idx + 1 }}
                                         className={`relative transition-all duration-300 ease-out ${
-                                          !isFirst ? "-mt-12 group-hover/wallet:-mt-8" : ""
+                                          !isFirst ? "-mt-11 group-hover/wallet:-mt-7" : ""
                                         }`}
                                       >
                                         <TiltCard3D maxTilt={5}>
                                           <div
-                                            style={{ background: brandVisual.background, borderColor: brandVisual.borderColor }}
-                                            className="wallet-physical-card wallet-card-crisp relative rounded-2xl p-3.5 shadow-xl border outline-none focus:outline-none ring-0"
+                                            style={{ background: cardBg, borderColor: cardBorder }}
+                                            className="wallet-physical-card wallet-card-crisp relative rounded-2xl p-3 shadow-xl border outline-none focus:outline-none ring-0"
                                           >
                                             <div className="relative z-20 antialiased backface-hidden">
                                               {/* Cabeçalho do Cartão */}
-                                              <div className="flex items-center justify-between text-white mb-2">
+                                              <div className="flex items-center justify-between text-white mb-1.5">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                   <span className="font-bold text-sm tracking-tight truncate">{card.name}</span>
                                                   {card.brand && (
@@ -9695,7 +9720,7 @@ export default function CoindexApp() {
                                               </div>
 
                                               {/* Rodapé do Cartão */}
-                                              <div className="mt-2 pt-1.5 border-t border-white/15 flex items-center justify-between text-[11px] text-white/80 font-mono">
+                                              <div className="mt-1.5 pt-1 border-t border-white/15 flex items-center justify-between text-[11px] text-white/80 font-mono">
                                                 <span>Fecha dia {card.closingDay || "—"} • Vence dia {card.dueDay || "—"}</span>
                                                 {exposure.used > 0 && (
                                                   <button
@@ -9727,8 +9752,8 @@ export default function CoindexApp() {
                               )}
                             </div>
 
-                            {/* PARTE INFERIOR: Barras de Limites Compactas Reais (SSOT Cartões de Crédito) */}
-                            <div className="pt-2 border-t border-white/10 space-y-2.5">
+                            {/* PARTE INFERIOR: Barra Slim de Utilização Global (SSOT Cartões de Crédito) */}
+                            <div className="pt-2 border-t border-white/10 space-y-2">
                               {/* Pílulas Consolidadas */}
                               <div className={`grid grid-cols-3 gap-2 text-xs text-center ${moneyBlur}`}>
                                 <div className="py-1.5 px-2.5 rounded-xl bg-slate-950/70 border border-white/10">
@@ -9751,35 +9776,20 @@ export default function CoindexApp() {
                                 </div>
                               </div>
 
-                              {/* Lista de Barras de Progresso Slim */}
-                              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 text-xs">
-                                {cardLimitsAnalytics.cards.map((c) => {
-                                  const barColor =
-                                    c.pctUsed >= 80 ? "bg-[#FF453A]" : c.pctUsed >= 50 ? "bg-[#FF9F0A]" : "bg-[#30D158]";
-                                  const cardBrandVisual = getCardBrandGradient(c.name);
-
-                                  return (
-                                    <div key={c.id} className="py-1.5 px-2.5 rounded-xl bg-slate-950/50 border border-white/5 space-y-1">
-                                      <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                          <span className="w-2 h-2 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: cardBrandVisual.dotColor }} />
-                                          <span className="font-semibold text-slate-200 text-xs whitespace-nowrap truncate">{c.name}</span>
-                                        </div>
-                                        <span className={`whitespace-nowrap tabular-nums text-xs text-slate-300 shrink-0 ${moneyBlur}`}>
-                                          <strong className="text-white">{formatBRL(c.used)}</strong> / {formatBRL(c.limit)} ({c.pctUsed}%)
-                                        </span>
-                                      </div>
-                                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden relative">
-                                        <div
-                                          className={`h-full rounded-full transition-all duration-500 relative liquid-progress-shimmer ${barColor}`}
-                                          style={{ width: `${c.pctUsed}%` }}
-                                        >
-                                          <span className="liquid-progress-head" />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                              {/* SPRINT 73: Barra Slim de Utilização Global Integrada (Sem repetição redundante) */}
+                              <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden relative">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-500 relative liquid-progress-shimmer ${
+                                    cardLimitsAnalytics.globalUsagePct >= 80
+                                      ? "bg-[#FF453A]"
+                                      : cardLimitsAnalytics.globalUsagePct >= 50
+                                      ? "bg-[#FF9F0A]"
+                                      : "bg-[#30D158]"
+                                  }`}
+                                  style={{ width: `${Math.min(100, Math.max(0, cardLimitsAnalytics.globalUsagePct))}%` }}
+                                >
+                                  <span className="liquid-progress-head" />
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -9824,7 +9834,7 @@ export default function CoindexApp() {
                                   </div>
                                 </div>
 
-                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("cashflow_recents", 175)}px` }}>
+                                <div className="w-full select-none transition-all duration-300" style={{ height: `${getChartHeightPx("cashflow_recents", 160)}px` }}>
                                   <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={cashflow6MData} barGap={4} barSize={12} accessibilityLayer={false} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                       <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.12)" />

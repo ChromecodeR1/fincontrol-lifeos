@@ -5,7 +5,7 @@ html[data-theme="dark"] {
   color-scheme: dark;
   --cupertino-bg: #0B0E14;
   --cupertino-sidebar: #0E121B;
-  --cupertino-card: rgba(16, 21, 33, 0.64);
+  --cupertino-card: rgba(15, 20, 30, 0.88);
   --cupertino-card-elevated: #1A2030;
   --cupertino-input: #0D111A;
   --cupertino-border: rgba(255, 255, 255, 0.08);
@@ -93,8 +93,8 @@ html[data-theme="dark"] [class*="bg-black/"]:not(.wallet-physical-card) {
 .cyber-card,
 .glass-card {
   background-color: var(--cupertino-card) !important;
-  backdrop-filter: blur(18px) saturate(165%);
-  -webkit-backdrop-filter: blur(18px) saturate(165%);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
   border-color: var(--cupertino-border) !important;
   box-shadow: var(--cupertino-shadow) !important;
 }

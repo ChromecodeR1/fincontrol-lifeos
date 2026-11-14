@@ -128,14 +128,14 @@ export default function ChartCard({
           : "opacity-100"
       } ${
         popoverOpen ? "z-[80] overflow-visible" : "z-10 focus-within:z-[80]"
-      } bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm ${className}`}
+      } bg-slate-900/60 p-4 sm:p-5 shadow-lg backdrop-blur-sm ${className}`}
     >
       {/* SPRINT 70: Borda de Safira Prismática (Exceto Cartões de Crédito / wallet_limits) */}
       {id !== "wallet_limits" && (
         <div className="coindex-sapphire-rim" aria-hidden="true" />
       )}
 
-      <div className="mb-4 flex items-start justify-between gap-3 relative z-10">
+      <div className="mb-3 flex items-start justify-between gap-3 relative z-10">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {icon}

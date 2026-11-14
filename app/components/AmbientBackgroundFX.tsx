@@ -248,11 +248,12 @@ const CAUSTIC_SHEETS: CausticSheetConfig[] = [
 ];
 
 /**
- * SPRINT 71: Motor Visual "Coindex Caustic Silk Sheet 3D — Envelope Cross-Over"
+ * SPRINT 73: Motor Visual "Coindex Caustic Silk Sheet 3D — Envelope Cross-Over"
  * 2 Lençóis paramétricos com 64 filamentos cada e 80 subdivisões spline a 144Hz.
  * Curvas limites edgeTopY e edgeBottomY que se cruzam em profundidade espacial (Cross-Over Twist),
  * gerando dobras cáusticas tridimensionais autênticas com bojo volumétrico silkBelly, modo screen
- * e bainhas externas destacadas com glow difuso shadowBlur = 10.
+ * e fluxo 100% autônomo (sem deformação por clique ou cursor).
+ * Altamente translúcido (alpha 0.014 a 0.034) para preservar a legibilidade absoluta dos dados.
  */
 function drawCausticSilkSheets(
   ctx: CanvasRenderingContext2D,
@@ -262,10 +263,7 @@ function drawCausticSilkSheets(
   primaryRgb: [number, number, number],
   secondaryRgb: [number, number, number],
   accentRgb: [number, number, number],
-  mouseX: number,
-  mouseY: number,
-  isLight: boolean,
-  ripples: SilkAcousticRipple[] = []
+  isLight: boolean
 ) {
   ctx.save();
   ctx.lineCap = "round";
@@ -273,28 +271,6 @@ function drawCausticSilkSheets(
 
   if (!isLight) {
     ctx.globalCompositeOperation = "screen";
-  }
-
-  // Filtra ondas acústicas ativas (< 1650ms)
-  const activeRipples = ripples.filter((r) => timestamp - r.startTime < 1650);
-
-  // Desenha no canvas um anel luminoso ultra-sutil no epicentro de cada onda
-  if (activeRipples.length > 0) {
-    for (let rIdx = 0; rIdx < activeRipples.length; rIdx++) {
-      const rip = activeRipples[rIdx];
-      const elapsed = Math.max(0, timestamp - rip.startTime);
-      const waveRadius = Math.max(0.5, elapsed * 0.42);
-      const decay = Math.max(0, 1 - elapsed / 1650);
-      const ringAlpha = decay * 0.08;
-
-      if (ringAlpha > 0.001) {
-        ctx.beginPath();
-        ctx.arc(rip.x, rip.y, waveRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, ${ringAlpha})`;
-        ctx.lineWidth = 1.1;
-        ctx.stroke();
-      }
-    }
   }
 
   const segments = 80;
@@ -309,31 +285,25 @@ function drawCausticSilkSheets(
 
     for (let i = 0; i < NUM_STRANDS; i++) {
       const u = i / (NUM_STRANDS - 1); // [0, 1]
-      const uCentered = u - 0.5; // [-0.5, 0.5]
       const isRimEdge = i === 0 || i === NUM_STRANDS - 1;
 
-      // Calibração de brilho, contraste e espessura
+      // SPRINT 73: Lençol muito mais transparente e discreto
       let lineWidth: number;
       let alpha: number;
 
       if (isRimEdge) {
-        lineWidth = isLight ? 1.35 : 1.65;
-        alpha = isLight ? 0.38 : 0.52;
-        if (!isLight) {
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, 0.45)`;
-        } else {
-          ctx.shadowBlur = 0;
-        }
+        lineWidth = 1.0;
+        alpha = 0.11;
+        ctx.shadowBlur = 0;
       } else {
-        lineWidth = isLight ? 0.70 : 0.85;
-        // Filamentos internos com alpha calibrado entre 0.065 e 0.150
+        lineWidth = 0.6;
+        // Filamentos internos com alpha calibrado estritamente entre 0.014 e 0.034
         const centerBell = Math.sin(u * Math.PI); // [0..1]
-        alpha = (0.065 + centerBell * 0.085) * sheetFactor;
+        alpha = (0.014 + centerBell * 0.020) * sheetFactor;
         ctx.shadowBlur = 0;
       }
 
-      // Função inline de cálculo de Y para este filamento no ponto x
+      // Função inline de cálculo de Y para este filamento no ponto x (100% autônomo)
       const computeY = (x: number): number => {
         let edgeTopY: number;
         let edgeBottomY: number;
@@ -380,45 +350,8 @@ function drawCausticSilkSheets(
           ripple = Math.sin(x * 0.0044 + timestamp * 0.00085 + u * 2.8) * 2.8;
         }
 
-        // Interpolação linear no envelope tridimensional
-        let y = edgeTopY * (1 - u) + edgeBottomY * u + silkBelly + ripple;
-
-        // Deformação elástica fluida por aproximação do cursor (< 320px)
-        const dx = x - mouseX;
-        const dy = y - mouseY;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < 102400) {
-          const dist = Math.sqrt(distSq);
-          const normDist = 1 - dist / 320;
-          const lift = Math.sin(normDist * (Math.PI * 0.5)) * 34 * (1 - Math.abs(uCentered) * 0.6);
-          const dir = dy >= 0 ? 1 : -1;
-          y += lift * dir * 0.55;
-        }
-
-        // Ondulação acústica física propagada a partir dos cliques e trocas de aba
-        if (activeRipples.length > 0) {
-          for (let rIdx = 0; rIdx < activeRipples.length; rIdx++) {
-            const rip = activeRipples[rIdx];
-            const elapsed = Math.max(0, timestamp - rip.startTime);
-            const waveRadius = Math.max(0.5, elapsed * 0.42);
-            const distToRipple = Math.hypot(x - rip.x, baseY - rip.y);
-            const deltaDist = Math.abs(distToRipple - waveRadius);
-
-            if (deltaDist < 130) {
-              const decay = Math.max(0, 1 - elapsed / 1650);
-              const spatialEnvelope = 1 - deltaDist / 130;
-              const waveDisplacement =
-                Math.sin((distToRipple - waveRadius) * 0.065) *
-                rip.strength *
-                decay *
-                spatialEnvelope *
-                (0.7 + 0.3 * Math.cos(u * Math.PI));
-              y += waveDisplacement;
-            }
-          }
-        }
-
-        return y;
+        // Interpolação linear pura no envelope tridimensional (sem deformação de cursor ou cliques)
+        return edgeTopY * (1 - u) + edgeBottomY * u + silkBelly + ripple;
       };
 
       // Inicia o desenho da fita contínua via spline por pontos médios (quadraticCurveTo em 80 segmentos)
@@ -497,11 +430,7 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
   const shootingStarsRef = useRef<ShootingStar[]>([]);
   const nextShootingStarTimeRef = useRef<number>(0);
 
-  // SPRINT 70: Ondas Acústicas Físicas no Lençol 3D (Captura de Cliques e Trocas de Aba)
-  const ripplesRef = useRef<SilkAcousticRipple[]>([]);
-  const firstTabRenderRef = useRef<boolean>(true);
-
-  // Partículas de Poeira Estelar (420 micro-partículas a 144Hz)
+  // SPRINT 73: 780 micro-partículas de poeira estelar flutuando de forma 100% autônoma
   const particlesRef = useRef<StardustParticle[]>([]);
 
   useEffect(() => {
@@ -542,48 +471,6 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, [mounted, mode]);
 
-  // SPRINT 70: Captura Global de Ondas de Choque ao Clicar (PointerDown)
-  useEffect(() => {
-    if (!mounted || mode === "none") return;
-
-    const handlePointerDown = (e: PointerEvent) => {
-      const docAttr = document.documentElement.getAttribute("data-animations");
-      if (docAttr === "off") return;
-
-      const now = performance.now();
-      ripplesRef.current = [
-        ...ripplesRef.current.filter((r) => now - r.startTime < 1650),
-        { x: e.clientX, y: e.clientY, startTime: now, strength: 26 }
-      ].slice(-4);
-    };
-
-    window.addEventListener("pointerdown", handlePointerDown, { passive: true });
-    return () => window.removeEventListener("pointerdown", handlePointerDown);
-  }, [mounted, mode]);
-
-  // SPRINT 70: Ondulação Suave Centralizada ao Trocar de Aba
-  useEffect(() => {
-    if (firstTabRenderRef.current) {
-      firstTabRenderRef.current = false;
-      return;
-    }
-    if (!mounted || mode === "none") return;
-
-    const docAttr = document.documentElement.getAttribute("data-animations");
-    if (docAttr === "off") return;
-
-    const now = performance.now();
-    ripplesRef.current = [
-      ...ripplesRef.current.filter((r) => now - r.startTime < 1650),
-      {
-        x: window.innerWidth * 0.5,
-        y: window.innerHeight * 0.38,
-        startTime: now,
-        strength: 30
-      }
-    ].slice(-4);
-  }, [activeTab, mounted, mode]);
-
   // SPRINT 63: Motor Cinemático Canvas 144Hz (Poeira Estelar 3D + Ondas de Seda Harmônicas + Aurora Camaleão)
   useEffect(() => {
     if (!mounted || mode === "none") return;
@@ -612,23 +499,25 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
 
     window.addEventListener("resize", handleResize);
 
-    // SPRINT 68: 420 micro-partículas bem pequenas de 0.5px (raio entre 0.4px e 0.65px, opacidade 0.05 a 0.20)
-    // Poeira estelar uniforme, fluida e nítida em 144Hz — elegância cinematográfica pura
+    // SPRINT 73: 780 micro-partículas bem sutis de ~0.5px (raio 0.35px a 0.68px, opacidade 0.06 a 0.22)
+    // 480 micro-partículas em telas mobile (< 768px). Flutuam 100% autônomas sem deformação por mouse ou clique.
+    const isMobile = window.innerWidth < 768;
+    const numParticles = isMobile ? 480 : 780;
     const particles: StardustParticle[] = [];
-    for (let i = 0; i < 420; i++) {
-      const radius = 0.4 + Math.random() * 0.25; // Raio estrito entre 0.4px e 0.65px (média ~0.5px)
+    for (let i = 0; i < numParticles; i++) {
+      const radius = 0.35 + Math.random() * 0.33; // Raio estrito entre 0.35px e 0.68px (média ~0.5px)
       particles.push({
         x: Math.random() * width,
         y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.05,
-        vy: -0.05 - Math.random() * 0.08,
-        baseVy: -0.05 - Math.random() * 0.08,
+        vx: (Math.random() - 0.5) * 0.04,
+        vy: -0.04 - Math.random() * 0.07,
+        baseVy: -0.04 - Math.random() * 0.07,
         radius,
         depth: 0.15 + Math.random() * 0.55,
         layer: 1,
-        twinkleSpeed: 0.0012 + Math.random() * 0.002,
+        twinkleSpeed: 0.0010 + Math.random() * 0.0018,
         phase: Math.random() * Math.PI * 2,
-        baseAlpha: 0.05 + Math.random() * 0.12 // Faixa sutil 0.05 a 0.17 (com pico máximo de 0.20)
+        baseAlpha: 0.06 + Math.random() * 0.14 // Faixa sutil 0.06 a 0.20
       });
     }
     particlesRef.current = particles;
@@ -679,16 +568,10 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
 
       // ======================================================================
       // PASSO 3: LENÇOL DE SEDA PARAMÉTRICO 3D (Coindex Caustic Silk Sheets)
-      // Renderizado com 52 filamentos (Hero) + 28 filamentos (Deep Sub-Veil),
-      // dobras cáusticas em modo screen, ondas acústicas por clique e bainhas especulares a 144Hz
+      // Renderizado com 64 filamentos (Hero) + 64 filamentos (Deep Sub-Veil),
+      // dobras cáusticas em modo screen e fluxo 100% autônomo sem interferência de mouse
       // ======================================================================
       if (mode === "hybrid" || mode === "aurora") {
-        if (!isReduced) {
-          ripplesRef.current = ripplesRef.current.filter((r) => timestamp - r.startTime < 1650);
-        } else {
-          ripplesRef.current = [];
-        }
-
         drawCausticSilkSheets(
           ctx,
           width,
@@ -697,37 +580,21 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
           curColors.primary,
           curColors.secondary,
           curColors.accent,
-          smoothMouse.current.x,
-          smoothMouse.current.y,
-          isLight,
-          isReduced ? [] : ripplesRef.current
+          isLight
         );
       }
 
       // ======================================================================
-      // PASSO 2: POEIRA ESTELAR CINEMATOGRÁFICA 3D (Floating Micro-Stardust Pro)
+      // PASSO 2: POEIRA ESTELAR CINEMATOGRÁFICA 3D (780 Floating Micro-Stardust Pro)
+      // Flutuação 100% autônoma a 144Hz (sem deformação por clique ou cursor)
       // ======================================================================
       if (mode === "hybrid" || mode === "spotlight" || mode === "aurora" || mode === "grid" || mode === "rays") {
         ctx.save();
 
         particlesRef.current.forEach((p) => {
-          // Interação de Brisa com o Cursor (< 135px)
-          const distToMouse = Math.hypot(p.x - smoothMouse.current.x, p.y - smoothMouse.current.y);
-          let flareBoost = 1.0;
-
-          if (distToMouse < 135) {
-            const normDist = 1 - distToMouse / 135;
-            const force = normDist * normDist * 1.8;
-            const angle = Math.atan2(p.y - smoothMouse.current.y, p.x - smoothMouse.current.x);
-            p.vx += Math.cos(angle) * force * p.depth;
-            p.vy += Math.sin(angle) * force * p.depth;
-            // SPRINT 64: Ganho de luminosidade perto do cursor calibrado para no máximo +5% (sem estouro)
-            flareBoost = 1 + normDist * 0.05;
-          }
-
-          // Damping e Atualização Física
-          p.vx *= 0.94;
-          p.vy = p.vy * 0.94 + p.baseVy * 0.06;
+          // SPRINT 73: Física 100% autônoma
+          p.vx *= 0.96;
+          p.vy = p.vy * 0.96 + p.baseVy * 0.04;
 
           if (!isReduced) {
             p.x += p.vx;
@@ -741,8 +608,8 @@ export const AmbientBackgroundFX: React.FC<AmbientBackgroundFXProps> = ({
           if (p.x > width + 20) p.x = -15;
 
           const twinkle = 0.5 + 0.5 * Math.sin(timestamp * p.twinkleSpeed + p.phase);
-          // SPRINT 67: Micro-partículas estelares sutis entre 0.06 e 0.22 de opacidade
-          const effectiveAlpha = Math.min(0.22, Math.max(0.06, p.baseAlpha * twinkle * flareBoost * (isLight ? 0.75 : 1)));
+          // SPRINT 73: Micro-partículas estelares sutis entre 0.06 e 0.22 de opacidade
+          const effectiveAlpha = Math.min(0.22, Math.max(0.06, p.baseAlpha * twinkle * (isLight ? 0.75 : 1)));
 
           ctx.fillStyle = isLight
             ? `rgba(${cp[0]}, ${cp[1]}, ${cp[2]}, ${effectiveAlpha * 0.7})`
