@@ -235,6 +235,7 @@ export interface CreditCardItem {
   logoUrl?: string;
   bankId?: string;
   bankName?: string;
+  color?: string;
   updatedAt?: string;
   deletedAt?: string;
   rev?: number;
@@ -401,13 +402,26 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const APP_VERSION = "0.51.1";
-export const PREVIOUS_VERSION = "0.51.0";
-export const COINDEX_APP_VERSION = "0.51.1";
+export const APP_VERSION = "0.51.2";
+export const PREVIOUS_VERSION = "0.51.1";
+export const COINDEX_APP_VERSION = "0.51.2";
 export const COINDEX_BUILD_DATE = "Novembro de 2026";
 export const COINDEX_RELEASE_CODENAME = "Equilibrium Wealth & Life OS";
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: "0.51.2",
+    date: "Nov/2026",
+    title: "Sprint 72: Feixe de Luz Real na Linha do Gráfico, Cores Autênticas por Banco nos Cartões, Eliminação do Espaço Vazio na Central Analítica e Higienização de Limites",
+    highlights: [
+      "Feixe de Luz Real na Curva do Gráfico: Substituição completa do retângulo de luz por feixe de fótons que percorre estritamente a linha SVG (.coindex-photon-trace-path com stroke-dasharray), deslizando suavemente pelas cristas do gráfico de Patrimônio sem artefatos no fundo.",
+      "Eliminação do Espaço Vazio na Central Analítica (page.tsx): Reorganização da linha flex no card de Patrimônio alinhando valor principal à esquerda e seletor [Bruto | Líquido IR | Só Aportes] à direita, com expansão vertical dinâmica do container do gráfico (min-h-[235px]).",
+      "Cores Autênticas e Distintas por Banco (getCardBrandGradient): Identificação precisa das marcas dos cartões (Nubank Roxo Ultravioleta, Inter Laranja Carbono Metálico, Itaú Platinum Azul Meia-Noite c/ Titânio, BTG Azul Imperial, C6/XP Grafite Titânio), eliminando cartões roxos genéricos.",
+      "Limpeza e Nitidez da Lista de Limites: Remoção da bandeira secundária redundante, exibição do ponto com a cor autêntica do banco, nome completo do cartão sem truncamento (Nubank, Inter, Itaú Platinum) e valores em linha única sem quebras.",
+      "Higienização de Título de Widgets (Apple Wallet Purge): Remoção automática de menções a 'Apple Wallet' e marcas de terceiros em layouts atuais e migrações legadas no normalizeDashboardLayout.",
+      "Alocação Real 50/30/20 & Saneamento de Abastecimento: Denominador consistente Math.max(income, totalDespesas + aportes, 1) com barras proporcionais limitadas a 100%, e blindagem para salvar correções de abastecimentos de 13-11-2026 sem restauração indevida."
+    ]
+  },
   {
     version: "0.51.1",
     date: "Nov/2026",
@@ -1517,7 +1531,7 @@ export const DEFAULT_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [
   },
   {
     id: "wallet_limits",
-    title: "Cartões & Limites (Apple Wallet)",
+    title: "Cartões & Limites",
     subtitle: "Stack de cartões físicos, faturas abertas e limites bancários",
     visible: true,
     size: "third"
@@ -1584,10 +1598,24 @@ export function normalizeDashboardLayout(layout: unknown): DashboardWidgetConfig
       continue;
     }
 
+    const rawTitle = defaultDef?.title || (item as any).title || canonicalId;
+    const cleanTitle = String(rawTitle)
+      .replace(/\s*\(Apple Wallet\)/gi, "")
+      .replace(/Apple Copilot Pure/gi, "Coindex")
+      .replace(/Apple\s*/gi, "")
+      .trim();
+
+    const rawSubtitle = defaultDef?.subtitle || (item as any).subtitle || "";
+    const cleanSubtitle = String(rawSubtitle)
+      .replace(/\s*\(Apple Wallet\)/gi, "")
+      .replace(/Apple Copilot Pure/gi, "Coindex")
+      .replace(/Apple\s*/gi, "")
+      .trim();
+
     result.push({
       id: canonicalId,
-      title: defaultDef?.title || (item as any).title || canonicalId,
-      subtitle: defaultDef?.subtitle || (item as any).subtitle || "",
+      title: cleanTitle,
+      subtitle: cleanSubtitle,
       visible: (item as any).visible !== false,
       size: (item as any).size || defaultDef?.size || "half"
     });
@@ -1611,6 +1639,90 @@ export function normalizeDashboardLayout(layout: unknown): DashboardWidgetConfig
   }
 
   return result;
+}
+
+/**
+ * SPRINT 72: Identidade Visual Autêntica e Distinta por Banco/Cartão
+ * Retorna gradiente autêntico, cor da borda, dot identificador e classes Tailwind
+ * para que Nubank, Inter, Itaú, BTG e outros bancos nunca fiquem com a mesma cor.
+ */
+export interface CardBrandVisual {
+  background: string;
+  borderColor: string;
+  dotColor: string;
+  gradientClass: string;
+}
+
+export function getCardBrandGradient(cardName: string, bankName?: string, customColor?: string): CardBrandVisual {
+  const text = `${cardName || ""} ${bankName || ""}`.toLowerCase();
+
+  // 1. Nubank (Roxo Ultravioleta)
+  if (text.includes("nubank") || text.includes("roxo") || text.includes("ultravioleta")) {
+    return {
+      background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 55%, #2E1065 100%)",
+      borderColor: "rgba(192, 132, 252, 0.32)",
+      dotColor: "#A855F7",
+      gradientClass: "from-[#7C3AED] via-[#5B21B6] to-[#2E1065]"
+    };
+  }
+
+  // 2. Inter (Laranja Carbono Metálico)
+  if (text.includes("inter") || text.includes("laranja")) {
+    return {
+      background: "linear-gradient(135deg, #EA580C 0%, #C2410C 55%, #431407 100%)",
+      borderColor: "rgba(251, 146, 60, 0.35)",
+      dotColor: "#F97316",
+      gradientClass: "from-[#EA580C] via-[#C2410C] to-[#431407]"
+    };
+  }
+
+  // 3. Itaú Platinum / Personnalité / Uniclass (Azul Meia-Noite Profundo com reflexo Âmbar/Titânio)
+  if (text.includes("itaú") || text.includes("itau") || text.includes("personnalite") || text.includes("uniclass")) {
+    return {
+      background: "linear-gradient(135deg, #1E293B 0%, #0F172A 60%, #9A3412 100%)",
+      borderColor: "rgba(251, 146, 60, 0.30)",
+      dotColor: "#EA580C",
+      gradientClass: "from-[#1E293B] via-[#0F172A] to-[#9A3412]"
+    };
+  }
+
+  // 4. BTG Pactual (Azul Imperial BTG)
+  if (text.includes("btg") || text.includes("pactual")) {
+    return {
+      background: "linear-gradient(135deg, #1E3A8A 0%, #0F172A 65%, #020617 100%)",
+      borderColor: "rgba(96, 165, 250, 0.30)",
+      dotColor: "#3B82F6",
+      gradientClass: "from-[#1E3A8A] via-[#0F172A] to-[#020617]"
+    };
+  }
+
+  // 5. C6 / XP / Black / Carbon / Infinite (Grafite Titânio Escuro)
+  if (text.includes("c6") || text.includes("xp") || text.includes("black") || text.includes("carbon") || text.includes("infinite")) {
+    return {
+      background: "linear-gradient(135deg, #334155 0%, #1E293B 60%, #090D16 100%)",
+      borderColor: "rgba(148, 163, 184, 0.25)",
+      dotColor: "#94A3B8",
+      gradientClass: "from-[#334155] via-[#1E293B] to-[#090D16]"
+    };
+  }
+
+  // 6. Bradesco / Santander (Vermelho Rubi Profundo)
+  if (text.includes("bradesco") || text.includes("santander")) {
+    return {
+      background: "linear-gradient(135deg, #991B1B 0%, #7F1D1D 60%, #450A0A 100%)",
+      borderColor: "rgba(248, 113, 113, 0.30)",
+      dotColor: "#EF4444",
+      gradientClass: "from-[#991B1B] via-[#7F1D1D] to-[#450A0A]"
+    };
+  }
+
+  // Fallback seguro de titânio
+  return {
+    background: "linear-gradient(135deg, #1E293B 0%, #0F172A 65%, #020617 100%)",
+    borderColor: "rgba(255, 255, 255, 0.15)",
+    dotColor: "#0A84FF",
+    gradientClass: "from-[#1E293B] via-[#0F172A] to-[#020617]"
+  };
 }
 
 export const DEFAULT_AUTO_DASHBOARD_LAYOUT: DashboardWidgetConfig[] = [

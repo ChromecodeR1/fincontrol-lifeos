@@ -522,7 +522,6 @@ const StravaProgressGrid = React.memo(function StravaProgressGrid(props: StravaP
           style={{ height: getChartHeightPx(stravaChartSettings.height, 240), width: "100%" }}
           className="w-full select-none relative"
         >
-          <div className="coindex-chart-photon-overlay" />
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={stravaProgressPoints}
@@ -3224,7 +3223,6 @@ export default function SecondaryTabs(props: SecondaryTabsProps) {
               style={{ height: getChartHeightPx(bioSettings.height, 220) }}
               className="w-full select-none relative"
             >
-              <div className="coindex-chart-photon-overlay" />
               <ResponsiveContainer width="100%" height="100%">
                 {renderBioChart()}
               </ResponsiveContainer>

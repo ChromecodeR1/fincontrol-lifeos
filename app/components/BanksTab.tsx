@@ -25,7 +25,8 @@ import {
   calculateCardExposure,
   calculateBankExposure,
   calculateBankBalance,
-  FlowType
+  FlowType,
+  getCardBrandGradient
 } from "@/app/lifeos-data";
 import { safeSub, safeAdd, toCents, fromCents } from "@/app/lib/domain/finance";
 import { TiltCard3D, triggerAuraBurst } from "./MotionEngine144";
@@ -164,38 +165,6 @@ export const BanksTab: React.FC<BanksTabProps> = ({
   }));
   const unlinkedCards = cards.filter((c) => !c.bankId);
 
-  // SPRINT 43: Helper de Gradiente das Marcas de Cartões Apple Wallet
-  const getCardGradient = (cardName: string, bankName?: string, globalIdx: number = 0): string => {
-    const text = `${cardName} ${bankName || ""}`.toLowerCase();
-    if (text.includes("nubank") || text.includes("roxo") || text.includes("ultravioleta")) {
-      return "from-[#8A05BE] via-[#5C0380] to-[#2B003D]";
-    }
-    if (text.includes("inter") || text.includes("laranja")) {
-      return "from-[#FF7A00] via-[#D65F00] to-[#5C2300]";
-    }
-    if (text.includes("btg") || text.includes("pactual")) {
-      return "from-[#001E62] via-[#0A1128] to-[#000511]";
-    }
-    if (text.includes("c6") || text.includes("carbon")) {
-      return "from-[#242424] via-[#171717] to-[#0A0A0A]";
-    }
-    if (text.includes("xp") || text.includes("infinite")) {
-      return "from-[#121A17] via-[#0B0F0E] to-[#050706]";
-    }
-    if (text.includes("bradesco")) {
-      return "from-[#CC092F] via-[#990623] to-[#660417]";
-    }
-    if (text.includes("itau") || text.includes("itaú") || text.includes("personnalite")) {
-      return "from-[#EC7000] via-[#C95A00] to-[#994400]";
-    }
-    if (text.includes("santander")) {
-      return "from-[#EC0000] via-[#B80000] to-[#850000]";
-    }
-    return globalIdx % 2 === 0
-      ? "from-indigo-950/90 via-slate-900 to-violet-950/80"
-      : "from-slate-900 via-zinc-900 to-slate-950";
-  };
-
   // SPRINT 43: Helper de Micro-Badge da Bandeira do Cartão
   const renderBrandBadge = (brand: string) => {
     const bLower = (brand || "").toLowerCase();
@@ -267,12 +236,13 @@ export const BanksTab: React.FC<BanksTabProps> = ({
     const futurePct = cardLimit > 0 ? Math.min(100 - currentPct, Math.round((futureBlocked / cardLimit) * 100)) : 0;
     const totalPct = cardLimit > 0 ? Math.min(100, Math.round((totalCommitted / cardLimit) * 100)) : 0;
     const cardBank = banks.find((b) => b.id === card.bankId) || (card.bankName ? banks.find((b) => b.name === card.bankName) || { name: card.bankName, logoUrl: undefined } : null);
-    const cardGradient = getCardGradient(card.name, cardBank?.name, globalIdx);
+    const brandVisual = getCardBrandGradient(card.name, cardBank?.name, card.color);
 
     return (
       <TiltCard3D maxTilt={6} className="h-full">
         <div
-          className={`wallet-physical-card wallet-card-crisp relative overflow-hidden rounded-2xl border border-white/12 p-4 sm:p-5 shadow-xl transition-all duration-200 bg-gradient-to-br ${cardGradient} outline-none focus:outline-none ring-0 select-none`}
+          style={{ background: brandVisual.background, borderColor: brandVisual.borderColor }}
+          className="wallet-physical-card wallet-card-crisp relative overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-xl transition-all duration-200 outline-none focus:outline-none ring-0 select-none"
         >
           {/* Brilho reflexivo diagonal em overlay */}
           <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.10),transparent_60%)]" />

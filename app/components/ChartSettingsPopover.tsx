@@ -198,7 +198,7 @@ export default function ChartSettingsPopover({
             <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Tipo de visualização</label>
             <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950/80 p-1 border border-white/5">
               {[
-                { id: "area" as const, label: "Área (Copilot)" },
+                { id: "area" as const, label: "Área Fluida" },
                 { id: "line" as const, label: "Linha" },
                 { id: "bar" as const, label: "Barras" }
               ].map((opt) => (
@@ -365,7 +365,7 @@ export default function ChartSettingsPopover({
           {isLineOrArea && currentDisplayType !== "bar" && (
             <>
               <label className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5 transition">
-                <span className="text-slate-300">Degradê suave (Copilot)</span>
+                <span className="text-slate-300">Degradê suave</span>
                 <input
                   type="checkbox"
                   checked={settings.fillArea}

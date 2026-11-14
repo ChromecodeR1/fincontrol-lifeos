@@ -1259,7 +1259,6 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({
                 {/* Gráfico 1: Evolução do Odômetro (KM) */}
                 {widget.id === "auto_odometer" && (
                   <div className="h-64 select-none relative">
-                    <div className="coindex-chart-photon-overlay" />
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart accessibilityLayer={false} data={autoMetrics.kmRecords}>
                         <defs>

@@ -204,7 +204,8 @@ import {
   downloadCurrentStateJson,
   SafetySnapshotItem,
   normalizeSearchText,
-  evaluateMathExpression
+  evaluateMathExpression,
+  getCardBrandGradient
 } from "./lifeos-data";
 import {
   validateTransactionData,
@@ -3145,14 +3146,24 @@ export default function CoindexApp() {
 
     const investTotal = monthSummary.aportes;
 
-    const totalBase =
-      monthSummary.income > 0
-        ? monthSummary.income
-        : Math.max(1, safeAdd(fixedTotal, variableTotal, investTotal));
+    // SPRINT 72: Denominador consistente para que Fixos, Variáveis e Aportes nunca estourem 100%
+    const totalExpensesAndInvestments = safeAdd(fixedTotal, variableTotal, investTotal);
+    const totalBase = Math.max(
+      monthSummary.income,
+      totalExpensesAndInvestments,
+      1
+    );
 
     const pctFixed = totalBase > 0 && Number.isFinite(fixedTotal / totalBase) ? Math.min(100, Math.max(0, Math.round((fixedTotal / totalBase) * 100))) : 0;
     const pctVariable = totalBase > 0 && Number.isFinite(variableTotal / totalBase) ? Math.min(100, Math.max(0, Math.round((variableTotal / totalBase) * 100))) : 0;
     const pctInvest = totalBase > 0 && Number.isFinite(investTotal / totalBase) ? Math.min(100, Math.max(0, Math.round((investTotal / totalBase) * 100))) : 0;
+
+    // Calibração proporcional das barras visuais para somarem no máximo 100%
+    const sumPcts = pctFixed + pctVariable + pctInvest;
+    const visualScale = sumPcts > 100 ? 100 / sumPcts : 1;
+    const barFixed = Math.round(pctFixed * visualScale);
+    const barVariable = Math.round(pctVariable * visualScale);
+    const barInvest = Math.min(100 - barFixed - barVariable, Math.round(pctInvest * visualScale));
 
     return {
       fixedTotal,
@@ -3161,7 +3172,10 @@ export default function CoindexApp() {
       totalBase,
       pctFixed,
       pctVariable,
-      pctInvest
+      pctInvest,
+      barFixed,
+      barVariable,
+      barInvest
     };
   }, [regimeTransactions, monthSummary.income, monthSummary.aportes, getFlowType]);
 
@@ -3522,34 +3536,9 @@ export default function CoindexApp() {
     [debtorMap, notify]
   );
 
-  // SPRINT 31: Helper de Gradiente das Marcas de Cartões Apple Wallet
+  // SPRINT 72: Helper de Gradiente das Marcas de Cartões Coindex
   const getCardGradient = useCallback((cardName: string, bankName?: string): string => {
-    const text = `${cardName} ${bankName || ""}`.toLowerCase();
-    if (text.includes("nubank") || text.includes("roxo") || text.includes("ultravioleta")) {
-      return "from-[#820AD1] via-[#5C069A] to-[#3B0463]";
-    }
-    if (text.includes("inter") || text.includes("laranja")) {
-      return "from-[#FF7A00] via-[#E05D00] to-[#B34500]";
-    }
-    if (text.includes("btg") || text.includes("pactual")) {
-      return "from-[#0C2340] via-[#103058] to-[#061424]";
-    }
-    if (text.includes("c6") || text.includes("carbon")) {
-      return "from-[#242424] via-[#1A1A1A] to-[#0F0F0F]";
-    }
-    if (text.includes("xp") || text.includes("infinite")) {
-      return "from-[#1F2421] via-[#2A2E2B] to-[#121413]";
-    }
-    if (text.includes("bradesco") || text.includes("elo")) {
-      return "from-[#CC092F] via-[#990623] to-[#660417]";
-    }
-    if (text.includes("itau") || text.includes("itaú") || text.includes("personnalite")) {
-      return "from-[#EC7000] via-[#C95A00] to-[#994400]";
-    }
-    if (text.includes("santander")) {
-      return "from-[#EC0000] via-[#B80000] to-[#850000]";
-    }
-    return "from-slate-800 via-slate-850 to-slate-900";
+    return getCardBrandGradient(cardName, bankName).gradientClass;
   }, []);
 
   // SPRINT 31: Radar Poligonal de 5 Eixos de Saúde Financeira (Score 0-100)
@@ -8588,17 +8577,17 @@ export default function CoindexApp() {
                               <div className="w-full h-2 rounded-full overflow-hidden bg-slate-950 border border-white/10 flex gap-0.5 p-0.5">
                                 <div
                                   className="h-full rounded-l-full bg-[#0A84FF] transition-all duration-500"
-                                  style={{ width: `${Math.min(100, allocation503020.pctFixed)}%` }}
+                                  style={{ width: `${allocation503020.barFixed}%` }}
                                   title={`Custos Fixos: ${allocation503020.pctFixed}%`}
                                 />
                                 <div
                                   className="h-full bg-[#FF9F0A] transition-all duration-500"
-                                  style={{ width: `${Math.min(100, allocation503020.pctVariable)}%` }}
+                                  style={{ width: `${allocation503020.barVariable}%` }}
                                   title={`Gastos Variáveis: ${allocation503020.pctVariable}%`}
                                 />
                                 <div
                                   className="h-full rounded-r-full bg-[#30D158] transition-all duration-500"
-                                  style={{ width: `${Math.min(100, allocation503020.pctInvest)}%` }}
+                                  style={{ width: `${allocation503020.barInvest}%` }}
                                   title={`Aportes/Investimentos: ${allocation503020.pctInvest}%`}
                                 />
                               </div>
@@ -8675,52 +8664,54 @@ export default function CoindexApp() {
                                   </div>
                                 )}
 
-                                <div className="flex flex-wrap items-center gap-2.5">
-                                  <div className="flex flex-wrap items-baseline gap-2">
-                                    <span className={`text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums tracking-tight ${moneyBlur}`}>
-                                      <AnimatedBRL value={patrimonyStats.currentValue} />
-                                    </span>
-                                    <span
-                                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-mono font-bold tabular-nums border ${
-                                        patrimonyStats.isPositive
-                                          ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
-                                          : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
-                                      }`}
-                                    >
-                                      {patrimonyStats.isPositive ? (
-                                        <ArrowUpRight className="w-3.5 h-3.5 text-[#30D158]" />
-                                      ) : (
-                                        <ArrowDownRight className="w-3.5 h-3.5 text-[#FF453A]" />
-                                      )}
-                                      <span>
-                                        {patrimonyStats.isPositive ? "+" : ""}
-                                        {formatBRL(patrimonyStats.diffAmount)} ({patrimonyStats.diffPercent >= 0 ? "+" : ""}
-                                        {patrimonyStats.diffPercent.toFixed(1).replace(".", ",")}%)
+                                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                  <div className="flex flex-wrap items-center gap-2.5">
+                                    <div className="flex flex-wrap items-baseline gap-2">
+                                      <span className={`text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums tracking-tight ${moneyBlur}`}>
+                                        <AnimatedBRL value={patrimonyStats.currentValue} />
                                       </span>
-                                    </span>
-                                  </div>
+                                      <span
+                                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-mono font-bold tabular-nums border ${
+                                          patrimonyStats.isPositive
+                                            ? "bg-[#30D158]/15 text-[#30D158] border-[#30D158]/30"
+                                            : "bg-[#FF453A]/15 text-[#FF453A] border-[#FF453A]/30"
+                                        }`}
+                                      >
+                                        {patrimonyStats.isPositive ? (
+                                          <ArrowUpRight className="w-3.5 h-3.5 text-[#30D158]" />
+                                        ) : (
+                                          <ArrowDownRight className="w-3.5 h-3.5 text-[#FF453A]" />
+                                        )}
+                                        <span>
+                                          {patrimonyStats.isPositive ? "+" : ""}
+                                          {formatBRL(patrimonyStats.diffAmount)} ({patrimonyStats.diffPercent >= 0 ? "+" : ""}
+                                          {patrimonyStats.diffPercent.toFixed(1).replace(".", ",")}%)
+                                        </span>
+                                      </span>
+                                    </div>
 
-                                  {/* SPRINT 30 & 46: Badge Cupertino com Rendimento CDI Oficial BCB */}
-                                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold shadow-xs">
-                                    <span className="relative flex h-2 w-2 mr-0.5">
-                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                                    </span>
-                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                    <span>
-                                      +<AnimatedBRL value={yieldMode === "liquido" ? (patrimonyEvolution.netYieldEstimated || 0) : (patrimonyEvolution.grossYieldAccumulated || 0)} /> de Rendimento
-                                    </span>
-                                    <span className="text-[10px] text-emerald-400/80 font-normal">
-                                      ({patrimonyEvolution.appliedCdiPercentage || 115}% CDI • BCB Ao Vivo)
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setShowAdjustmentInput((prev) => !prev)}
-                                      title="Calibrar Ajuste de Saldo Real do App (Nubank/BTG)"
-                                      className="ml-1 text-emerald-400/70 hover:text-white cursor-pointer transition p-0.5 apple-press"
-                                    >
-                                      <SlidersHorizontal className="w-3 h-3" />
-                                    </button>
+                                    {/* SPRINT 30 & 46: Badge Cupertino com Rendimento CDI Oficial BCB */}
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold shadow-xs">
+                                      <span className="relative flex h-2 w-2 mr-0.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                                      </span>
+                                      <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                      <span>
+                                        +<AnimatedBRL value={yieldMode === "liquido" ? (patrimonyEvolution.netYieldEstimated || 0) : (patrimonyEvolution.grossYieldAccumulated || 0)} /> de Rendimento
+                                      </span>
+                                      <span className="text-[10px] text-emerald-400/80 font-normal">
+                                        ({patrimonyEvolution.appliedCdiPercentage || 115}% CDI • BCB Ao Vivo)
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowAdjustmentInput((prev) => !prev)}
+                                        title="Calibrar Ajuste de Saldo Real do App (Nubank/BTG)"
+                                        className="ml-1 text-emerald-400/70 hover:text-white cursor-pointer transition p-0.5 apple-press"
+                                      >
+                                        <SlidersHorizontal className="w-3 h-3" />
+                                      </button>
+                                    </div>
                                   </div>
 
                                   {/* SPRINT 30 / SPRINT 49: Toggle Rápido [Bruto | Líquido IR | Só Aportes] Deslizante */}
@@ -8739,7 +8730,7 @@ export default function CoindexApp() {
                                 </div>
 
                                 {showAdjustmentInput && (
-                                  <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 text-xs">
+                                  <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 text-xs mb-3">
                                     <span className="text-slate-300 font-semibold text-[11px] shrink-0">
                                       Ajuste de Saldo Real do App (Nubank/BTG):
                                     </span>
@@ -8773,8 +8764,7 @@ export default function CoindexApp() {
                                   </div>
                                 )}
 
-                                <div className="w-full select-none transition-all duration-300 relative" style={{ height: `${getChartHeightPx("patrimony", 175)}px` }}>
-                                  <div className="coindex-chart-photon-overlay" />
+                                <div className="w-full flex-1 min-h-[235px] select-none transition-all duration-300 relative" style={{ height: chartConfigs?.patrimony?.height ? `${getChartHeightPx("patrimony", 235)}px` : undefined }}>
                                   <ResponsiveContainer width="100%" height="100%">
                                     {effectiveChartType === "line" ? (
                                       <LineChart
@@ -8815,6 +8805,18 @@ export default function CoindexApp() {
                                           strokeWidth={cfg.strokeWidth || 2.5}
                                           dot={cfg.showDots ? { r: 3.5, fill: primaryColor, stroke: "#07030f", strokeWidth: 1.5 } : false}
                                           activeDot={{ r: 5, strokeWidth: 2, stroke: primaryColor, fill: "#0d061c" }}
+                                          connectNulls={true}
+                                        />
+                                        {/* SPRINT 72: Feixe de Fótons Real que Desliza na Linha SVG */}
+                                        <Line
+                                          type={cfg.curveType || "monotone"}
+                                          dataKey="acumulado"
+                                          stroke="#E0F2FE"
+                                          strokeWidth={2.6}
+                                          dot={false}
+                                          activeDot={false}
+                                          isAnimationActive={false}
+                                          className="coindex-photon-trace-path pointer-events-none"
                                           connectNulls={true}
                                         />
                                         {yieldMode !== "aportes" && (
@@ -8899,6 +8901,20 @@ export default function CoindexApp() {
                                           activeDot={{ r: 5, strokeWidth: 2, stroke: primaryColor, fill: "#0d061c" }}
                                           fill={cfg.fillArea !== false ? `url(#gradPatrimony_${widget.id})` : "none"}
                                           fillOpacity={1}
+                                          connectNulls={true}
+                                        />
+                                        {/* SPRINT 72: Feixe de Fótons Real que Desliza na Curva SVG */}
+                                        <Area
+                                          type={cfg.curveType || "monotone"}
+                                          dataKey="acumulado"
+                                          fill="none"
+                                          fillOpacity={0}
+                                          stroke="#E0F2FE"
+                                          strokeWidth={2.6}
+                                          dot={false}
+                                          activeDot={false}
+                                          isAnimationActive={false}
+                                          className="coindex-photon-trace-path pointer-events-none"
                                           connectNulls={true}
                                         />
                                         {yieldMode !== "aportes" && (
@@ -9626,7 +9642,7 @@ export default function CoindexApp() {
                                   )}
                                   {visibleCards.map((card, idx) => {
                                     const exposure = calculateCardExposure(card, transactions, selectedMonth);
-                                    const cardGradient = getCardGradient(card.name, card.bankName);
+                                    const brandVisual = getCardBrandGradient(card.name, card.bankName, card.color);
                                     const isFirst = idx === 0;
 
                                     return (
@@ -9639,7 +9655,8 @@ export default function CoindexApp() {
                                       >
                                         <TiltCard3D maxTilt={5}>
                                           <div
-                                            className={`wallet-physical-card wallet-card-crisp relative rounded-2xl p-3.5 shadow-xl border border-white/15 bg-gradient-to-br ${cardGradient} outline-none focus:outline-none ring-0`}
+                                            style={{ background: brandVisual.background, borderColor: brandVisual.borderColor }}
+                                            className="wallet-physical-card wallet-card-crisp relative rounded-2xl p-3.5 shadow-xl border outline-none focus:outline-none ring-0"
                                           >
                                             <div className="relative z-20 antialiased backface-hidden">
                                               {/* Cabeçalho do Cartão */}
@@ -9739,20 +9756,16 @@ export default function CoindexApp() {
                                 {cardLimitsAnalytics.cards.map((c) => {
                                   const barColor =
                                     c.pctUsed >= 80 ? "bg-[#FF453A]" : c.pctUsed >= 50 ? "bg-[#FF9F0A]" : "bg-[#30D158]";
+                                  const cardBrandVisual = getCardBrandGradient(c.name);
 
                                   return (
                                     <div key={c.id} className="py-1.5 px-2.5 rounded-xl bg-slate-950/50 border border-white/5 space-y-1">
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-medium text-slate-200 text-xs flex items-center gap-1.5 truncate">
-                                          <CreditCard className="w-3.5 h-3.5 text-[#0A84FF] shrink-0" />
-                                          <span className="truncate">{c.name}</span>
-                                          {c.brand && (
-                                            <span className="text-[9px] text-slate-400 px-1.5 py-0.2 rounded bg-white/5 shrink-0">
-                                              {c.brand}
-                                            </span>
-                                          )}
-                                        </span>
-                                        <span className={`text-[11px] font-mono tabular-nums text-slate-300 ${moneyBlur}`}>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="w-2 h-2 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: cardBrandVisual.dotColor }} />
+                                          <span className="font-semibold text-slate-200 text-xs whitespace-nowrap truncate">{c.name}</span>
+                                        </div>
+                                        <span className={`whitespace-nowrap tabular-nums text-xs text-slate-300 shrink-0 ${moneyBlur}`}>
                                           <strong className="text-white">{formatBRL(c.used)}</strong> / {formatBRL(c.limit)} ({c.pctUsed}%)
                                         </span>
                                       </div>

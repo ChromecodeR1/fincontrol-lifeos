@@ -1,6 +1,6 @@
 # RAIO-X TÉCNICO COINDEX (DOSSIÊ COMPLETO DO SISTEMA)
-> **Versão da Aplicação:** `0.51.1`  
-> **Última Atualização:** 14 de Novembro de 2026 (Pós-Sprint 71 — Extermínio Definitivo do Bug de Recálculo/Retorno dos R$ 3.084,98 na Gasolina, Desacoplamento de Caches Paralelos, Deduplicação Semântica no Supabase e Desbloqueio de Alto Contraste do Lençol de Seda 3D no Background)  
+> **Versão da Aplicação:** `0.51.2`  
+> **Última Atualização:** 14 de Novembro de 2026 (Pós-Sprint 72 — Feixe de Luz Real na Linha do Gráfico Recharts, Paleta Autêntica por Banco nos Cartões Nubank/Inter/Itaú/BTG, Eliminação do Espaço Vazio na Central Analítica, Higienização da Lista de Limites e Consistência na Barra de Alocação 50/30/20)  
 > **Propósito:** Fonte única da verdade (SSOT) técnica, arquitetural, contábil e de interface para sincronização contínua de contexto entre engenheiros e agentes de IA.
 
 ---
@@ -1377,6 +1377,31 @@ Atualizado na Sprint 19 com a substituição de categorias compostas com barras 
     - **Pilar 5 — Deformação Elástica por Interação de Cursor (< 320px) & Zero GC:**
       - Campo de deflexão suave do tecido com raio de influência de 320px ao redor de `smoothMouse`, gerando elevação e expansão de seda conforme o cursor navega pela tela.
       - 100% livre de alocações dinâmicas de memória por frame dentro do loop de renderização a 144Hz.
+
+  - **Sprint 72 (Novembro de 2026 — Feixe de Luz Real na Linha do Gráfico Recharts, Paleta Autêntica por Banco nos Cartões, Eliminação do Espaço Vazio na Central Analítica, Higienização da Lista de Limites e Consistência na Barra de Alocação 50/30/20 v0.51.2):**
+    - **Pilar 1 — Feixe de Luz Real na Linha do Gráfico Recharts (`globals.css`, `page.tsx`, `SecondaryTabs.tsx`, `VehiclesTab.tsx`):**
+      - Extinção total do antigo retângulo `.coindex-chart-photon-overlay` que criava uma caixa luminosa genérica cobrindo o gráfico.
+      - Nova animação vetorial estrita `@keyframes coindexPhotonLineTrace` via `stroke-dasharray: 85 1100` e `stroke-dashoffset` aplicado diretamente nas curvas SVG (`.coindex-photon-trace-path .recharts-area-curve, .recharts-line-curve`).
+      - Inclusão de segunda `<Area>` translúcida sobreposta no gráfico de Patrimônio & Caixa (`app/page.tsx`) com cor `#38BDF8`, espessura `3px` e filtro `drop-shadow(0 0 8px rgba(56,189,248,0.95))`, percorrendo organicamente a linha de dados a cada 5.2s.
+    - **Pilar 2 — Eliminação do Espaço Vazio na Central Analítica de Patrimônio & Caixa (`page.tsx`):**
+      - Unificação do cabeçalho em linha horizontal flex única (`flex flex-wrap items-center justify-between gap-3 mb-3`): valor monetário consolidado e badges à esquerda, seletor de visão `[Bruto | Líquido IR | Só Aportes]` à direita.
+      - O container do gráfico agora preenche toda a área disponível com `className="w-full flex-1 min-h-[235px]"`, eliminando vãos pretos vazios e garantindo legibilidade máxima das curvas de patrimônio e caixa.
+    - **Pilar 3 — Cores Autênticas e Identitárias por Banco nos Cartões de Crédito (`lifeos-data.tsx`, `BanksTab.tsx`, `page.tsx`):**
+      - Função utilitária centralizada `getCardBrandGradient(cardName, bankName, customColor)` retornando `gradientClass`, `dotColor`, `background` e `borderColor` dedicados:
+        * **Nubank:** Roxo Ultravioleta e Índigo Profundo (`#820AD1` / `#4C0677`) com borda roxa e dot `#A855F7`.
+        * **Inter:** Laranja Carbono (`#FF7A00` / `#C44500` / `#1E150F`) com borda âmbar e dot `#FF7A00`.
+        * **Itaú / Personalité:** Azul Meia-Noite com Titânio e Ouro Fino (`#002855` / `#001833` / `#162B44`) com dot `#0066D6` ou dourado.
+        * **BTG Pactual:** Azul Imperial Profundo com Grafite Titânio (`#0B1B3D` / `#050B1A` / `#122040`) com dot `#0A84FF`.
+        * **C6 Bank / XP:** Grafite Carbono Fosco e Titânio Escovado (`#18191C` / `#0F1012`) com dot `#E2E8F0` / `#FACC15`.
+      - Aplicação unificada tanto na visualização dos cartões empilhados de `app/page.tsx` quanto no modal detalhado de `app/components/BanksTab.tsx`.
+    - **Pilar 4 — Limpeza e Refinamento da Lista de Limites (`wallet_limits` em `page.tsx` e `lifeos-data.tsx`):**
+      - Remoção da bandeira redundante (`Mastercard Platinum`, etc.) que causava quebra e truncamento dos nomes.
+      - Inclusão do dot colorido autêntico do banco à esquerda, nome completo do cartão (`font-semibold text-slate-200 whitespace-nowrap`) e valores monetários em linha única sem quebras (`whitespace-nowrap tabular-nums text-xs`).
+      - Higienização de menções a `(Apple Wallet)` e marcas de terceiros nos layouts padrão e normalizador de widgets (`normalizeDashboardLayout`).
+    - **Pilar 5 — Consistência Contábil na Barra de Alocação 50/30/20 (`page.tsx`):**
+      - Base de cálculo calibrada para `totalAllocationBase = Math.max(income, totalFixed + totalVariable + totalInvestments, 1)`.
+      - Barras de progresso com proporcionalidade estrita e limites de 100%, exibindo com exatidão a divisão real da renda em Necessidades, Desejos e Aportes.
+      - Saneamento na edição de combustíveis mantendo a fonte canônica `transactions` intacta sem restauração de valores legados de 3.084,98.
 
   - **Sprint 71 (Novembro de 2026 — Extermínio Definitivo do Bug de Recálculo na Gasolina, Desacoplamento de Caches Paralelos, Deduplicação Semântica no Supabase e Desbloqueio de Alto Contraste do Lençol de Seda 3D v0.51.1):**
     - **Pilar 1 — Extermínio Definitivo do Retorno dos R$ 3.084,98 na Gasolina (`TransactionModal.tsx`, `page.tsx`, `VehiclesTab.tsx`, `coindex-supabase.ts`):**

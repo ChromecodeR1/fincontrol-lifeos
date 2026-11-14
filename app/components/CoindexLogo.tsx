@@ -20,12 +20,12 @@ export const COINDEX_LOGO_VARIANTS: CoindexLogoVariantInfo[] = [
     id: "equilibrium_link",
     name: "The Equilibrium Link (Oficial)",
     tagline: "Dois Elos Entrelaçados em Over-Under",
-    desc: "Elo esquerdo em Titânio desenhando o 'C' entrelaçado ao elo direito Apple Blue com pulso orbital contínuo."
+    desc: "Elo esquerdo em Titânio desenhando o 'C' entrelaçado ao elo direito Sapphire Blue com pulso orbital contínuo."
   },
   {
     id: "kinetic_arc",
     name: "Kinetic Arc",
-    tagline: "Apple Copilot & Aerodinâmica",
+    tagline: "Vetor Fluido & Aerodinâmica",
     desc: "Arco único fluido em vetor contínuo desenhando um 'C' ascendente em degradê azul e índigo."
   },
   {

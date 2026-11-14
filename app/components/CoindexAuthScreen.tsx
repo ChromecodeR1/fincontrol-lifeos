@@ -137,7 +137,7 @@ export default function CoindexAuthScreen({
         </div>
 
         <div className="flex items-center justify-between text-xs text-slate-400 border-t border-white/[0.06] pt-6">
-          <span>Coindex Financial OS • Cupertino Pure Design</span>
+          <span>Coindex Financial OS • Pure Glassmorphism</span>
           <span className="font-mono text-slate-400">Vercel + Supabase Cloud</span>
         </div>
       </div>
